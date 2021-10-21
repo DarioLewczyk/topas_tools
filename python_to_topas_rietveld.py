@@ -43,19 +43,16 @@ def topas_refinement(working_directory = os.getcwd(), del_out = True):
             subprocess.call(refine_cmd+inp_file) #This is telling TOPAS we want to refine. 
             os.chdir(working_directory) 
             pbar.update(1)
-        dir_contents = os.listdir()
-        exist_dict={}
+        dir_contents = os.listdir() 
         for i, f in enumerate(dir_contents):
             if f.endswith('.xy'): 
                 os.chdir(output_dir)#checks to see if the file already exists. 
                 for i2, f2 in enumerate(os.listdir()):
                     if f == f2:
-                       exist_dict[i] = True  
+                        os.remove(f2) 
                 os.chdir(working_directory)
-                if exist_dict[i]== True:
-                    os.replace(f,r'{}\{}'.format(output_dir,f))
-                else:
-                    shutil.move(f,output_dir)#This moves the newly created .xy files to the output folder. 
+                
+                shutil.move(f,output_dir)#This moves the newly created .xy files to the output folder. 
             if del_out == True: 
                 if f.endswith('.out'):
                     os.remove(f)
