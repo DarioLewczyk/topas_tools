@@ -1,0 +1,11 @@
+
+		r_bragg 0
+		TCHZ_Peak_Type(pku, 0.00039`,pkv, -0.00221`,pkw, -0.00146`,!pkz, 0.0000,pky, 0.00957`,!pkx, 0.0000)
+		Phase_Density_g_on_cm3( 6.05002)
+		
+		LVol_FWHM_CS_G_L( 1, 220.51687`, 0.89, 308.28452`,,,@, 346.38710`)
+		e0_from_Strain( 0.00038`,,,@, 0.17330`)
+		r_bragg  37.8249222
+		phase_MAC  180.833743
+	
+	

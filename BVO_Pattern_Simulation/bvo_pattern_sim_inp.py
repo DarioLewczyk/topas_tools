@@ -1,0 +1,100 @@
+#Authorship{{{
+'''
+This is a small program to generate input files for a large number of .cif files. 
+This is not yet modularized so you have to go through and modify parameters as necessary. 
+You must also have templates available (unless you want to use string formatting to generate the whole file).
+
+Created by: Dario Lewczyk
+Date: 10-21-21
+V: 1.0.0
+'''
+#}}}
+#Imports{{{
+import os, subprocess
+import sys
+import pandas as pd
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+from pymatgen.core.structure import Structure
+from pymatgen.core.periodic_table import Specie
+import numpy as np
+#}}}
+#Defining the directories we need.{{{
+working_dir = os.getcwd() #lists the current directory.
+template_inp_directory = '/Users/christopherlewczyk/Documents/Stony_Brook/Khalifah_Research_Group/Python_Tools/BVO_Pattern_Simulation' #This is where the template inp files are. 
+cif_directory = '/Users/christopherlewczyk/Documents/Stony_Brook/Khalifah_Research_Group/BiVO4_Work/BiVO4_Enumeration/output/Fixed_Output' #This is where the cif files are
+#}}}
+#Making the lists of lines from the inp templates{{{
+os.chdir(template_inp_directory)
+bvo_inp_top_half = open('625Mo_BiVO4_top_half_template.inp')
+bvo_inp_bottom_half = open('625Mo_BiVO4_bottom_half_template.inp')
+
+bvo_inp_top_lines = bvo_inp_top_half.readlines()
+bvo_inp_bottom_lines = bvo_inp_bottom_half.readlines()
+#}}}
+#Making the Inp files{{{
+cif_files = []
+os.chdir(working_dir)
+output_dir = 'inp_files'
+if os.path.isdir(output_dir):
+    pass
+else:
+    os.mkdir(output_dir)
+os.chdir(cif_directory)
+for filename in os.listdir():
+    if filename.endswith('.cif'):
+        cif_files.append(filename)
+with tqdm(total=len(cif_files)) as pbar:
+    for i, cif_file in enumerate(cif_files):
+        inp_name = cif_file.replace('.cif','.inp') # This makes the inp file name the same as the cif name. 
+        cur_struct = Structure.from_file(cif_file) #make a structure object. 
+        no_cif_name = cif_file.strip('.cif')
+        '''
+        This is the section where we write the input files automatically into a directory labeled "inp_files"
+        Some notes:
+            - Because of the way that TOPAS likes to see structures, a loop with an if else statement exists to remediate any issues with charges. 
+            - Since there is no file with the name that we are naming our file, we have to put the "open" command into write mode with the "w" flag.
+            - This is currently set up for outputting .xy files that are simulated diffraction patterns. 
+        '''
+        
+        with open(working_dir+'/'+output_dir+'/'+inp_name,'w') as inp_file:
+            for line in bvo_inp_top_lines:
+                inp_file.write(line) #This copies the lines present in the template.
+            ## Now we need to add the structure. 
+            inp_file.write('str\n' 
+                    '\t\tspace_group \"{}\"'.format(cur_struct.get_space_group_info(symprec=0.01, angle_tolerance=5.0)[0])+'\n' 
+                    '\t\tscale @ 1.68165115e-005\n'
+
+                    '\t \t'+'a {}'.format(cur_struct.lattice.a)+'\n'
+                    '\t \t'+'b {}'.format(cur_struct.lattice.b)+'\n'
+                    '\t \t'+'c {}'.format(cur_struct.lattice.c)+'\n'
+    
+                    '\t \t'+'al {}'.format(cur_struct.lattice.alpha)+'\n'
+                    '\t \t'+'be {}'.format(cur_struct.lattice.beta)+'\n'
+                    '\t \t'+'ga {}'.format(cur_struct.lattice.gamma)+'\n'
+    
+                    '\t \t'+'volume {}'.format(cur_struct.lattice.volume)+'\n'
+                    )
+            for i, site in enumerate(cur_struct.sites):
+                specie_dict = site.specie.as_dict()
+                #This if statement is required to filter those species with no specified charge.
+                #These lines are not necessary.
+                #TOPAS does not like seeing charges.
+                if len(specie_dict) == 4:
+                    ch = '+{charge:.0f}'.format(charge=specie_dict['oxidation_state'])
+                else:
+                    ch = ''
+                inp_file.write('\t\tsite {specie}{num} \t x {x} \t y {y} \t z {z} \t occ {species} {occu} \n'.format(specie = specie_dict["element"],num = i,x = site.x,y = site.y,z = site.z, species = specie_dict['element'],  occu = site.as_dict()['species'][0]['occu']))
+                    # Now this part is for making topas give us outputs. 
+            inp_file.write( 
+                '\txdd_out \"{}.xy\" load out_record out_fmt out_eqn'.format(no_cif_name)+'\n'
+                '\t\t{\n'
+                '\t\t'+'\"%11.6f,\" = X;\n' 
+		'\t\t'+'\"%11.6f,\" = Yobs;\n'	
+		'\t\t'+'\"%11.6f,\" = Ycalc;\n'	
+		'\t\t'+r'"%11.6f\n" = Yobs - Ycalc;'+'\n'	
+                '\t\t}'
+                    )
+            inp_file.close() 
+            pbar.update(1)
+#}}}
