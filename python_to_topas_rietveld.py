@@ -36,7 +36,6 @@ def topas_refinement(working_directory = os.getcwd(), del_out = True):
         if f.endswith('.inp'): 
             filenames.append(f) 
     with tqdm(total=len(filenames)) as pbar:
-
         for i, inp_file in enumerate(filenames):  
             refine_cmd = 'tc '+working_directory+'\\' #This is the refinement command for TOPAS
             os.chdir(TOPAS6_dir)

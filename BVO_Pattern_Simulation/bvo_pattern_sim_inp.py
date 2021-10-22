@@ -34,12 +34,20 @@ bvo_inp_bottom_lines = bvo_inp_bottom_half.readlines()
 #}}}
 #Making the Inp files{{{
 cif_files = []
+duplicate_inp_files = []
 os.chdir(working_dir)
 output_dir = 'inp_files'
 if os.path.isdir(output_dir):
-    pass
+    #If the directory exists, this clears all the inp files from it. 
+    os.chdir(output_dir)
+    output_directory = os.getcwd()
+    os.chdir(working_dir) 
 else:
     os.mkdir(output_dir)
+if len(duplicate_inp_files)>0:
+    os.chdir(output_directory)
+    for f in duplicate_inp_files:
+        os.remove(f)
 os.chdir(cif_directory)
 for filename in os.listdir():
     if filename.endswith('.cif'):
@@ -84,8 +92,16 @@ with tqdm(total=len(cif_files)) as pbar:
                     ch = '+{charge:.0f}'.format(charge=specie_dict['oxidation_state'])
                 else:
                     ch = ''
-                inp_file.write('\t\tsite {specie}{num} \t x {x} \t y {y} \t z {z} \t occ {species} {occu} \n'.format(specie = specie_dict["element"],num = i,x = site.x,y = site.y,z = site.z, species = specie_dict['element'],  occu = site.as_dict()['species'][0]['occu']))
+                inp_file.write('\t\tsite {specie}{num} \t x {x:0.8f} \t y {y:0.8f} \t z {z:0.8f} \t occ {species} {occu} \n'.format(specie = specie_dict["element"],
+                    num = i,
+                    x = site.frac_coords[0],
+                    y = site.frac_coords[1],
+                    z = site.frac_coords[2], 
+                    species = specie_dict['element'],  
+                    occu = site.as_dict()['species'][0]['occu']))
                     # Now this part is for making topas give us outputs. 
+            for line in bvo_inp_bottom_lines:
+                inp_file.write(line) #This is writing the second half of the input file. 
             inp_file.write( 
                 '\txdd_out \"{}.xy\" load out_record out_fmt out_eqn'.format(no_cif_name)+'\n'
                 '\t\t{\n'
