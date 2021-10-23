@@ -15,6 +15,7 @@ import pandas as pd
 import matplotlib.pyplot as plt 
 from tqdm import tqdm
 import numpy as np
+import matplotlib.ticker as mticker
 #}}}
 #function to send inps to topas{{{
 def topas_refinement(working_directory = os.getcwd(), del_out = True):
@@ -139,12 +140,18 @@ class Analyzer:
                 os.chdir(self.data_folder)
     #}}}
     #Subplots{{{
-    def subplot_creator(self, rows = 5,cols = 5,save_figs=True):
+    def subplot_creator(self, rows = 3,cols = 3,save_figs=True):
         num_plots = len(self.data_dict)#This is the total number of plots to make. 
         plots_per_subplot = rows*cols #This defines the total number of plots per subplot. 
         if num_plots > plots_per_subplot:
+            #print('num_plots: {}'.format(num_plots))#####################################################################
+            #print('plots_per_subplot: {}'.format(plots_per_subplot))####################################################
             num_figs = num_plots//plots_per_subplot #This gives us the nearest whole number divisor
-            num_figs += num_plots % plots_per_subplot #This adds in the remainder
+            #print('whole number divisor: {}'.format(num_figs))#########################################################
+            if num_plots%plots_per_subplot != 0:
+                num_figs+=1 #This adds in another figure to accommodate the whole number of figures. 
+            #num_figs += num_plots % plots_per_subplot #This adds in the remainder
+            #print('num_figs to be made: {}'.format(num_figs)) #######################################################################
             figure_range_intermediate = np.linspace(1,num_figs,num_figs) #This creates a range of integers that equals the number of figures. 
             figure_range = []
             for i in figure_range_intermediate:
@@ -152,6 +159,8 @@ class Analyzer:
             data_range_dictionary = {} #This creates a dictionary of the dividing points for the data for each subplot. 
             for i in figure_range:
                 data_range_dictionary[i] = i*plots_per_subplot #This adds in the dividing lines. 
+            #print('Data_Range_Dict: {}'.format(data_range_dictionary))############################################################
+            #print('Figure_Range: {}'.format(figure_range))################################################################
         else:
             num_figs = 1
             figure_range = [1]
@@ -159,46 +168,53 @@ class Analyzer:
         for i in figure_range:
             subplot_fig = plt.figure(i) #Creates the figure object.
             subplot_fig.clear() #Make sure that the plot is cleared before being saved. 
-            subplot_fig.set_size_inches(11,8.5) #Makes the figure a very large size (10 in. by 10 in.)
-            plt.tight_layout(w_pad = 2,h_pad = 3)
+            subplot_fig.set_size_inches(12,12.5) #Makes the figure a very large size (10 in. by 10 in.)
+            #plt.tight_layout(w_pad = 2,h_pad = 3)
             self.figure_dictionary[i] = subplot_fig #we are adding each numbered figure to a dictionary of figures.
-        for fig_num in figure_range:
-            #print('We are working on Figure #{}'.format(fig_num))
-            subplot_fig = self.figure_dictionary[fig_num] #we are calling the figure to add subplots to here.   
-            x_axis = r'$2{\theta}^\circ$'
-            y_axis = 'Intensity'
-            subplot_fig.text(0.5,0.04, x_axis, ha = 'center')
-            subplot_fig.text(0.04,0.5, y_axis, va = 'center', rotation='vertical')
-            
-            for i, f in enumerate(self.data_dict):
-                v =self.data_dict[i]
-                subplot_angle = v['angle']
-                subplot_y_obs = v['y_obs']
-                subplot_y_calc = v['y_calc']
-                subplot_y_diff = v['y_diff']
-                if fig_num!=1:
-                    if i+1<=data_range_dictionary[fig_num] and i+1>data_range_dictionary[fig_num-1]:
-                        #print('regular i: {}'.format(i))
-                        #We have to do this because i becomes > the number of boxes we have in a 5x5 plot
-                        corrected_i = i - data_range_dictionary[fig_num-1]
-                        #print('corrected i:{}'.format(corrected_i)) 
-                        subplot_ax = subplot_fig.add_subplot(rows,cols,corrected_i+1) 
-                elif fig_num == 1:
-                    if i+1 <= data_range_dictionary[fig_num]:
-                        #print('regular i: {}'.format(i))
-                        subplot_ax = subplot_fig.add_subplot(rows,cols,i+1) 
-
-                subplot_ax.get_xaxis().set_visible(False)
-                subplot_ax.get_yaxis().set_visible(False)
-                subplot_ax.plot(subplot_angle,subplot_y_calc,'r')
-                subplot_ax.plot(subplot_angle,subplot_y_obs,'b')
-                subplot_ax.plot(subplot_angle,subplot_y_diff,'grey')
-        
-                title = r"BiVO$_4$ {}".format(v['number'])
+        '''
+        Here is where the subplots are made. Using a progress bar. 
+        '''
+        with tqdm(total=len(figure_range)) as pbar:
+            print('Generating {} Plots'.format(num_figs))
+            for fig_num in figure_range:
+                #print('Working on Figure #{}'.format(fig_num))##################################
+                subplot_fig = self.figure_dictionary[fig_num] #we are calling the figure to add subplots to here.   
+                x_axis = r'$2{\theta}^\circ$'
+                y_axis = 'Intensity'
+                subplot_fig.text(0.5,0.04, x_axis, ha = 'center')
+                subplot_fig.text(0.04,0.5, y_axis, va = 'center', rotation='vertical')
              
-                #ax.set_xlabel(x_axis)
-                #ax.set_ylabel(y_axis)
-                subplot_ax.set_title(title)
+                for i, f in enumerate(self.data_dict):
+                    v =self.data_dict[i]
+                    subplot_angle = v['angle']
+                    subplot_y_obs = v['y_obs']
+                    subplot_y_calc = v['y_calc']
+                    subplot_y_diff = v['y_diff']
+                    if fig_num!=1:
+                        if i+1<=data_range_dictionary[fig_num] and i+1>data_range_dictionary[fig_num-1]:
+                            #print('regular i: {}'.format(i))
+                            #We have to do this because i becomes > the number of boxes we have in an nxm plot
+                            corrected_i = i - data_range_dictionary[fig_num-1]
+                            #print('corrected i:{}'.format(corrected_i)) #######################################
+                            subplot_ax = subplot_fig.add_subplot(rows,cols,corrected_i+1) 
+                    elif fig_num == 1:
+                        if i+1 <= data_range_dictionary[fig_num]:
+                            #print('regular i: {}'.format(i)) #################################################3
+                            subplot_ax = subplot_fig.add_subplot(rows,cols,i+1) 
+                    subplot_ax.plot(subplot_angle,subplot_y_obs,'b') #Plots the observed pattern
+                    subplot_ax.plot(subplot_angle,subplot_y_calc,'r') #Plots the calculated pattern
+                    #formatter = mticker.ScalarFormatter(useMathText=True) #This uses LaTeX for the labels. 
+                    #subplot_ax.yaxis.set_major_formatter(formatter) # Uses the above to make the change
+                    
+                    #subplot_ax.plot(subplot_angle,subplot_y_diff,'grey') #Plots the difference curve
+                    plt.tight_layout(w_pad=3,h_pad=3)#This adds enough space between the plots so that nothing gets cut off. 
+                    subplot_ax.ticklabel_format(axis='y', style='sci',scilimits=(0,0)) #This is here to force scientific notation for the y axis.
+                    title = r"BiVO$_4$ {}".format(v['number'])
+                 
+                    #ax.set_xlabel(x_axis)
+                    #ax.set_ylabel(y_axis)
+                    subplot_ax.set_title(title)
+                pbar.update(1)
         
         if save_figs == True:
             figure_directory = 'figures'
@@ -207,10 +223,13 @@ class Analyzer:
             else:
                 os.mkdir(figure_directory)
             os.chdir(figure_directory)
-            for i, subplot_fig in enumerate(self.figure_dictionary.values()):
-                subplot_fig.savefig('BVO_{}_x_{}_grid_{}.png'.format(rows,cols,i))
-            os.chdir(self.data_folder)
-            
+            with tqdm(total = len(figure_range)) as pbar2:
+                print('Saving Figures...')
+                for i, subplot_fig in enumerate(self.figure_dictionary.values()):
+                    subplot_fig.savefig('BVO_{}_x_{}_grid_{}.png'.format(rows,cols,i))
+                    pbar2.update(1)
+                os.chdir(self.data_folder)
+             
     #}}}
     
     #show_plots{{{
@@ -228,16 +247,26 @@ class Analyzer:
             os.mkdir(output_dir)
         os.chdir(output_dir)
         self.output_dir = os.getcwd()
+
         filename = '{}.pkl'.format(data_name)
         file_object = open(filename,'wb') #This serializes the class
-        pickle.dump(self.data_dict, file_object) #saves everything else.
-        pickle.dump(self.figure_dictionary, file_object) #saves the multiplots
+        class_object = self #This is the class object 
+        pickle.dump(class_object, file_object) #saves everything else.
+        
         file_object.close()
     #}}}
-    #Load_data{{{
-    def load_data(self,filename, folder = 'Analyzed_Data'):
-        file_object = open(filename,'rb')
-        self.data_dict = pickle.load(file_object) #This will restore the data you saved.  
-        file_object.close()
-    #}}} 
 #}}}
+
+#Load_data{{{
+def load_data(filename, folder = 'Analyzed_Data'):
+    '''
+    This is not something that can be run within a jupyter notebook. 
+    '''
+    current_directory = os.getcwd() #Saves our original place so we can return when data is loaded. 
+    os.chdir(folder)
+    file_object = open(filename,'rb')
+    restored_class = pickle.load(file_object) #This will restore the data you saved.  
+    file_object.close()
+    os.chdir(current_directory) #return to the original location. 
+    return restored_class
+#}}} 
