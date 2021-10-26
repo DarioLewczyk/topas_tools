@@ -243,33 +243,34 @@ class Analyzer:
                         #####################################################
                         pbar2.update(1)
                 #}}}
-            #This is where the .csv figures will be made.{{{
-            if self.csv_files_loaded == True:   
-                #We have csv data in out dictionary. 
-                #These plots are put onto the self variable since there is only one for all files. 
-                #################
-                # Rwp Plot
-                ################
-                self.rwp_fig, self.rwp_ax = plt.subplots()
-                for i, v in enumerate(tqdm(self.data_dict, desc='Rwp Figure')):
-                    self.rwp_ax.scatter(i,self.data_dict[i]['rwp'], color='b')
-                self.rwp_ax.set_xlabel('Enumeration Figure')
-                self.rwp_ax.set_ylabel(r'R$_{wp}$')
-                self.rwp_ax.set_title(r'R$_{wp}$ Results')
-                #################
-                # Volume Plot
-                #################
-                self.vol_fig, self.vol_ax = plt.subplots()
-                for i,v in enumerate(tqdm(self.data_dict,desc='Vol Figure')):
-                    self.vol_ax.scatter(i,self.data_dict[i]['volume'], color='b')
-                self.vol_ax.set_xlabel('Enumeration Figure')
-                self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
-                self.vol_ax.set_title('Volume Results')
+                #This is where the .csv figures will be made.{{{
+                if self.csv_files_loaded == True:   
+                    #We have csv data in out dictionary. 
+                    #These plots are put onto the self variable since there is only one for all files. 
+                    #################
+                    # Rwp Plot
+                    ################
+                    self.rwp_fig, self.rwp_ax = plt.subplots()
+                    for i, v in enumerate(tqdm(self.data_dict, desc='Rwp Figure')):
+                        self.rwp_ax.scatter(i,self.data_dict[i]['rwp'], color='b')
+                    self.rwp_ax.set_xlabel('Enumeration Figure')
+                    self.rwp_ax.set_ylabel(r'R$_{wp}$')
+                    self.rwp_ax.set_title(r'R$_{wp}$ Results')
+                    #################
+                    # Volume Plot
+                    #################
+                    self.vol_fig, self.vol_ax = plt.subplots()
+                    for i,v in enumerate(tqdm(self.data_dict,desc='Vol Figure')):
+                        self.vol_ax.scatter(i,self.data_dict[i]['volume'], color='b')
+                    self.vol_ax.set_xlabel('Enumeration Figure')
+                    self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
+                    self.vol_ax.set_title('Volume Results')
 
 
-                self.rwp_fig.savefig('BiVO4_Enumeration_Rwp_Plot.png')
-                self.vol_fig.savefig('BiVO4_Enumeration_Volume_Plot.png')
-            #}}} 
+                    if save_figs == True:
+                        self.rwp_fig.savefig('BiVO4_Enumeration_Rwp_Plot.png')
+                        self.vol_fig.savefig('BiVO4_Enumeration_Volume_Plot.png')
+                #}}} 
             os.chdir(self.data_folder)
     #}}}
     #Subplots{{{
