@@ -312,8 +312,10 @@ class Analyzer:
                 dictionary right now. 
                 '''
                 subplot_fig = plt.figure(fig_num) #This makes a figure with the number of "fig_num"
+
                 subplot_fig.clear() #This clears the figure out. 
                 subplot_fig.set_size_inches(14,12.5) #Resize the overall large figure
+                    
              
                 self.figure_dictionary[fig_num] = {'fig_{}'.format(fig_num): subplot_fig} #This adds the figure to the figure dictionary
                 '''
@@ -323,6 +325,7 @@ class Analyzer:
                 y_axis = 'Intensity' # Label for y
                 self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].supxlabel(x_axis) #Adds an xlabel for the whole fig. 
                 self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].supylabel(y_axis) #Adds a ylabel for the whole fig. 
+                self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].suptitle('Figure {}'.format(fig_num))
                 ############################################################################3
                              
                 for i, f in enumerate(self.data_dict):
@@ -379,18 +382,13 @@ class Analyzer:
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(subplot_angle,subplot_y_calc,'r') #Plots the calculated pattern
                         ######################################
             
-                        plt.tight_layout(w_pad=3,h_pad=3)#This adds enough space between the plots so that nothing gets cut off. 
+                        plt.tight_layout(w_pad=1,h_pad=1)#This adds enough space between the plots so that nothing gets cut off. 
                         #####################################
                         # Subplot Decorations
                         #####################################
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].ticklabel_format(axis='y', style='sci',scilimits=(0,0)) #This is here to force scientific notation for the y axis.
                         title = r"BiVO$_4$ {}".format(v['number'])   
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].set_title(title)
-                #####################################
-                # Add axis labels to the overall figure. 
-                ####################################
-                #self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].text(0.5,-0.04, x_axis, ha = 'center')
-                #self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].text(-0.04,0.5, y_axis, va = 'center', rotation='vertical')
 
                 self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)]; #I think this will refresh the figure. Not sure its necessary
                 pbar.update(1)
