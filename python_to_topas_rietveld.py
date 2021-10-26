@@ -172,7 +172,8 @@ class Analyzer:
                     'volume':vol
                     })
     # Make Plots{{{
-    def make_plots(self,save_figs = False, plot_diff = False):
+    def make_plots(self,save_figs = False, show_diff = False):
+        plot_diff = show_diff #I am being lazy here. 
         with tqdm(total= len(self.data_dict), desc='Making Figures...') as pbar: 
             with tqdm(total = len(self.data_dict), desc= 'Saving Figures...') as pbar2: 
             
@@ -312,7 +313,7 @@ class Analyzer:
                 '''
                 subplot_fig = plt.figure(fig_num) #This makes a figure with the number of "fig_num"
                 subplot_fig.clear() #This clears the figure out. 
-                subplot_fig.set_size_inches(12,12.5) #Resize the overall large figure
+                subplot_fig.set_size_inches(14,12.5) #Resize the overall large figure
              
                 self.figure_dictionary[fig_num] = {'fig_{}'.format(fig_num): subplot_fig} #This adds the figure to the figure dictionary
                 '''
@@ -320,8 +321,8 @@ class Analyzer:
                 '''
                 x_axis = r'$2{\theta}^\circ$' #This is the label for x
                 y_axis = 'Intensity' # Label for y
-                self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].text(0.5,0.04, x_axis, ha = 'center')
-                self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].text(0.04,0.5, y_axis, va = 'center', rotation='vertical')
+                self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].supxlabel(x_axis) #Adds an xlabel for the whole fig. 
+                self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].supylabel(y_axis) #Adds a ylabel for the whole fig. 
                 ############################################################################3
                              
                 for i, f in enumerate(self.data_dict):
@@ -385,6 +386,11 @@ class Analyzer:
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].ticklabel_format(axis='y', style='sci',scilimits=(0,0)) #This is here to force scientific notation for the y axis.
                         title = r"BiVO$_4$ {}".format(v['number'])   
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].set_title(title)
+                #####################################
+                # Add axis labels to the overall figure. 
+                ####################################
+                #self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].text(0.5,-0.04, x_axis, ha = 'center')
+                #self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)].text(-0.04,0.5, y_axis, va = 'center', rotation='vertical')
 
                 self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)]; #I think this will refresh the figure. Not sure its necessary
                 pbar.update(1)
@@ -398,7 +404,7 @@ class Analyzer:
             os.chdir(figure_directory)
             with tqdm(total = len(figure_range),desc='Saving Figures') as pbar2: 
                 for i, fig_number in enumerate(self.figure_dictionary):
-                    self.figure_dictionary[fig_number]['fig_{}'.format(fig_number)].savefig('BVO_{}_x_{}_grid_{}.png'.format(rows,cols,i))
+                    self.figure_dictionary[fig_number]['fig_{}'.format(fig_number)].savefig('BVO_{}_x_{}_grid_{}.png'.format(rows,cols,i+1))
                     pbar2.update(1)
                 os.chdir(self.data_folder)
              
