@@ -60,7 +60,11 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
     for f in files:
         if f.endswith('.inp'): 
             filenames.append(f) 
-    with tqdm(total=len(filenames)) as pbar:
+    ###########################
+    # Input Files sent to 
+    # TOPAS for analysis
+    ##########################
+    with tqdm(total=len(filenames,desc = 'Analyzing With TOPAS')) as pbar:
         for i, inp_file in enumerate(filenames):  
             refine_cmd = 'tc '+working_directory+'\\' #This is the refinement command for TOPAS
             os.chdir(TOPAS6_dir)
@@ -79,8 +83,12 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
             csv_files.append(f)
         elif f.endswith('.out'):
             out_files.append(f)
-    with tqdm(total = len(xy_files)+ len(csv_files)) as pbar:
-        print('Moving .csv and .xy files...')
+    ##########################
+    # Moving the .xy and .csv
+    # Files to the output 
+    # Directory.
+    #########################
+    with tqdm(total = len(xy_files)+ len(csv_files),desc='Moving .csv/.xy Files') as pbar: 
         for i, f in enumerate(dir_contents):
             if f.endswith('.xy') or f.endswith('.csv'): 
                 os.chdir(output_dir)#checks to see if the file already exists. 
@@ -90,8 +98,13 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
                 os.chdir(working_directory) 
                 shutil.move(f,output_dir)#This moves the newly created .xy files to the output folder. 
                 pbar.update(1)
-    with tqdm(total=len(out_files)) as pbar:
-        print('Moving .out files...')
+    ###########################
+    # Handling of .out files
+    # From TOPAS
+    # Default is to keep these
+    # Files and move them. 
+    ###########################
+    with tqdm(total=len(out_files), desc='Moving .out Files: {}'.format(del_out)) as pbar: 
         for f in out_files:
             if del_out == True:  
                 os.remove(f)
@@ -205,9 +218,11 @@ class Analyzer:
             ##################################
             save_excel = input('###################################################################\n'
                                 '# Do you want to save an excel file with the complete dataframe? \n'
-                                '# y/n \n'
+                                '# y/(n) \n'
                                 '###################################################################\n')
-            if save_excel == 'y':
+            if save_excel == '':
+                pass
+            elif save_excel == 'y':
                 complete_dataframe_name = 'Excel_Output'
                 complete_dataframe_dir = self.data_folder+'/'+complete_dataframe_name #Synthesizes the full path
                 if os.path.isdir(complete_dataframe_dir):
@@ -221,105 +236,127 @@ class Analyzer:
     # Make Plots{{{
     def make_plots(self,save_figs = False, show_diff = False):
         plot_diff = show_diff #I am being lazy here. 
-        with tqdm(total= len(self.data_dict), desc='Making Figures...') as pbar: 
-            with tqdm(total = len(self.data_dict), desc= 'Saving Figures...') as pbar2: 
-            
-                for i, dict_entry in enumerate(self.data_dict.values()):
-                    #This is where the xy file plots are made{{{
-                    fn_no_xy = dict_entry['filename'].strip('.xy')+'_Simulated_Pattern'
-                    ##################################################################
-                    angle = dict_entry['angle'] 
-                    y_calc = dict_entry['y_calc']
-                    y_obs = dict_entry['y_obs']
-                    y_diff = dict_entry['y_diff']
-                    modified_diff_curve = dict_entry['modified_diff_curve'] 
-                    ###################################################################
+        with tqdm(total= len(self.data_dict), desc='Making y_calc_Figures...') as pbar:  
+            if show_diff == True:
+                pbar2 = tqdm(total=len(self.data_dict),desc = 'Making Difference Figs...')
+            if save_figs == True:
+                pbar3 = tqdm(total = len(self.data_dict), desc= 'Saving y_calc Figures...') 
+                if show_diff == True:
+                    pbar4 = tqdm(total = len(self.data_dict), desc= 'Saving Difference Figures...') 
+                
+            for i, dict_entry in enumerate(self.data_dict.values()):
+                #This is where the xy file plots are made{{{
+                fn_no_xy = dict_entry['filename'].strip('.xy')+'_Simulated_Pattern'
+                ##################################################################
+                angle = dict_entry['angle'] 
+                y_calc = dict_entry['y_calc']
+                y_obs = dict_entry['y_obs']
+                y_diff = dict_entry['y_diff']
+                modified_diff_curve = dict_entry['modified_diff_curve'] 
+                ###################################################################
                      
-                    fig,ax = plt.subplots()
-                    if plot_diff == True:
-                        fig2,ax2 = plt.subplots()
-                        ax2.plot(angle,modified_diff_curve,'grey') #plots the fixed difference curve
-                        ax2.plot(angle,y_obs,'b') #Plots observed
-                        ax2.plot(angle,y_calc,'r')
-                             
-                        ax2.set_ylabel('Intensity')
-                        ax2.set_xlabel(r'$2{\theta}^\circ$')
-                        dict_entry.update({
-                            'diff_fig': fig2,
-                            'diff_ax': ax2
-                            })
-         
-                         
+                fig,ax = plt.subplots()
+                fig.set_size_inches(8,8)
+                dict_entry.update({
+                    'fig': fig,
+                    'ax': ax  
+                    })
+                ax.plot(angle, y_calc, 'r'); ########## Plot of y calc only
+                ax.ticklabel_format(axis = 'y',style = 'sci', scilimits = (0,0)) #This forces scientific notation
+                plt.tight_layout()
+                pbar.update(1) ## Progress the first progress bar
+
+                if plot_diff == True:
+                    #with tqdm(total=len(self.data_dict),desc='Making Difference Figs') as pbar2:
+                    fig2,ax2 = plt.subplots()
+                    fig2.set_size_inches(8,8)
+                    ax2.plot(angle,modified_diff_curve,'grey'); #plots the fixed difference curve
+                    ax2.plot(angle,y_obs,'b'); #Plots observed
+                    ax2.plot(angle,y_calc,'r');
+                    ax2.ticklabel_format(axis='y',style='sci',scilimits=(0,0)) #This forces scientific notation
+                    fig2.suptitle(' ') #Trying to get the title to not be cut off.  
+                    ax2.set_ylabel('Intensity')
+                    ax2.set_xlabel(r'$2{\theta}^\circ$')
                     dict_entry.update({
-                        'fig': fig,
-                        'ax': ax  
+                        'diff_fig': fig2,
+                        'diff_ax': ax2
                         })
-                    ax.plot(angle, y_calc, 'r')
+                    plt.tight_layout() 
+                    pbar2.update(1) #Progress the second progress bar
                      
-                    #Creating the plot titles. 
-                    fn_list = fn_no_xy.split('_')
-                    fn_list[0] = r'BiVO$_4$'
+                #Creating the plot titles. 
+                fn_list = fn_no_xy.split('_')
+                fn_list[0] = r'BiVO$_4$'
+                if self.rietveld == True:
+                    fn_list[-2] = 'Rietveld' #This replaces the word 'simulation' with 'Rietveld'  
+                title = ' '.join(fn_list)
+                if plot_diff == True:
+                    ax2.set_title(title+' Difference')
+                ax.set_title(title)
+                ax.set_ylabel('Intensity')
+                ax.set_xlabel(r'$2{\theta}^\circ$')
+                ######################################
+                # Saving of figures happens
+                # here.
+                ######################################
+                if save_figs == True:
+                    #with tqdm(total = len(self.data_dict), desc= 'Saving y_calc Figures...') as pbar3: 
+                    figure_directory = self.data_folder+'/figures' #This gives the absolute path of the directory
+                    if os.path.isdir(figure_directory):
+                        pass
+                    else:
+                        os.mkdir(figure_directory)
+                    os.chdir(figure_directory)
+                    ######################################################
                     if self.rietveld == True:
-                        fn_list[-2] = 'Rietveld' #This replaces the word 'simulation' with 'Rietveld'  
-                    title = ' '.join(fn_list)
+                        ####### Changes the name to rietveld. 
+                        fig.savefig('BiVO4_Rietveld_{}.png'.format(dict_entry['number']))
+                    elif self.rietveld ==False:
+                        fig.savefig('BiVO4_Pattern_Sim_{}.png'.format(dict_entry['number']))
+                    pbar3.update(1) #Saving of y_calc happens here
+                    ###################################################### 
                     if plot_diff == True:
-                        ax2.set_title(title+' Difference')
-                    ax.set_title(title)
-                    ax.set_ylabel('Intensity')
-                    ax.set_xlabel(r'$2{\theta}^\circ$')
-                    pbar.update(1) 
-                    if save_figs == True:
-                        figure_directory = self.data_folder+'/figures' #This gives the absolute path of the directory
-                        if os.path.exists(figure_directory):
-                            pass
-                        else:
-                            os.mkdir(figure_directory)
-                        os.chdir(figure_directory)
-                        #####################################################
+                        #with tqdm(total=len(self.data_dict),desc='Saving Difference Figures...') as pbar4:
                         if self.rietveld == True:
-                            ###### Changes the name to rietveld. 
-                            fig.savefig('BiVO4_Rietveld_{}.png'.format(dict_entry['number']))
-                        elif self.rietveld ==False:
-                            fig.savefig('BiVO4_Pattern_Sim_{}.png'.format(dict_entry['number']))
-                        #####################################################
-                        if plot_diff == True:
-                            if self.rietveld == True:
-                                ##### Changes the name to rieteveld
-                                fig2.savefig('BiVO4_Rietveld_diff_{}.png'.format(dict_entry['number']))
-                            elif self.rietveld == False:
-                                fig2.savefig('BiVO4_Pattern_Sim_diff_{}.png'.format(dict_entry['number']))
-                        #####################################################
-                        pbar2.update(1)
+                            ##### Changes the name to rieteveld
+                            fig2.savefig('BiVO4_Rietveld_diff_{}.png'.format(dict_entry['number']))
+                        elif self.rietveld == False:
+                            fig2.savefig('BiVO4_Pattern_Sim_diff_{}.png'.format(dict_entry['number']))
+                        pbar4.update(1) # Saving of y_diff happens here 
+                    #####################################################
+                        
                 #}}}
-                #This is where the .csv figures will be made.{{{
-                if self.csv_files_loaded == True:   
-                    #We have csv data in out dictionary. 
-                    #These plots are put onto the self variable since there is only one for all files. 
-                    #################
-                    # Rwp Plot
-                    ################
-                    self.rwp_fig, self.rwp_ax = plt.subplots()
-                    for i, v in enumerate(tqdm(self.data_dict, desc='Rwp Figure')):
-                        self.rwp_ax.scatter(i,self.data_dict[i]['rwp'], color='b')
-                    self.rwp_ax.set_xlabel('Enumeration Figure')
-                    self.rwp_ax.set_ylabel(r'R$_{wp}$')
-                    self.rwp_ax.set_title(r'R$_{wp}$ Results')
-                    #################
-                    # Volume Plot
-                    #################
-                    self.vol_fig, self.vol_ax = plt.subplots()
-                    for i,v in enumerate(tqdm(self.data_dict,desc='Vol Figure')):
-                        self.vol_ax.scatter(i,self.data_dict[i]['volume'], color='b')
-                    self.vol_ax.set_xlabel('Enumeration Figure')
-                    self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
-                    self.vol_ax.set_title('Volume Results')
+            #This is where the .csv figures will be made.{{{
+            if self.csv_files_loaded == True:   
+                #We have csv data in out dictionary. 
+                #These plots are put onto the self variable since there is only one for all files. 
+                #################
+                # Rwp Plot
+                ################
+                self.rwp_fig, self.rwp_ax = plt.subplots()
+                for i, v in enumerate(tqdm(self.data_dict, desc='Rwp Figure')):
+                    self.rwp_ax.scatter(i,self.data_dict[i]['rwp'], color='b')
+                self.rwp_ax.set_xlabel('Enumeration Figure')
+                self.rwp_ax.set_ylabel(r'R$_{wp}$')
+                self.rwp_ax.set_title(r'R$_{wp}$ Results')
+                #################
+                # Volume Plot
+                #################
+                self.vol_fig, self.vol_ax = plt.subplots()
+                for i,v in enumerate(tqdm(self.data_dict,desc='Vol Figure')):
+                    self.vol_ax.scatter(i,self.data_dict[i]['volume'], color='b')
+                self.vol_ax.set_xlabel('Enumeration Figure')
+                self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
+                self.vol_ax.set_title('Volume Results')
+                #################
+                # Save figs
+                #################
 
-
-                    if save_figs == True:
-                        self.rwp_fig.savefig('BiVO4_Enumeration_Rwp_Plot.png')
-                        self.vol_fig.savefig('BiVO4_Enumeration_Volume_Plot.png')
-                #}}} 
-            os.chdir(self.data_folder)
+                if save_figs == True:
+                    self.rwp_fig.savefig('BiVO4_Enumeration_Rwp_Plot.png')
+                    self.vol_fig.savefig('BiVO4_Enumeration_Volume_Plot.png')
+            #}}} 
+        os.chdir(self.data_folder)
     #}}}
     #Subplots{{{
     def subplot_creator(self, rows = 3,cols = 3,save_figs=True,show_diff = False):
@@ -424,9 +461,9 @@ class Analyzer:
                         #This means that if corrected_i!=0 then do these things. 
 
                         if show_diff == True:
-                            self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(subplot_angle, subplot_modified_y_diff, 'grey')#This plots the difference curve. 
-                        self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(subplot_angle,subplot_y_obs,'b') #Plots the observed pattern
-                        self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(subplot_angle,subplot_y_calc,'r') #Plots the calculated pattern
+                            self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(subplot_angle, subplot_modified_y_diff, 'grey'); #This plots the difference curve. 
+                        self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(subplot_angle,subplot_y_obs,'b'); #Plots the observed pattern
+                        self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(subplot_angle,subplot_y_calc,'r'); #Plots the calculated pattern
                         ######################################
             
                         plt.tight_layout(w_pad=1,h_pad=1)#This adds enough space between the plots so that nothing gets cut off. 
