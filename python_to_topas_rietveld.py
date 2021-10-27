@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import numpy as np
 import matplotlib.ticker as mticker
+from matplotlib.offsetbox import AnchoredText
 #}}}
 #function to send inps to topas{{{
 def topas_refinement(working_directory = os.getcwd(), del_out = False):
@@ -234,7 +235,7 @@ class Analyzer:
             os.chdir(self.data_folder) ##### Returns us to the original directory.
         #}}}
     # Make Plots{{{
-    def make_plots(self,save_figs = False, show_diff = False):
+    def make_plots(self,save_figs = False, show_diff = False, show_rwp=True, close_all=True):
         plot_diff = show_diff #I am being lazy here. 
         with tqdm(total= len(self.data_dict), desc='Making y_calc_Figures...') as pbar:  
             if show_diff == True:
@@ -262,8 +263,7 @@ class Analyzer:
                     'ax': ax  
                     })
                 ax.plot(angle, y_calc, 'r'); ########## Plot of y calc only
-                ax.ticklabel_format(axis = 'y',style = 'sci', scilimits = (0,0)) #This forces scientific notation
-                plt.tight_layout()
+                ax.ticklabel_format(axis = 'y',style = 'sci', scilimits = (0,0)) #This forces scientific notation 
                 pbar.update(1) ## Progress the first progress bar
 
                 if plot_diff == True:
@@ -281,7 +281,11 @@ class Analyzer:
                         'diff_fig': fig2,
                         'diff_ax': ax2
                         })
-                    plt.tight_layout() 
+                    plt.tight_layout(w_pad=1,h_pad=1) 
+                    if self.csv_files_loaded == True:
+                        if show_rwp == True:
+                            rwp_text_box = AnchoredText(r'R$_{wp}$'+': {}'.format(dict_entry['rwp']), loc=1) #This anchors the rwp in the top right
+                            ax2.add_artist(rwp_text_box)
                     pbar2.update(1) #Progress the second progress bar
                      
                 #Creating the plot titles. 
@@ -295,6 +299,7 @@ class Analyzer:
                 ax.set_title(title)
                 ax.set_ylabel('Intensity')
                 ax.set_xlabel(r'$2{\theta}^\circ$')
+                plt.tight_layout(w_pad=1,h_pad=1)
                 ######################################
                 # Saving of figures happens
                 # here.
@@ -324,6 +329,15 @@ class Analyzer:
                             fig2.savefig('BiVO4_Pattern_Sim_diff_{}.png'.format(dict_entry['number']))
                         pbar4.update(1) # Saving of y_diff happens here 
                     #####################################################
+
+                    #Close Figures{{{
+                    #####################
+                    # Close Figures
+                    #####################
+
+                    if close_all == True:
+                        plt.close('all') #This will close all figures when run
+                    #}}}
                         
                 #}}}
             #This is where the .csv figures will be made.{{{
@@ -359,7 +373,7 @@ class Analyzer:
         os.chdir(self.data_folder)
     #}}}
     #Subplots{{{
-    def subplot_creator(self, rows = 3,cols = 3,save_figs=True,show_diff = False):
+    def subplot_creator(self, rows = 3,cols = 3,save_figs=True,show_diff = False, show_rwp = True):
         num_plots = len(self.data_dict)#This is the total number of plots to make. 
         plots_per_subplot = rows*cols #This defines the total number of plots per subplot. 
         if num_plots > plots_per_subplot:
@@ -388,7 +402,7 @@ class Analyzer:
         Here is where all the plotting happens with a 
         progress bar. 
         '''
-        with tqdm(total=len(figure_range),desc='Making Figures') as pbar:
+        with tqdm(total=num_figs,desc='Making Figures') as pbar:
             #print('Generating {} Plots'.format(num_figs))
             for fig_num in figure_range:
                 '''
@@ -465,6 +479,13 @@ class Analyzer:
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(subplot_angle,subplot_y_obs,'b'); #Plots the observed pattern
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(subplot_angle,subplot_y_calc,'r'); #Plots the calculated pattern
                         ######################################
+                        ######################################
+                        # Show Rwp
+                        #####################################
+                        if self.csv_files_loaded == True:
+                            if show_rwp == True:
+                                rwp_text_box = AnchoredText(r'R$_{wp}$'+': {}'.format(v['rwp']), loc=1) #This anchors the rwp in the top right
+                                self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].add_artist(rwp_text_box) #This adds the rwp in a box to the plot.
             
                         plt.tight_layout(w_pad=1,h_pad=1)#This adds enough space between the plots so that nothing gets cut off. 
                         #####################################
