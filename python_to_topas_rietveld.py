@@ -113,6 +113,7 @@ class Analyzer:
         self.csv_files_loaded = False ###########################Default value is false. Will change if csv files are detected. 
         self.rietveld = False ################################## Default value is false  will change if csv files are loaded
         os.chdir(data_folder) #Changes us to the working directory
+        #Automatic .xy file data extraction. {{{
         for i, f in enumerate(os.listdir()):
             if f.endswith('.xy'):
                 filename = f 
@@ -137,6 +138,8 @@ class Analyzer:
                     'modified_diff_curve': modified_diff_curve,
                     'number': number
                 }
+        #}}}
+        #Automatic .csv file data extraction {{{
         for i,f in enumerate(os.listdir()):
             ####################
             # Has to be in a new loop in case the program doesn't encounter
@@ -184,6 +187,8 @@ class Analyzer:
                     'volume':vol,
                     'df': df
                     })
+        #}}}
+        #Making Large Dataframe and Excel File {{{
         ################################
         # Saving a large table
         # This contains all of the 
@@ -198,15 +203,21 @@ class Analyzer:
             ##################################
             #Saving to Excel
             ##################################
-            complete_dataframe_name = 'Excel_Output'
-            complete_dataframe_dir = self.data_folder+'/'+complete_dataframe_name #Synthesizes the full path
-            if os.path.isdir(complete_dataframe_dir):
-                pass
-            else:
-                os.mkdir(complete_dataframe_name) #makes the directory
-            os.chdir(complete_dataframe_dir) 
-            self.complete_df.to_excel('Rietveld_Results_Full.xlsx', index = False) #writes the data to the excel file. 
+            save_excel = input('###################################################################\n'
+                                '# Do you want to save an excel file with the complete dataframe? \n'
+                                '# y/n \n'
+                                '###################################################################\n')
+            if save_excel == 'y':
+                complete_dataframe_name = 'Excel_Output'
+                complete_dataframe_dir = self.data_folder+'/'+complete_dataframe_name #Synthesizes the full path
+                if os.path.isdir(complete_dataframe_dir):
+                    pass
+                else:
+                    os.mkdir(complete_dataframe_name) #makes the directory
+                os.chdir(complete_dataframe_dir) 
+                self.complete_df.to_excel('Rietveld_Results_Full.xlsx', index = False) #writes the data to the excel file. 
             os.chdir(self.data_folder) ##### Returns us to the original directory.
+        #}}}
     # Make Plots{{{
     def make_plots(self,save_figs = False, show_diff = False):
         plot_diff = show_diff #I am being lazy here. 
