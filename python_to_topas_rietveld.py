@@ -64,7 +64,7 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
     # Input Files sent to 
     # TOPAS for analysis
     ##########################
-    with tqdm(total=len(filenames,desc = 'Analyzing With TOPAS')) as pbar:
+    with tqdm(total=len(filenames),desc = 'Analyzing With TOPAS') as pbar:
         for i, inp_file in enumerate(filenames):  
             refine_cmd = 'tc '+working_directory+'\\' #This is the refinement command for TOPAS
             os.chdir(TOPAS6_dir)
