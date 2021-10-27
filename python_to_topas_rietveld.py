@@ -153,6 +153,7 @@ class Analyzer:
                 '''
                 Create variables for Rwp, a,b,c, al,be,ga, vol
                 '''
+                filename_shortened = f.strip('_Results.csv') #This gives us a short name to use as a column.
                 rwp = csv_df[cols[0]]
                 a = csv_df[cols[1]]
                 b = csv_df[cols[2]]
@@ -161,6 +162,17 @@ class Analyzer:
                 be = csv_df[cols[5]]
                 ga = csv_df[cols[6]]
                 vol = csv_df[cols[7]]
+
+                ###########################
+                # adding filenames to the 
+                # Dataframe
+                ###########################
+                df = csv_df.copy() #make a copy. 
+                df.insert(0, 'filename', f.strip('_Results.csv')) #Inserts the filename to the first column
+
+                ###########################
+                # Update the dictionary
+                ###########################
                 self.data_dict[file_number].update({'csv':csv_df,
                     'rwp':rwp,
                     'a':a,
@@ -169,8 +181,32 @@ class Analyzer:
                     'alpha':al,
                     'beta':be,
                     'gamma':ga,
-                    'volume':vol
+                    'volume':vol,
+                    'df': df
                     })
+        ################################
+        # Saving a large table
+        # This contains all of the 
+        # data from the csv in one table
+        ################################
+        if self.csv_files_loaded == True:
+            dataframes = [] #Create a list to house all of the dataframes.
+            for i, f in enumerate(self.data_dict): 
+                if i !=0:
+                    dataframes.append(self.data_dict[i]['df']) # Add the df with the filenames into the list. 
+            self.complete_df = self.data_dict[0]['df'].append(dataframes)
+            ##################################
+            #Saving to Excel
+            ##################################
+            complete_dataframe_name = 'Excel_Output'
+            complete_dataframe_dir = self.data_folder+'/'+complete_dataframe_name #Synthesizes the full path
+            if os.path.isdir(complete_dataframe_dir):
+                pass
+            else:
+                os.mkdir(complete_dataframe_name) #makes the directory
+            os.chdir(complete_dataframe_dir) 
+            self.complete_df.to_excel('Rietveld_Results_Full.xlsx', index = False) #writes the data to the excel file. 
+            os.chdir(self.data_folder) ##### Returns us to the original directory.
     # Make Plots{{{
     def make_plots(self,save_figs = False, show_diff = False):
         plot_diff = show_diff #I am being lazy here. 
