@@ -23,9 +23,10 @@ elif directory == False:
 elif directory == '0':
     dir_dict = {}
     print('i | Directory Name\n_____________________________________________________')
-    for i, dir_name in enumerate(dir_list):
-        print('\n{} | {}\n_____________________________________________________'.format(i,dir_name))
-        dir_dict[i] = dir_name #This adds the directory names into a dictionary
+    for i, dir_name in enumerate(dir_list): 
+        if os.path.isdir(dir_name):
+            print('\n{} | {}\n_____________________________________________________'.format(i,dir_name))
+            dir_dict[i] = dir_name #This adds the directory names into a dictionary
     dir_num = input('Please type the number of the directory where your files are.\n'
             '------------------------------------------------------------------------ \n'
             )
@@ -36,6 +37,9 @@ elif directory:
     os.chdir(directory)
 #}}}
 #Inputs for function params{{{
+#############################
+# Atom for Removal
+#############################
 atom_for_removal = input('What atom should be removed by this program? (Default is Pb): \n'
         '------------------------------------------------------------- \n')
 if atom_for_removal:
@@ -43,21 +47,39 @@ if atom_for_removal:
 else:
     atom_for_removal = 'Pb'
 #print('You selected {} for removal. Input type: {}'.format(atom_for_removal,type(atom_for_removal)))
-
+#############################
+# Atom for Replacement
+#############################
 atom_for_replacement = input('What atom do you want to have replaced? (Default is Fe): \n'
         'If you do not want to replace an atom, input: "0". \n'
         'If you want to replace multiple atoms, input: "1".\n'
         '------------------------------------------------------------ \n')
-if atom_for_replacement != '0' and atom_for_replacement != '1':
+##########################
+# Atom explicitly assigned
+##########################
+if atom_for_replacement != '0' and atom_for_replacement != '1' and atom_for_replacement != '':
     atom_for_replacement = atom_for_replacement
+#########################
+# If we want to assign
+# multiple atoms to 
+# replace
+#########################
 elif atom_for_replacement == '1': 
     atoms_for_replacement = input('Please type the atoms to replace, separated by: ",".\n'
             '------------------------------------------------------------ \n')
     atoms_for_replacement =atoms_for_replacement.split(',')
+########################
+# This is the default
+#######################
+elif atom_for_replacement == '':
+    atom_for_replacement = 'Fe'
+########################
+# This will not replace 
+# Any atom. 
+#######################
 elif atom_for_replacement == "0":
     atom_for_replacement = ''
-else:
-    atom_for_replacement = 'Fe'
+   
 #print('You selected {} for replacement. Input type: {}'.format(atom_for_replacement,type(atom_for_replacement)))
 
 if atom_for_replacement:

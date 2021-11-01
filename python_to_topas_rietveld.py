@@ -5,7 +5,7 @@ topas_refinement function is inspired by Monty Cosby's code.
 The class was made by Dario Lewczyk
 '''
 #}}}
-#Inputs{{{
+#Imports{{{
 import os, subprocess
 import shutil
 import sys
@@ -77,6 +77,7 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
     xy_files = []
     csv_files = []
     out_files = []
+    cif_files = []
     for f in dir_contents:
         if f.endswith('.xy'):
             xy_files.append(f)
@@ -84,14 +85,16 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
             csv_files.append(f)
         elif f.endswith('.out'):
             out_files.append(f)
+        elif f.endswith('.cif'):
+            cif_files.append(f)
     ##########################
     # Moving the .xy and .csv
     # Files to the output 
     # Directory.
     #########################
-    with tqdm(total = len(xy_files)+ len(csv_files),desc='Moving .csv/.xy Files') as pbar: 
+    with tqdm(total = len(xy_files)+ len(csv_files),desc='Moving .csv/.xy/ .cif Files') as pbar: 
         for i, f in enumerate(dir_contents):
-            if f.endswith('.xy') or f.endswith('.csv'): 
+            if f.endswith('.xy') or f.endswith('.csv') or f.endswith('.cif'): 
                 os.chdir(output_dir)#checks to see if the file already exists. 
                 for i2, f2 in enumerate(os.listdir()):
                     if f == f2:

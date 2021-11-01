@@ -45,7 +45,7 @@ bvo_inp_bottom_lines = bvo_inp_bottom_half.readlines()
 cif_files = []
 
 os.chdir(working_dir) ################################# WORKING DIRECTORY
-output_dir = 'inp_files'
+output_dir = os.getcwd()+'/inp_files'
 if os.path.isdir(output_dir):
     #If the directory exists, this clears all the inp files from it. 
     os.chdir(output_dir)
@@ -86,7 +86,7 @@ with tqdm(total=len(cif_files)) as pbar:
         ga = cur_struct.lattice.gamma
         vol = cur_struct.lattice.volume
         
-        with open(working_dir+'/'+output_dir+'/'+inp_name,'w') as inp_file:
+        with open(output_dir+'/'+inp_name,'w') as inp_file:
             for line in bvo_inp_top_lines:
                 inp_file.write(line) #This copies the lines present in the template.
             ## Now we need to add the structure. 
@@ -142,6 +142,9 @@ with tqdm(total=len(cif_files)) as pbar:
 		'\t\t'+'\"%11.6f,\" = Ycalc;\n'	
 		'\t\t'+r'"%11.6f\n" = Yobs - Ycalc;'+'\n'	
                 '\t\t}'
+                    )
+            inp_file.write(
+                '\tOut_CIF_STR(\"Refined_{}.cif\")'.format(no_cif_name)
                     )
             inp_file.close()  
             pbar.update(1)

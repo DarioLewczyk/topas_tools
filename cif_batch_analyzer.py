@@ -153,6 +153,6 @@ class BatchAnalyzer:
             self.unique_sites_dict[i] = self.df_transposed_cleaned[self.df_transposed_cleaned['unique sites'] == unique_sites] 
 
     #}}}
-#}}}
+    #}}}
 
 

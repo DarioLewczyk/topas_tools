@@ -1,0 +1,36 @@
+'--------------------------------------------------------------
+'Input File for simple Rietveld Refinement
+'Replace any $, # or text after ---> as needed
+'Use Ta-> button to save/send to topas; Ta button to launch topas; run in topas with red arrow
+'--------------------------------------------------------------
+r_wp 0 r_exp 0 r_p 0 r_wp_dash 0 r_p_dash 0 r_exp_dash 0 weighted_Durbin_Watson 0 gof 0
+
+'--------------------------------------------------------------
+'General information about refinement here
+'Remove commented lines as required
+'--------------------------------------------------------------
+iters 100000
+chi2_convergence_criteria 0.001
+'do_errors
+
+'--------------------------------------------------------------
+'Information on datafile etc here
+'Check that default weighting is appropriate for your data
+'--------------------------------------------------------------
+xdd "Z:\\Documents\Stony_Brook\Khalifah_Research_Group\Li7RuO6_Rietveld\11bmb_5352.xye"
+	x_calculation_step = Yobs_dx_at(Xo); convolution_step 4
+	bkg @ -17.36887378 175.0487595 -175.7292228 126.8247282 -78.26297433 35.58980743
+	One_on_X(@, 1453.762103)
+	'Simple_Axial_Model(axial,10)
+	
+	lam ymin_on_ymax 0.0001 la 1.0 lo 0.457944 lh 0.1
+	LP_Factor( 90) 'change the LP correction  or lh value if required
+			
+	'Zero_Error(zero,0)
+
+	finish_X 19.5
+'--------------------------------------------------------------
+'Information on structure
+'Change recurring numbers in coordinates as required e.g. 0.3333 to =1/3;
+'--------------------------------------------------------------
+	

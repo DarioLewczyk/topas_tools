@@ -5,12 +5,13 @@ This is not yet modularized so you have to go through and modify parameters as n
 You must also have templates available (unless you want to use string formatting to generate the whole file).
 
 Created by: Dario Lewczyk
-Date: 10-21-21
+Date: 10-28-21
 V: 1.0.0
 '''
 #}}}
 #Imports{{{
 import os, subprocess
+import shutil
 import sys
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -20,36 +21,47 @@ from pymatgen.core.periodic_table import Specie
 import numpy as np
 #}}}
 #Defining the directories we need.{{{
+'''
+The working_dir variable is the directory where this script is called. 
+
+template_inp_directory is where you have your templates saved. 
+
+cif_directory is where you have your .cif files saved. 
+'''
 working_dir = os.getcwd() #lists the current directory.
-template_inp_directory = '/Users/christopherlewczyk/Documents/Stony_Brook/Khalifah_Research_Group/Python_Tools/BVO_Pattern_Simulation' #This is where the template inp files are. 
-cif_directory = '/Users/christopherlewczyk/Documents/Stony_Brook/Khalifah_Research_Group/BiVO4_Work/BiVO4_Enumeration/output/Fixed_Output' #This is where the cif files are
+template_inp_directory = '/Users/christopherlewczyk/Documents/Stony_Brook/Khalifah_Research_Group/Python_Tools/LRO_Rietveld' #This is where the template inp files are. 
+cif_directory = '/Users/christopherlewczyk/Documents/Stony_Brook/Khalifah_Research_Group/Li7Ru06_Enumeration/Li7Ru06_SG2_Output/Fixed_Output' #This is where the cif files are
 #}}}
 #Making the lists of lines from the inp templates{{{
 os.chdir(template_inp_directory)
-bvo_inp_top_half = open('625Mo_BiVO4_top_half_template.inp')
-bvo_inp_bottom_half = open('625Mo_BiVO4_bottom_half_template.inp')
+inp_top_half = open('lro_top_template.inp')
+inp_bottom_half = open('lro_bottom_template.inp')
 
-bvo_inp_top_lines = bvo_inp_top_half.readlines()
-bvo_inp_bottom_lines = bvo_inp_bottom_half.readlines()
+#This reads the lines of the templates to prepare for saving to the new file. 
+inp_top_lines = inp_top_half.readlines() 
+inp_bottom_lines = inp_bottom_half.readlines()
 #}}}
 #Making the Inp files{{{
 cif_files = []
 
-os.chdir(working_dir)
+os.chdir(working_dir) ################################# WORKING DIRECTORY
 output_dir = os.getcwd()+'/inp_files'
 if os.path.isdir(output_dir):
     #If the directory exists, this clears all the inp files from it. 
     os.chdir(output_dir)
-    output_directory = os.getcwd()
-    dir_contents = os.listdir()
-    ###### Removing the old inp files
-    for f in dir_contents:
-        if f.endswith('.inp'):
-            os.remove(f)
-    os.chdir(working_dir) 
+    output_directory = os.getcwd() ######################## OUTPUT DIRECTORY DEFINED
+    dir_contents = os.listdir() #######
+    #for f in dir_contents:
+        #if f.endswith('.inp'):
+            #path = os.path.join(output_directory,f)
+            #print('{} was removed'.format(path)) 
+            #os.remove(path)
+    os.chdir(working_dir) ############################# RE-ENTER WORKING DIRECTORY
+    shutil.rmtree(output_directory)
+    os.mkdir(output_dir)
 else:
     os.mkdir(output_dir)
-os.chdir(cif_directory)
+os.chdir(cif_directory) ############################## CIF DIRECTORY
 for filename in os.listdir():
     if filename.endswith('.cif'):
         cif_files.append(filename)
@@ -65,24 +77,32 @@ with tqdm(total=len(cif_files)) as pbar:
             - Since there is no file with the name that we are naming our file, we have to put the "open" command into write mode with the "w" flag.
             - This is currently set up for outputting .xy files that are simulated diffraction patterns. 
         '''
+        ############ Lattice Params
+        a = cur_struct.lattice.a
+        b = cur_struct.lattice.b
+        c = cur_struct.lattice.c
+        al = cur_struct.lattice.alpha
+        be = cur_struct.lattice.beta
+        ga = cur_struct.lattice.gamma
+        vol = cur_struct.lattice.volume
         
         with open(output_dir+'/'+inp_name,'w') as inp_file:
-            for line in bvo_inp_top_lines:
+            for line in inp_top_lines:
                 inp_file.write(line) #This copies the lines present in the template.
             ## Now we need to add the structure. 
             inp_file.write('str\n' 
                     '\t\tspace_group \"{}\"'.format(cur_struct.get_space_group_info(symprec=0.01, angle_tolerance=5.0)[0])+'\n' 
                     '\t\tscale @ 1.68165115e-005\n'
 
-                    '\t \t'+'a {}'.format(cur_struct.lattice.a)+'\n'
-                    '\t \t'+'b {}'.format(cur_struct.lattice.b)+'\n'
-                    '\t \t'+'c {}'.format(cur_struct.lattice.c)+'\n'
+                    '\t \t'+'a @ {}'.format(a)+'\n'
+                    '\t \t'+'b @ {}'.format(b)+'\n'
+                    '\t \t'+'c @ {}'.format(c)+'\n'
     
-                    '\t \t'+'al {}'.format(cur_struct.lattice.alpha)+'\n'
-                    '\t \t'+'be {}'.format(cur_struct.lattice.beta)+'\n'
-                    '\t \t'+'ga {}'.format(cur_struct.lattice.gamma)+'\n'
+                    '\t \t'+'al @ {}'.format(al)+'\n'
+                    '\t \t'+'be @ {}'.format(be)+'\n'
+                    '\t \t'+'ga @ {}'.format(ga)+'\n'
     
-                    '\t \t'+'volume {}'.format(cur_struct.lattice.volume)+'\n'
+                    '\t \t'+'volume @ {}'.format(vol)+'\n'
                     )
             for i, site in enumerate(cur_struct.sites):
                 specie_dict = site.specie.as_dict()
@@ -101,8 +121,19 @@ with tqdm(total=len(cif_files)) as pbar:
                     species = specie_dict['element'],  
                     occu = site.as_dict()['species'][0]['occu']))
                     # Now this part is for making topas give us outputs. 
-            for line in bvo_inp_bottom_lines:
+            for line in inp_bottom_lines:
                 inp_file.write(line) #This is writing the second half of the input file. 
+            inp_file.write(
+                '\tout \"{}_Results.csv\"'.format(no_cif_name)+'\n'
+                '\t\tOut(Get(r_wp),'+ r'"%11.10f\t")'+'\n'
+                '\t\tOut(Get(a),'+ r'"%11.10f\t")'+'\n'
+                '\t\tOut(Get(b),'+ r'"%11.10f\t")'+'\n'
+                '\t\tOut(Get(c),'+ r'"%11.10f\t")'+'\n'
+                '\t\tOut(Get(al),'+ r'"%11.10f\t")'+'\n'
+                '\t\tOut(Get(be),'+ r'"%11.10f\t")'+'\n'
+                '\t\tOut(Get(ga),'+ r'"%11.10f\t")'+'\n'
+                '\t\tOut(Get(cell_volume),'+ r'"%11.10f\n")'+'\n' 
+                    )
             inp_file.write( 
                 '\txdd_out \"{}.xy\" load out_record out_fmt out_eqn'.format(no_cif_name)+'\n'
                 '\t\t{\n'
@@ -112,6 +143,15 @@ with tqdm(total=len(cif_files)) as pbar:
 		'\t\t'+r'"%11.6f\n" = Yobs - Ycalc;'+'\n'	
                 '\t\t}'
                     )
-            inp_file.close() 
+            inp_file.close()  
             pbar.update(1)
+#}}}
+#Checking for duplicates.{{{
+os.chdir(working_dir)
+os.chdir(output_dir)
+for f in os.listdir():
+    if f.endswith(' 2.inp'):
+        os.remove(f)
+os.chdir(working_dir)
+
 #}}}
