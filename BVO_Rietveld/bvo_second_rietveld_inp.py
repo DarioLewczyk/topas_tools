@@ -85,24 +85,31 @@ with tqdm(total=len(cif_files)) as pbar:
         be = cur_struct.lattice.beta
         ga = cur_struct.lattice.gamma
         vol = cur_struct.lattice.volume
+        space_group = cur_struct.get_space_group_info(symprec=0.01, angle_tolerance=5.0)[0]
         
         with open(output_dir+'/'+inp_name,'w') as inp_file:
             for line in bvo_inp_top_lines:
                 inp_file.write(line) #This copies the lines present in the template.
             ## Now we need to add the structure. 
+            ###################################
+            # Place the @ symbol where you want 
+            # to have TOPAS refine. 
+            # Going to remove the @ after all of the
+            # Lattice Parameters now. 
+            ###################################
             inp_file.write('str\n' 
-                    '\t\tspace_group \"{}\"'.format(cur_struct.get_space_group_info(symprec=0.01, angle_tolerance=5.0)[0])+'\n' 
+                    '\t\tspace_group \"{}\"'.format(space_group)+'\n' 
                     '\t\tscale @ 1.68165115e-005\n'
 
-                    '\t \t'+'a @ {}'.format(a)+'\n'
-                    '\t \t'+'b @ {}'.format(b)+'\n'
-                    '\t \t'+'c @ {}'.format(c)+'\n'
+                    '\t \t'+'a  {}'.format(a)+'\n'
+                    '\t \t'+'b  {}'.format(b)+'\n'
+                    '\t \t'+'c  {}'.format(c)+'\n'
     
-                    '\t \t'+'al @ {}'.format(al)+'\n'
-                    '\t \t'+'be @ {}'.format(be)+'\n'
-                    '\t \t'+'ga @ {}'.format(ga)+'\n'
+                    '\t \t'+'al  {}'.format(al)+'\n'
+                    '\t \t'+'be  {}'.format(be)+'\n'
+                    '\t \t'+'ga  {}'.format(ga)+'\n'
     
-                    '\t \t'+'volume @ {}'.format(vol)+'\n'
+                    '\t \t'+'volume  {}'.format(vol)+'\n'
                     )
             for i, site in enumerate(cur_struct.sites):
                 specie_dict = site.specie.as_dict()

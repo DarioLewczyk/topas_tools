@@ -17,6 +17,11 @@ from tqdm import tqdm
 import numpy as np
 import matplotlib.ticker as mticker
 from matplotlib.offsetbox import AnchoredText
+import cif_batch_analyzer as cba ## This is my cif batch analyzer so that we can get all of the space group info from the cifs. 
+import matplotlib
+#}}}
+#Matplotlib Reconfiguration{{{
+matplotlib.rcParams['legend.handlelength'] = 0
 #}}}
 #function to send inps to topas{{{
 def topas_refinement(working_directory = os.getcwd(), del_out = False):
@@ -69,7 +74,7 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
         for i, inp_file in enumerate(filenames):  
             refine_cmd = 'tc '+working_directory+'\\' #This is the refinement command for TOPAS
             os.chdir(TOPAS6_dir)
-            subprocess.call(refine_cmd+inp_file) #This is telling TOPAS we want to refine. 
+            subprocess.call(refine_cmd+inp_file) #This is telling TOPAS we want to refine.  
             os.chdir(working_directory) 
             pbar.update(1)
 
@@ -129,7 +134,22 @@ class Analyzer:
         self.dict_of_data_files = {}
         self.csv_files_loaded = False ###########################Default value is false. Will change if csv files are detected. 
         self.rietveld = False ################################## Default value is false  will change if csv files are loaded
+
+        
         os.chdir(data_folder) #Changes us to the working directory
+        ################
+        # Defines the 
+        # Inp directory. 
+        ################
+        os.chdir('../')
+        self.inp_dir = os.getcwd() #Define the inp_dir. 
+        self.inp_files = {} #Creates a dictionary so it will be organized. 
+        for f in os.listdir():
+            if f.endswith('.inp'):
+                number = int(f.strip('.inp').split('_')[-1])
+                self.inp_files[number] = f
+        os.chdir(self.data_folder)
+
         #Automatic .xy file data extraction. {{{
         for i, f in enumerate(os.listdir()):
             if f.endswith('.xy'):
@@ -165,11 +185,23 @@ class Analyzer:
             ####################
             if f.endswith('.csv'):
                 self.csv_files_loaded = True ###############################################ENSURES WE KNOW THAT CSV FILE DATA ARE PRESENT FOR PLOTTING
-                self.rietveld = True #######################################################
+                self.rietveld = True ####################################################### 
                 cols = ['Rwp', 'a', 'b', 'c', 'alpha', 'beta', 'gamma', 'volume']
                 csv_df = pd.read_csv(f, header = None, sep = '\t', names=cols)
                 #The format of the filename is: BiVO4_Fixed_Supercell_#_Results.csv. This just grabs the number. 
-                file_number = int(f.strip('_Results.csv').split('_')[-1] )
+                file_number = int(f.strip('_Results.csv').split('_')[-1] ) ## This is used to match the input file with the csv file. 
+                '''
+                Here, we are adding in the space group information to the end of the csv files. 
+                '''
+                os.chdir(self.inp_dir) #Change to the input file directory
+                input_file_lines = open(self.inp_files[file_number]).readlines() ##This reads the input file corresponding to the current csv.
+                sg = ''
+                for row in input_file_lines:
+                    split_row = row.split(' ') #splits by spaces
+                    if split_row[0].strip('\t\t') == 'space_group':
+                        #We removed the tabs from the first value to see if it matches space_group. 
+                        sg = split_row[-1].strip('""\n') #This removes all of the formatting for topas and leaves us with the raw string. 
+                os.chdir(self.data_folder) ## This returns us to the working directory. 
                 '''
                 Create variables for Rwp, a,b,c, al,be,ga, vol
                 '''
@@ -189,7 +221,8 @@ class Analyzer:
                 ###########################
                 df = csv_df.copy() #make a copy. 
                 df.insert(0, 'filename', f.strip('_Results.csv')) #Inserts the filename to the first column
-
+                number_cols = len(df.columns) #This gives the number of columns +1 (So we can add in a last column. )
+                df.insert(number_cols, 'space group', sg) #This adds a column called "space group" with the space group. 
                 ###########################
                 # Update the dictionary
                 ###########################
@@ -202,6 +235,7 @@ class Analyzer:
                     'beta':be,
                     'gamma':ga,
                     'volume':vol,
+                    'space group':sg,
                     'df': df
                     })
         #}}}
@@ -287,8 +321,17 @@ class Analyzer:
                     plt.tight_layout(w_pad=1,h_pad=1) 
                     if self.csv_files_loaded == True:
                         if show_rwp == True:
-                            rwp_text_box = AnchoredText(r'R$_{wp}$'+': {}'.format(dict_entry['rwp']), loc=1) #This anchors the rwp in the top right
-                            ax2.add_artist(rwp_text_box)
+                            rwp = float(dict_entry['rwp']) #This casts the Rwp as a float. 
+                            sg = dict_entry['space group'] #This pulls the space group. 
+                            ax2.plot(0,0,linestyle = None,color ='white', label = r'R$_{wp}$: '+'{:.4f}'.format(rwp))
+                            ax2.plot(0,0,linestyle = None,color ='white', label = 'Space Group: {}'.format(sg))
+                            ax2.legend()
+
+                            #ax2.legend(['Difference','Observed','Calculated\n'+'\t'+r'R$_{wp}$: '+'{}'.format(rwp)+'\n'+'SG: {}'.format(sg)])
+
+                            #rwp_text_box = AnchoredText(r'R$_{wp}$'+': {}'.format(rwp), loc=1) #This anchors the rwp in the top right
+                            #ax2.add_artist(rwp_text_box)
+                            
                     pbar2.update(1) #Progress the second progress bar
                      
                 #Creating the plot titles. 
@@ -487,8 +530,14 @@ class Analyzer:
                         #####################################
                         if self.csv_files_loaded == True:
                             if show_rwp == True:
-                                rwp_text_box = AnchoredText(r'R$_{wp}$'+': {}'.format(v['rwp']), loc=1) #This anchors the rwp in the top right
-                                self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].add_artist(rwp_text_box) #This adds the rwp in a box to the plot.
+                                rwp = float(v['rwp']) #This casts the Rwp as a float. 
+                                sg =v['space group'] #This pulls the space group. 
+                                self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(0,0,linestyle = None,color ='white', label = r'R$_{wp}$: '+'{:.4f}'.format(rwp))
+                                self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(0,0,linestyle = None,color ='white', label = 'SG: {}'.format(sg))
+                                self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].legend()
+
+                                #rwp_text_box = AnchoredText(r'R$_{wp}$'+': {}'.format(v['rwp']), loc=1) #This anchors the rwp in the top right
+                                #self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].add_artist(rwp_text_box) #This adds the rwp in a box to the plot.
             
                         plt.tight_layout(w_pad=1,h_pad=1)#This adds enough space between the plots so that nothing gets cut off. 
                         #####################################

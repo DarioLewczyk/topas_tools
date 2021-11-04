@@ -1,0 +1,28 @@
+
+r_exp 2.42835142 r_exp_dash 0.5422331957 r_wp 18.64130018 r_wp_dash 4.162466636 r_p 12.75413052 r_p_dash 3.11967416 weighted_Durbin_Watson 0.1052749561 gof 7.676524915
+iters 100000
+xdd "Z:\Documents\Stony_Brook\Khalifah_Research_Group\BiVO4_Work\Rietveld_Analysis\Cc_Superstructure\625Mo_BiVO4_6hrscan.raw"
+	r_exp 2.42835142 r_exp_dash 0.5422331957 r_wp 18.64130018 r_wp_dash 4.162466636 r_p 12.75413052 r_p_dash 3.11967416 weighted_Durbin_Watson 0.1052749561 gof 7.676524915
+	bkg  -6999.51 9007.669 -5002.103 2892.707835 -1485.741721 671.8062483 -290.5639124 94.59513099 3.744516522 -7.8533415 28.91912027
+	LP_Factor( 0)
+	One_on_X( 285672.6968)
+	Specimen_Displacement(@, -0.06011855088)
+	Rp 217.5
+	Rs 217.5
+	lpsd_th2_angular_range_degrees  3
+		lpsd_equitorial_divergence_degrees  0.3
+	axial_conv 
+		filament_length  12
+		sample_length  15
+		receiving_slit_length  12
+		primary_soller_angle  2.5
+		secondary_soller_angle  2.5
+		axial_n_beta  30
+	lam
+		ymin_on_ymax  0.0001
+		la  0.0159 lo  1.534753 lh  3.6854
+		la  0.5791 lo  1.540596 lh  0.437
+		la  0.0762 lo  1.541058 lh  0.6
+		la  0.2417 lo  1.54441 lh  0.52
+		la  0.0871 lo  1.544721 lh  0.62
+	

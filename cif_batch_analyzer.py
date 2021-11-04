@@ -17,7 +17,7 @@ from collections import Counter
 #}}}
 #BatchAnalyzer{{{
 class BatchAnalyzer:
-    def __init__(self, doc_list:list):
+    def __init__(self, doc_list = os.listdir()):
         self.doc_list = doc_list #This is initializing. 
     #Document Dictionary Creator{{{
     '''
