@@ -70,7 +70,9 @@ for i, f in enumerate(os.listdir()):
 with tqdm(total = len(cif_files),desc='Altering Cif Files') as pbar:
     for i, cif in enumerate(cif_files):
         struct = Structure.from_file(cif) #This makes a pymatgen struct. 
-        name = cif.strip('.cif')+'_Mixed_Occupancy.cif' #This makes the new .cif name to save. 
+        split_name = cif.split('_') # splits the name by "_"
+        split_name.insert(-1,'Mixed_Occupancy') #adds this title component before the number.cif
+        name = '_'.join(split_name) #Recombine the name
         species = struct.species 
         for i, site in enumerate(species):
             atom = site.name #This obtains the string of the element. 

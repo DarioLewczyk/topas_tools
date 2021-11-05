@@ -176,13 +176,13 @@ with tqdm(total=len(cif_files)) as pbar:
         # the purposes of fixing everything
         # to the same lattice constraints. 
         #####################################
-        a = 16.5352467
-        b = 11.6728038
-        c = 11.6990003
-        al = 90
-        be = 134.8779
-        ga = 90
-        vol = 1600.08650
+        #a = 16.5352467
+        #b = 11.6728038
+        #c = 11.6990003
+        #al = 90
+        #be = 134.8779
+        #ga = 90
+        #vol = 1600.08650
         ####################################
         
         with open(output_dir+'/'+inp_name,'w') as inp_file:
@@ -198,15 +198,15 @@ with tqdm(total=len(cif_files)) as pbar:
                     '\t\tspace_group \"{}\"'.format(space_group)+'\n' 
                     '\t\tscale @ 1.68165115e-005\n'
 
-                    '\t \t'+'a   {}'.format(a)+'\n' 
-                    '\t \t'+'b   {}'.format(b)+'\n'
-                    '\t \t'+'c   {}'.format(c)+'\n'
+                    '\t \t'+'a @  {}'.format(a)+'\n' 
+                    '\t \t'+'b @  {}'.format(b)+'\n'
+                    '\t \t'+'c @  {}'.format(c)+'\n'
     
-                    '\t \t'+'al   {}'.format(al)+'\n'
-                    '\t \t'+'be   {}'.format(be)+'\n'
-                    '\t \t'+'ga   {}'.format(ga)+'\n'
+                    '\t \t'+'al @  {}'.format(al)+'\n'
+                    '\t \t'+'be @  {}'.format(be)+'\n'
+                    '\t \t'+'ga @  {}'.format(ga)+'\n'
     
-                    '\t \t'+'volume   {}'.format(vol)+'\n'
+                    '\t \t'+'volume @  {}'.format(vol)+'\n'
                     )
             for i, site in enumerate(cur_struct.sites):
                 ######################
@@ -240,15 +240,22 @@ with tqdm(total=len(cif_files)) as pbar:
                     # The occu value is the other 
                     # value within the specie dict 
                     # entry for the atom. 
+                    # We also need to add in 
+                    # B values here using the term: "beq"
                     ###########################
                     atom_name = entry 
-                    inp_file.write('\t\tsite {specie}{num} \t x {x:0.8f} \t y {y:0.8f} \t z {z:0.8f} \t occ {species} {occu} \n'.format(specie = atom_name,
+                    b_value = 1 #We are going to set all b values as 1. I can make this change as I see fit later. 
+
+                    topas_site_text = '\t\tsite {specie}{num} \t x {x:0.8f} \t y {y:0.8f} \t z {z:0.8f} \t occ {species} {occu} \t beq {beq} \n'
+                    
+                    inp_file.write(topas_site_text.format(specie = atom_name,
                         num = i,
                         x = site.frac_coords[0],
                         y = site.frac_coords[1],
                         z = site.frac_coords[2], 
                         species = atom_name,  
-                        occu = specie_dict[entry]
+                        occu = specie_dict[entry],
+                        beq = b_value
                         ))
                     # Now this part is for making topas give us outputs. 
             for line in bvo_inp_bottom_lines:

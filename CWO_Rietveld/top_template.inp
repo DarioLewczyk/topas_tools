@@ -6,7 +6,7 @@ xdd "Z:\Documents\Stony_Brook\Khalifah_Research_Group\BiVO4_Work\Rietveld_Analys
 	bkg  -6999.51 9007.669 -5002.103 2892.707835 -1485.741721 671.8062483 -290.5639124 94.59513099 3.744516522 -7.8533415 28.91912027
 	LP_Factor( 0)
 	One_on_X( 285672.6968)
-	Specimen_Displacement( -0.07806039012) 'This is fixed now. 
+	Specimen_Displacement(@, -0.07806039012) 'This is fixed now. 
 	Rp 217.5
 	Rs 217.5
 	lpsd_th2_angular_range_degrees  3
