@@ -165,9 +165,30 @@ class Analyzer:
                 modified_diff_curve = []
                 for value in y_diff:
                     modified_diff_curve.append(value-max_diff*0.5) #subs 50% of the max difference. 
+                # LaTeX Formatting for Formula in Title {{{
+                #################
+                # Automates 
+                # latex formatting
+                # of formula in 
+                # title. 
+                #################
+                first_word = filename.split('_')[0] #This grabs the formula. 
+                nums = re.findall(r'\d+',first_word) #This creates a list of the numbers in the formula
+                characters = [] #houses the latex formatted text.
+                for char in first_word:
+                    characters.append(char) # add the letters to the list. 
+                for val in nums:
+                    for digit in val:
+                        idx = characters.index(digit)
+                        characters.pop(idx)
+                    characters.insert(idx,'$_{}$'.format(val)) 
+                formatted_formula = ''.join(characters) #This creates a formula name with latex formatting. 
+                #}}}
+
 
                 self.data_dict[int(number)] = {
                     'filename': filename,
+                    'formatted_formula':formatted_formula,
                     'df': df,
                     'angle': angle,
                     'y_obs': y_obs,
@@ -177,6 +198,7 @@ class Analyzer:
                     'number': number
                 }
         #}}}
+
         #Automatic .csv file data extraction {{{
         for i,f in enumerate(os.listdir()):
             ####################
@@ -294,6 +316,8 @@ class Analyzer:
             y_obs = dict_entry['y_obs']
             y_diff = dict_entry['y_diff']
             modified_diff_curve = dict_entry['modified_diff_curve'] 
+            formatted_formula = dict_entry['formatted_formula'] #This brings up the formatted formula for the given structure. 
+            first_word = dict_entry['filename'].split('_')[0]
             ###################################################################
             if show_diff == False:     
                 fig,ax = plt.subplots()
@@ -344,26 +368,7 @@ class Analyzer:
             # Looking at BiVO4.
             ##########################
             fn_list = fn_no_xy.split('_')
-            # LaTeX Formatting for Formula in Title {{{
-            #################
-            # Automates 
-            # latex formatting
-            # of formula in 
-            # title. 
-            #################
-            first_word = fn_list[0] #This grabs the formula. 
-            nums = re.findall(r'\d+',first_word) #This creates a list of the numbers in the formula
-            characters = [] #houses the latex formatted text.
-            for char in first_word:
-                characters.append(char) # add the letters to the list. 
-            for val in nums:
-                for digit in val:
-                    idx = characters.index(digit)
-                    characters.pop(idx)
-                characters.insert(idx,'$_{}$'.format(val)) 
-            formatted_formula = ''.join(characters) #This creates a formula name with latex formatting. 
-            #}}}
-
+            
             fn_list[0] = r'{}'.format(formatted_formula) #This is the formatted formula.
             if self.rietveld == True:
                 fn_list[-2] = 'Rietveld' #This replaces the word 'simulation' with 'Rietveld'  
@@ -511,6 +516,8 @@ class Analyzer:
                     subplot_y_calc = v['y_calc']
                     subplot_y_diff = v['y_diff']
                     subplot_modified_y_diff = v['modified_diff_curve']
+                    formatted_formula = v['formatted_formula'] #This is the formatted formula for the plot title. 
+                    first_word = v['filename'].split('_')[0] #This is the formula part of the filename. 
                     ####################################
                     # Corrected i and the if statements
                     ####################################
@@ -576,7 +583,7 @@ class Analyzer:
                         # Subplot Decorations
                         #####################################
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].ticklabel_format(axis='y', style='sci',scilimits=(0,0)) #This is here to force scientific notation for the y axis.
-                        title = r"BiVO$_4$ {}".format(v['number'])   
+                        title = r"{} {}".format(formatted_formula,v['number'])   
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].set_title(title)
 
                 self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)]; #I think this will refresh the figure. Not sure its necessary
@@ -591,7 +598,7 @@ class Analyzer:
             os.chdir(figure_directory)
             with tqdm(total = len(figure_range),desc='Saving Figures') as pbar2: 
                 for i, fig_number in enumerate(self.figure_dictionary):
-                    self.figure_dictionary[fig_number]['fig_{}'.format(fig_number)].savefig('BVO_{}_x_{}_grid_{}.png'.format(rows,cols,i+1))
+                    self.figure_dictionary[fig_number]['fig_{}'.format(fig_number)].savefig('{}_{}_x_{}_grid_{}.png'.format(first_word,rows,cols,i+1))
                     pbar2.update(1)
                 os.chdir(self.data_folder)
              
