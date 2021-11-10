@@ -295,7 +295,7 @@ class Analyzer:
             os.chdir(self.data_folder) ##### Returns us to the original directory.
         #}}}
     # Make Plots{{{
-    def make_plots(self,save_figs = False, show_diff = False, show_rwp=True, close_all=True):
+    def make_plots(self,save_figs = False,x_label_interval=5, show_diff = False, show_text_on_scatter = True, show_rwp=True, close_all=False,leave_five_lowest =True):
         plot_diff = show_diff #I am being lazy here. 
         if show_diff == False:
             pbar = tqdm(total= len(self.data_dict), desc='Making y_calc_Figures...') 
@@ -307,8 +307,9 @@ class Analyzer:
             if show_diff == True:
                 pbar4 = tqdm(total = len(self.data_dict), desc= 'Saving Difference Figures...') 
                 
-        for i, dict_entry in enumerate(self.data_dict.values()):
+        for i, placeholder in enumerate(self.data_dict.values()):
             #This is where the xy file plots are made{{{
+            dict_entry = self.data_dict[i] #This ensures that everything is referenced based upon the filenumbers. 
             fn_no_xy = dict_entry['filename'].strip('.xy')+'_Simulated_Pattern'
             ##################################################################
             angle = dict_entry['angle'] 
@@ -318,26 +319,32 @@ class Analyzer:
             modified_diff_curve = dict_entry['modified_diff_curve'] 
             formatted_formula = dict_entry['formatted_formula'] #This brings up the formatted formula for the given structure. 
             first_word = dict_entry['filename'].split('_')[0]
+            xinterval = np.arange(angle.min(),angle.max(),x_label_interval) ### sets the label interval for plots. 
             ###################################################################
             if show_diff == False:     
                 fig,ax = plt.subplots()
-                fig.set_size_inches(8,8)
+                fig.set_size_inches(15,8)
                 dict_entry.update({
                     'fig': fig,
                     'ax': ax  
                     })
                 ax.plot(angle, y_calc, 'r'); ########## Plot of y calc only
                 ax.ticklabel_format(axis = 'y',style = 'sci', scilimits = (0,0)) #This forces scientific notation 
+                ax.set_xlim(angle.min()-0.5,angle.max()+0.5) #sets min and max
+                ax.set_xticks(xinterval) #sets the x axis ticks
+                
                 pbar.update(1) ## Progress the first progress bar
 
             if plot_diff == True:
                 #with tqdm(total=len(self.data_dict),desc='Making Difference Figs') as pbar2:
                 fig2,ax2 = plt.subplots()
-                fig2.set_size_inches(8,8)
+                fig2.set_size_inches(15,8)
                 ax2.plot(angle,modified_diff_curve,'grey'); #plots the fixed difference curve
                 ax2.plot(angle,y_obs,'b'); #Plots observed
                 ax2.plot(angle,y_calc,'r');
                 ax2.ticklabel_format(axis='y',style='sci',scilimits=(0,0)) #This forces scientific notation
+                ax2.set_xticks(xinterval) #sets the x label ticks.
+                ax2.set_xlim(angle.min()-0.5,angle.max()+0.5) #This sets the min and max range for plotting
                 fig2.suptitle(' ') #Trying to get the title to not be cut off.  
                 ax2.set_ylabel('Intensity')
                 ax2.set_xlabel(r'$2{\theta}^\circ$')
@@ -345,7 +352,7 @@ class Analyzer:
                     'diff_fig': fig2,
                     'diff_ax': ax2
                     })
-                plt.tight_layout(w_pad=1,h_pad=1) 
+                plt.tight_layout(w_pad=1,h_pad=1)  
                 if self.csv_files_loaded == True:
                     if show_rwp == True:
                         rwp = float(dict_entry['rwp']) #This casts the Rwp as a float. 
@@ -421,11 +428,42 @@ class Analyzer:
             # Rwp Plot
             ################
             self.rwp_fig, self.rwp_ax = plt.subplots()
+            five_lowest_rwp = self.complete_df.nsmallest(5,['Rwp']) #Creates a new table with just the 5 lowest RWP
+            lowest_rwp_integers = [] #Will hold the integers of the filenames that have the lowest Rwp
+            lowest_rwp_space_groups = [] #will hold the space groups of the lowest rwp values.  
+            ####################
+            # The indices of 
+            # filename, SG
+            # are: 
+            # [0,-1]
+            ####################
+
+            for row in five_lowest_rwp.values:
+                number = int(row[0].split('_')[-1]) #gets the int of the filename 
+                sg = row[-1] #This is the rwp
+ 
+                lowest_rwp_space_groups.append(sg)
+                lowest_rwp_integers.append(number)
+            
             for i, v in enumerate(tqdm(self.data_dict, desc='Rwp Figure')):
+                plot_rwp = self.data_dict[i]['rwp']
                 self.rwp_ax.scatter(i,self.data_dict[i]['rwp'], color='b')
+                for index, j in enumerate(lowest_rwp_integers):
+                    if i == j:
+                        self.rwp_ax.scatter(i,plot_rwp, color='r') 
+                        curr_sg = lowest_rwp_space_groups[index] #gets the space group
+                        if show_text_on_scatter == True:
+                            self.rwp_fig.set_size_inches(15,8) #This makes the figure bigger so that the labels don't run together or get cut off. 
+                            plt.text(i,plot_rwp-1.5, 'fn:{}, \n'.format(i)+r'R$_{wp}$:'+'{:0.2f}, \n'.format(float(plot_rwp))+'SG:{}\n'.format(curr_sg),fontsize=8)
+
+            #####################
+            # Decorations
+            #####################
             self.rwp_ax.set_xlabel('Enumeration Figure')
             self.rwp_ax.set_ylabel(r'R$_{wp}$')
             self.rwp_ax.set_title(r'R$_{wp}$ Results')
+            plt.ylim(self.complete_df['Rwp'].min()-1.5, self.complete_df['Rwp'].max()+1)
+        
             #################
             # Volume Plot
             #################
@@ -435,6 +473,21 @@ class Analyzer:
             self.vol_ax.set_xlabel('Enumeration Figure')
             self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
             self.vol_ax.set_title('Volume Results')
+
+            ###################
+            # leave five lowest
+            ###################
+            if leave_five_lowest == True:
+                figure_numbers = [] #stores all of the figures created.  
+                for dict_entry in self.data_dict.values():
+                    figure_number = int(dict_entry['number'])
+                    figure_numbers.append(figure_number) 
+                
+                for i, figure in enumerate(figure_numbers):
+                    if i not in lowest_rwp_integers:
+                        plt.close(i +1)
+
+
             #################
             # Save figs
             #################
