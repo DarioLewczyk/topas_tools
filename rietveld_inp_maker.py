@@ -118,7 +118,7 @@ while choosing_cif_folder == True:
 #sys.exit()
 #}}}
 #}}}
-#Making the lists of lines from the inp templates{{{
+#Making the lists of lines from the inp templates Also getting symmetry info{{{
 os.chdir(template_inp_directory)
 bvo_inp_top_half = open('top_template.inp')
 bvo_inp_bottom_half = open('bottom_template.inp')
@@ -166,6 +166,14 @@ with tqdm(total=len(cif_files)) as pbar:
         symmetry_dataset = space_group_analyzer.get_symmetry_dataset() #This gives a dictionary with all the symmetry information.
         equivalent_atoms = symmetry_dataset['equivalent_atoms'] #Gives a list of equivalent atoms. (the exact length of all of the sites)
         crystal_system = space_group_analyzer.get_crystal_system().capitalize() #This gives us a capitalized name of the crystal system. 
+        wyckoff_letters = symmetry_dataset['wyckoffs'] #This gives the wyck symbols of everything.
+        wyckoff_numbers = symmetry_dataset['site_symmetry_symbols'] #This gets the associated number
+        wyckoffs = [] #This will house all of the completed wyckoff symbols
+        for i, letter in enumerate(wyckoff_letters):
+            wyckoff = '{}_{}'.format(letter ,wyckoff_numbers[i]) #formats to look like: mult_letter_symbol
+            wyckoffs.append(wyckoff) 
+        axis_choice = symmetry_dataset['choice'] #This tells us where the program decided to reference in the crystal.
+
         '''
         This is the section where we write the input files automatically into a directory labeled "inp_files"
         Some notes:
@@ -279,7 +287,7 @@ with tqdm(total=len(cif_files)) as pbar:
             # change regardless of 
             # crystal system. 
             #########################
-            inp_file.write('\tstr\n' 
+            inp_file.write('\t\'This is the reference direction choice: {}\n'.format(axis_choice)+'\tstr\n' 
                     '\t\tspace_group \"{}\"'.format(space_group)+'\n' 
                     '\t\tscale @ 1.68165115e-005\n'
                     )
@@ -392,7 +400,7 @@ with tqdm(total=len(cif_files)) as pbar:
                     elif atom_name == 'V' or atom_name == 'Mo':
                         b_value = b_value_v
                     
-                    topas_site_text = '\t\tsite {specie}{num} \tnum_posns {num_posns} \tx {x:0.8f} \ty {y:0.8f} \tz {z:0.8f} \tocc {species} {occu} \tbeq {beq}\n'
+                    topas_site_text = "\t\tsite {specie}{num} \tnum_posns {num_posns} \tx {x:0.8f} \ty {y:0.8f} \tz {z:0.8f} \tocc {species} {occu} \tbeq {beq} \t'Wyckoff: {mult}_{wyckoff}\n"
 
                     ##########################
                     # Here, we are filtering
@@ -409,7 +417,9 @@ with tqdm(total=len(cif_files)) as pbar:
                             z = site.frac_coords[2], 
                             species = atom_name,  
                             occu = specie_dict[entry],
-                            beq = b_value
+                            beq = b_value,
+                            mult= count_equiv_sites,
+                            wyckoff = wyckoffs[i]
                             ))
             # Now this part is for making topas give us outputs. 
             for line in bvo_inp_bottom_lines:
