@@ -20,6 +20,7 @@ from matplotlib.offsetbox import AnchoredText
 #import cif_batch_analyzer as cba ## This is my cif batch analyzer so that we can get all of the space group info from the cifs. 
 import matplotlib
 import re #This helps us to grab information from filenames. 
+from matplotlib import cm #Allows us to use color maps
 #}}}
 #Matplotlib Reconfiguration{{{
 matplotlib.rcParams['legend.handlelength'] = 0
@@ -128,6 +129,7 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
 #}}}
 #Analysis_Class{{{
 class Analyzer:
+    # Initialization {{{
     def __init__(self, data_folder=os.getcwd(),col_labels = ['angle', 'y_obs','y_calc','y_diff']):
         self.data_folder = data_folder
         self.col_labels = col_labels
@@ -150,7 +152,7 @@ class Analyzer:
                 number = int(f.strip('.inp').split('_')[-1])
                 self.inp_files[number] = f
         os.chdir(self.data_folder)
-
+        #}}}
         #Automatic .xy file data extraction. {{{
         for i, f in enumerate(os.listdir()):
             if f.endswith('.xy'):
@@ -198,7 +200,6 @@ class Analyzer:
                     'number': number
                 }
         #}}}
-
         #Automatic .csv file data extraction {{{
         for i,f in enumerate(os.listdir()):
             ####################
@@ -236,8 +237,7 @@ class Analyzer:
                 al = csv_df[cols[4]]
                 be = csv_df[cols[5]]
                 ga = csv_df[cols[6]]
-                vol = csv_df[cols[7]]
-
+                vol = csv_df[cols[7]] 
                 ###########################
                 # adding filenames to the 
                 # Dataframe
@@ -259,7 +259,7 @@ class Analyzer:
                     'gamma':ga,
                     'volume':vol,
                     'space group':sg,
-                    'df': df
+                    'df': df, 
                     })
         #}}}
         #Making Large Dataframe and Excel File {{{
@@ -295,7 +295,15 @@ class Analyzer:
             os.chdir(self.data_folder) ##### Returns us to the original directory.
         #}}}
     # Make Plots{{{
-    def make_plots(self,save_figs = False,x_label_interval=5, show_diff = False, show_text_on_scatter = True, show_rwp=True, close_all=False,leave_five_lowest =True):
+    def make_plots(self,
+            save_figs = False,
+            x_label_interval=5, 
+            show_diff = False, 
+            show_text_on_scatter = True, 
+            show_rwp=True, 
+            close_all=False,
+            leave_lowest =True, 
+            num_figs_to_keep = 5):
         plot_diff = show_diff #I am being lazy here. 
         if show_diff == False:
             pbar = tqdm(total= len(self.data_dict), desc='Making y_calc_Figures...') 
@@ -319,7 +327,7 @@ class Analyzer:
             modified_diff_curve = dict_entry['modified_diff_curve'] 
             formatted_formula = dict_entry['formatted_formula'] #This brings up the formatted formula for the given structure. 
             first_word = dict_entry['filename'].split('_')[0]
-            xinterval = np.arange(angle.min(),angle.max(),x_label_interval) ### sets the label interval for plots. 
+            xinterval = np.arange(0,angle.max()+x_label_interval,x_label_interval) ### sets the label interval for plots. It also makes sure it counts the endpoint.
             ###################################################################
             if show_diff == False:     
                 fig,ax = plt.subplots()
@@ -359,7 +367,7 @@ class Analyzer:
                         sg = dict_entry['space group'] #This pulls the space group. 
                         ax2.plot(0,0,linestyle = None,color ='white', label = r'R$_{wp}$: '+'{:.4f}'.format(rwp))
                         ax2.plot(0,0,linestyle = None,color ='white', label = 'Space Group: {}'.format(sg))
-                        ax2.legend()
+                        ax2.legend(prop={'size':12})
 
                             #ax2.legend(['Difference','Observed','Calculated\n'+'\t'+r'R$_{wp}$: '+'{}'.format(rwp)+'\n'+'SG: {}'.format(sg)])
 
@@ -412,9 +420,9 @@ class Analyzer:
                     #with tqdm(total=len(self.data_dict),desc='Saving Difference Figures...') as pbar4:
                     if self.rietveld == True:
                         ##### Changes the name to rieteveld
-                        fig2.savefig('{}_Rietveld_diff_{}.png'.format(first_word,dict_entry['number']))
+                        fig2.savefig('{}_Rietveld_diff_{}.png'.format(first_word, dict_entry['number']))
                     elif self.rietveld == False:
-                        fig2.savefig('{}_Pattern_Sim_diff_{}.png'.format(first_word,dict_entry['number']))
+                        fig2.savefig('{}_Pattern_Sim_diff_{}.png'.format(first_word, dict_entry['number']))
                     pbar4.update(1) # Saving of y_diff happens here 
                 #####################################################
 
@@ -428,9 +436,9 @@ class Analyzer:
             # Rwp Plot
             ################
             self.rwp_fig, self.rwp_ax = plt.subplots()
-            five_lowest_rwp = self.complete_df.nsmallest(5,['Rwp']) #Creates a new table with just the 5 lowest RWP
-            lowest_rwp_integers = [] #Will hold the integers of the filenames that have the lowest Rwp
-            lowest_rwp_space_groups = [] #will hold the space groups of the lowest rwp values.  
+            lowest_rwp = self.complete_df.nsmallest(num_figs_to_keep,['Rwp']) #Creates a new table with just the 5 lowest RWP
+            lowest_rwp_dictionary = {} #Indices are the number of the filename. Values are the sg and the rwp
+            lowest_rwp_integers = []
             ####################
             # The indices of 
             # filename, SG
@@ -438,23 +446,41 @@ class Analyzer:
             # [0,-1]
             ####################
 
-            for row in five_lowest_rwp.values:
+            for row in lowest_rwp.values:
                 number = int(row[0].split('_')[-1]) #gets the int of the filename 
                 sg = row[-1] #This is the rwp
- 
-                lowest_rwp_space_groups.append(sg)
+                rwp = row[1]
                 lowest_rwp_integers.append(number)
+                lowest_rwp_dictionary[number] = {
+                        'sg':sg,
+                        'rwp':rwp
+                        }  
+            #########################
+            # Plotting the lowest
+            # Rwp points with their 
+            # labels
+            #########################
+            cmap = cm.get_cmap('winter_r') #Setting the active colormap
+            norm = matplotlib.colors.Normalize(vmin=lowest_rwp['Rwp'].min(),vmax=lowest_rwp['Rwp'].max()) #Normalizes the color bar to the numbers we have.
             
             for i, v in enumerate(tqdm(self.data_dict, desc='Rwp Figure')):
                 plot_rwp = self.data_dict[i]['rwp']
-                self.rwp_ax.scatter(i,self.data_dict[i]['rwp'], color='b')
-                for index, j in enumerate(lowest_rwp_integers):
+                self.rwp_ax.scatter(i,plot_rwp,color = 'black') #This plots the rwp vs. figure. 
+                for index, j in enumerate(lowest_rwp_dictionary):
                     if i == j:
-                        self.rwp_ax.scatter(i,plot_rwp, color='r') 
-                        curr_sg = lowest_rwp_space_groups[index] #gets the space group
+                        current_rwp = lowest_rwp_dictionary[j]['rwp']
+                        current_sg = lowest_rwp_dictionary[j]['sg']
+                        label = 'fn:{}, '.format(i)+r'R$_{wp}$:'+'{:0.2f}, '.format(float(current_rwp))+'SG:{}'.format(current_sg)
+
+                        self.rwp_ax.scatter(i,current_rwp, norm=norm, c=current_rwp,cmap=cmap,label = label)  
                         if show_text_on_scatter == True:
-                            self.rwp_fig.set_size_inches(15,8) #This makes the figure bigger so that the labels don't run together or get cut off. 
-                            plt.text(i,plot_rwp-1.5, 'fn:{}, \n'.format(i)+r'R$_{wp}$:'+'{:0.2f}, \n'.format(float(plot_rwp))+'SG:{}\n'.format(curr_sg),fontsize=8)
+                            plt.text(i*(1+0.01),current_rwp*(1-0.05), 'fn:{}'.format(i),fontsize=12)
+            
+            
+            self.rwp_fig.set_size_inches(15,10) #This makes the figure bigger so that the labels don't run together or get cut off. 
+            plt.legend(prop={'size':12}) #add the legend with the size increased
+            #plt.text(i+0.8,plot_rwp-y_sep, 'fn:{}, \n'.format(i)+r'R$_{wp}$:'+'{:0.2f}, \n'.format(float(plot_rwp))+'SG:{}\n'.format(curr_sg),fontsize=12)
+            plt.ylim(self.complete_df['Rwp'].min()-3.5, self.complete_df['Rwp'].max()+1)
 
             #####################
             # Decorations
@@ -462,22 +488,32 @@ class Analyzer:
             self.rwp_ax.set_xlabel('Enumeration Figure')
             self.rwp_ax.set_ylabel(r'R$_{wp}$')
             self.rwp_ax.set_title(r'R$_{wp}$ Results')
-            plt.ylim(self.complete_df['Rwp'].min()-1.5, self.complete_df['Rwp'].max()+1)
+            
         
             #################
             # Volume Plot
             #################
+            #Volume Plot{{{
             self.vol_fig, self.vol_ax = plt.subplots()
             for i,v in enumerate(tqdm(self.data_dict,desc='Vol Figure')):
                 self.vol_ax.scatter(i,self.data_dict[i]['volume'], color='b')
             self.vol_ax.set_xlabel('Enumeration Figure')
             self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
             self.vol_ax.set_title('Volume Results')
+            #}}}
+            #################
+            # Save figs
+            #################
 
+            if save_figs == True:
+                first_word = self.data_dict[0]['filename'].split('_')[0] #First word in filename
+                self.rwp_fig.savefig('{}_Enumeration_Rwp_Plot.png'.format(first_word))
+                self.vol_fig.savefig('{}_Enumeration_Volume_Plot.png'.format(first_word))
             ###################
-            # leave five lowest
+            # leave lowest
             ###################
-            if leave_five_lowest == True:
+            #Leave Lowest open{{{
+            if leave_lowest == True:
                 figure_numbers = [] #stores all of the figures created.  
                 for dict_entry in self.data_dict.values():
                     figure_number = int(dict_entry['number'])
@@ -487,15 +523,8 @@ class Analyzer:
                     if i not in lowest_rwp_integers:
                         plt.close(i +1)
 
+            #}}}
 
-            #################
-            # Save figs
-            #################
-
-            if save_figs == True:
-                first_word = self.data_dict[0]['filename'].split('_')[0] #First word in filename
-                self.rwp_fig.savefig('{}_Enumeration_Rwp_Plot.png'.format(first_word))
-                self.vol_fig.savefig('{}_Enumeration_Volume_Plot.png'.format(first_word))
         #Close Figures{{{
         #####################
         # Close Figures
@@ -548,7 +577,7 @@ class Analyzer:
                 subplot_fig = plt.figure(fig_num) #This makes a figure with the number of "fig_num"
 
                 subplot_fig.clear() #This clears the figure out. 
-                subplot_fig.set_size_inches(14,12.5) #Resize the overall large figure
+                subplot_fig.set_size_inches(24,12.5) #Resize the overall large figure
                     
              
                 self.figure_dictionary[fig_num] = {'fig_{}'.format(fig_num): subplot_fig} #This adds the figure to the figure dictionary
@@ -640,6 +669,7 @@ class Analyzer:
                         self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].set_title(title)
 
                 self.figure_dictionary[fig_num]['fig_{}'.format(fig_num)]; #I think this will refresh the figure. Not sure its necessary
+
                 pbar.update(1)
         
         if save_figs == True:
