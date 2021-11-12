@@ -442,7 +442,7 @@ with tqdm(total=len(cif_files)) as pbar:
 		'\t\t'+'\"%11.6f,\" = Yobs;\n'	
 		'\t\t'+'\"%11.6f,\" = Ycalc;\n'	
 		'\t\t'+r'"%11.6f\n" = Yobs - Ycalc;'+'\n'	
-                '\t\t}'
+                '\t\t}\n'
                     )
             inp_file.write(
                 '\tOut_CIF_STR(\"Refined_{}.cif\")'.format(no_cif_name)

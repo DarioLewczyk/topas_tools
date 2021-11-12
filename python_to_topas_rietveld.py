@@ -63,17 +63,23 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
     os.chdir(output_directory) ###################### OUTPUT DIRECTORY
     output_dir = os.getcwd() #This redefines the output directory to the new output folder. 
     os.chdir(working_directory)######################changes us back to the working directory to start looping. 
-    filenames = []
+    filenames = {} #make a dict so it has the ability to be sorted 
+    filenumbers = []
     files = os.listdir()
     for f in files:
         if f.endswith('.inp'): 
-            filenames.append(f) 
+            number = int(f.strip('.inp').split('_')[-1])
+            filenumbers.append(number)
+            filenames[number] = f 
+    filenumbers.sort()
     ###########################
     # Input Files sent to 
     # TOPAS for analysis
     ##########################
     with tqdm(total=len(filenames),desc = 'Analyzing With TOPAS') as pbar:
         for i, inp_file in enumerate(filenames):  
+            curr_num = filenumbers[i]
+            inp_file = filenames[curr_num]
             refine_cmd = 'tc '+working_directory+'\\' #This is the refinement command for TOPAS
             os.chdir(TOPAS6_dir)
             subprocess.call(refine_cmd+inp_file) #This is telling TOPAS we want to refine.  
@@ -199,6 +205,10 @@ class Analyzer:
                     'modified_diff_curve': modified_diff_curve,
                     'number': number
                 }
+        self.filenumbers = []
+        for f in self.data_dict:
+            self.filenumbers.append(f) #adds the filenumber to the list
+        self.filenumbers.sort() #Sorts the filenumbers so we can reference later.
         #}}}
         #Automatic .csv file data extraction {{{
         for i,f in enumerate(os.listdir()):
@@ -272,8 +282,8 @@ class Analyzer:
             dataframes = [] #Create a list to house all of the dataframes.
             for i, f in enumerate(self.data_dict): 
                 if i !=0:
-                    dataframes.append(self.data_dict[i]['df']) # Add the df with the filenames into the list. 
-            self.complete_df = self.data_dict[0]['df'].append(dataframes)
+                    dataframes.append(self.data_dict[self.filenumbers[i]]['df']) # Add the df with the filenames into the list. 
+            self.complete_df = self.data_dict[self.filenumbers[0]]['df'].append(dataframes)
             ##################################
             #Saving to Excel
             ##################################
@@ -317,6 +327,7 @@ class Analyzer:
                 
         for i, placeholder in enumerate(self.data_dict.values()):
             #This is where the xy file plots are made{{{
+            i = self.filenumbers[i] #Redefines so when we dont have sequential files it still works.
             dict_entry = self.data_dict[i] #This ensures that everything is referenced based upon the filenumbers. 
             fn_no_xy = dict_entry['filename'].strip('.xy')+'_Simulated_Pattern'
             ##################################################################
@@ -464,6 +475,7 @@ class Analyzer:
             norm = matplotlib.colors.Normalize(vmin=lowest_rwp['Rwp'].min(),vmax=lowest_rwp['Rwp'].max()) #Normalizes the color bar to the numbers we have.
             
             for i, v in enumerate(tqdm(self.data_dict, desc='Rwp Figure')):
+                i = self.filenumbers[i] #Redefines i so that when we dont have sequential numbers, it still works.
                 plot_rwp = self.data_dict[i]['rwp']
                 self.rwp_ax.scatter(i,plot_rwp,color = 'black') #This plots the rwp vs. figure. 
                 for index, j in enumerate(lowest_rwp_dictionary):
@@ -496,7 +508,9 @@ class Analyzer:
             #Volume Plot{{{
             self.vol_fig, self.vol_ax = plt.subplots()
             for i,v in enumerate(tqdm(self.data_dict,desc='Vol Figure')):
+                i = self.filenumbers[i]
                 self.vol_ax.scatter(i,self.data_dict[i]['volume'], color='b')
+            self.vol_fig.set_size_inches(15,10)
             self.vol_ax.set_xlabel('Enumeration Figure')
             self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
             self.vol_ax.set_title('Volume Results')
@@ -506,7 +520,7 @@ class Analyzer:
             #################
 
             if save_figs == True:
-                first_word = self.data_dict[0]['filename'].split('_')[0] #First word in filename
+                first_word = self.data_dict[self.filenumbers[0]]['filename'].split('_')[0] #First word in filename
                 self.rwp_fig.savefig('{}_Enumeration_Rwp_Plot.png'.format(first_word))
                 self.vol_fig.savefig('{}_Enumeration_Volume_Plot.png'.format(first_word))
             ###################
@@ -520,6 +534,7 @@ class Analyzer:
                     figure_numbers.append(figure_number) 
                 
                 for i, figure in enumerate(figure_numbers):
+                    i = self.filenumbers[i] #redefines i so that itll work if we are working with non-sequential datasets.
                     if i not in lowest_rwp_integers:
                         plt.close(i +1)
 
