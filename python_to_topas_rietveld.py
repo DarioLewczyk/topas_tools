@@ -24,6 +24,7 @@ from matplotlib import cm #Allows us to use color maps
 #}}}
 #Matplotlib Reconfiguration{{{
 matplotlib.rcParams['legend.handlelength'] = 0
+matplotlib.rcParams.update({'font.size':15})
 #}}}
 #function to send inps to topas{{{
 def topas_refinement(working_directory = os.getcwd(), del_out = False):
