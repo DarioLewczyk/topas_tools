@@ -311,6 +311,7 @@ class Analyzer:
             x_label_interval=5, 
             show_diff = False, 
             show_text_on_scatter = True, 
+            legend_size = 18,
             show_rwp=True, 
             close_all=False,
             leave_lowest =True, 
@@ -379,7 +380,7 @@ class Analyzer:
                         sg = dict_entry['space group'] #This pulls the space group. 
                         ax2.plot(0,0,linestyle = None,color ='white', label = r'R$_{wp}$: '+'{:.4f}'.format(rwp))
                         ax2.plot(0,0,linestyle = None,color ='white', label = 'Space Group: {}'.format(sg))
-                        ax2.legend(prop={'size':12})
+                        ax2.legend(prop={'size':legend_size})
 
                             #ax2.legend(['Difference','Observed','Calculated\n'+'\t'+r'R$_{wp}$: '+'{}'.format(rwp)+'\n'+'SG: {}'.format(sg)])
 
@@ -483,15 +484,16 @@ class Analyzer:
                     if i == j:
                         current_rwp = lowest_rwp_dictionary[j]['rwp']
                         current_sg = lowest_rwp_dictionary[j]['sg']
-                        label = 'fn:{}, '.format(i)+r'R$_{wp}$:'+'{:0.2f}, '.format(float(current_rwp))+'SG:{}'.format(current_sg)
+                        label = 'rs:{}, '.format(i)+r'R$_{wp}$:'+'{:0.2f}, '.format(float(current_rwp))+'SG:{}'.format(current_sg)
 
-                        self.rwp_ax.scatter(i,current_rwp, norm=norm, c=current_rwp,cmap=cmap,label = label)  
+                        #self.rwp_ax.scatter(i,current_rwp, norm=norm, c=current_rwp,cmap=cmap,label = label)  
+                        self.rwp_ax.scatter(i,current_rwp, color='r',label = label) #Just the plain red labeling for the lowest rwps.
                         if show_text_on_scatter == True:
-                            plt.text(i*(1+0.01),current_rwp*(1-0.05), 'fn:{}'.format(i),fontsize=12)
+                            plt.text(i*(1+0.01),current_rwp*(1-0.05), 'rs:{}'.format(i),fontsize=12)
             
             
             self.rwp_fig.set_size_inches(15,10) #This makes the figure bigger so that the labels don't run together or get cut off. 
-            plt.legend(prop={'size':12}) #add the legend with the size increased
+            plt.legend(prop={'size':15}) #add the legend with the size increased
             #plt.text(i+0.8,plot_rwp-y_sep, 'fn:{}, \n'.format(i)+r'R$_{wp}$:'+'{:0.2f}, \n'.format(float(plot_rwp))+'SG:{}\n'.format(curr_sg),fontsize=12)
             plt.ylim(self.complete_df['Rwp'].min()-3.5, self.complete_df['Rwp'].max()+1)
 
