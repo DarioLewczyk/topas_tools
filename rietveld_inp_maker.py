@@ -72,9 +72,31 @@ else:
 os.system('clear') #This clears the output
 #}}}
 #Choosing where the cif_directory is.{{{
-os.chdir(khalifah_research) #This goes back to the research folder. 
+############################
+# Select where you want to
+# Start from?
+# Options are the 'Khalifah research' folder
+# Or the 'working directory'
+############################
+os.system('clear')
+cif_dir_choice = input('______________________________________________\n'
+        'What folder do you want to work from?\n'
+        '0 | {}\n'.format(khalifah_research)+
+        '1 | {}\n'.format(working_dir)+
+        'Default is 0\n'
+        '______________________________________________\n'
+        )
+if cif_dir_choice == str(1):
+    cif_dir_choice = working_dir
+    os.chdir(working_dir) #You choose to go into the current working directory to search for the cif files.
+    #print('working directory')
+elif cif_dir_choice == str(0) or cif_dir_choice == '':
+    cif_dir_choice = khalifah_research
+    os.chdir(khalifah_research) #This goes back to the research folder. 
+    #print('khalifah research')
+os.system('clear')
 choosing_cif_folder = True
-next_folder = khalifah_research #################### This houses the next folder in. 
+next_folder = cif_dir_choice #################### This houses the next folder in. 
 while choosing_cif_folder == True:
     folders = []
     for folder in os.listdir():
@@ -123,7 +145,7 @@ while choosing_cif_folder == True:
                 'y / (n)\n'
                 '______________________________________________\n' 
                 )
-        if exit:
+        if exit == 'y':
             sys.exit()
         else:
             pass
@@ -245,6 +267,32 @@ if refine_xyz:
 if excel_file_present:
     full_df = pd.read_excel(excel_file_fullpath) #This imports the excel file.
 #}}}
+#b_value_refinement{{{
+######################
+# Do you want to 
+# refine b-values?
+######################
+b_value_refinement = input('______________________________________________\n'
+        'Do you want to refine b-values?\n'
+        'y / (n)\n'
+        '______________________________________________\n'
+        )
+refine_lattice_and_b = False
+if b_value_refinement == 'y':
+    b_value_refinement = True
+    ref_lattice = input('______________________________________________\n'
+            'Do you want to refine the lattice parameters?\n'
+            'y / (n)\n'
+            '______________________________________________\n'
+            )
+    if ref_lattice == 'y':
+        refine_lattice_and_b = True
+    else:
+        pass
+else:
+    b_value_refinement = False
+os.system('clear')
+#}}}
 #Making the lists of lines from the inp templates Also getting symmetry info{{{
 os.chdir(template_inp_directory)
 bvo_inp_top_half = open('top_template.inp')
@@ -275,12 +323,18 @@ if os.path.isdir(output_dir):
 else:
     os.mkdir(output_dir)
 os.chdir(cif_directory) ############################## CIF DIRECTORY
+filenumbers = []
 for filename in os.listdir():
     if filename.endswith('.cif'):
         number = int(filename.strip('.cif').split('_')[-1]) #Make sure we can sort through these one by one so the excel sheet matches up
+        filenumbers.append(number)
         cif_files[number] = filename
+filenumbers.sort() #This gives us the numbers present in case we dont have a complete set of cifs.
+#print(cif_files)
+#print(filenumbers)
 with tqdm(total=len(cif_files)) as pbar:
     for i, placeholder in enumerate(cif_files):
+        i = filenumbers[i]
         cif_file = cif_files[i]
         inp_name = cif_file.replace('.cif','.inp') # This makes the inp file name the same as the cif name. 
         cur_struct = Structure.from_file(cif_file) #make a structure object. 
@@ -437,7 +491,7 @@ with tqdm(total=len(cif_files)) as pbar:
                     '\t\tspace_group \"{}\"'.format(space_group)+'\n' 
                     '\t\tscale @ 1.68165115e-005\n'
                     )
-            # Crystal System Writing {{{ 
+            # Crystal System Definition{{{ 
             #################
             # Check to see
             # if an excel file
@@ -448,7 +502,16 @@ with tqdm(total=len(cif_files)) as pbar:
             if excel_file_present:
                 r = '' #This makes sure that the lattice is not refined.
             else:
-                r = '@' #This sets the refinement tag.
+                if b_value_refinement:
+                    #This allows us the determine whether or not we want to refine the a,b,c when we refine b-values
+                    if refine_lattice_and_b:
+                        #This allows us to refine lattice parameters for the final refinement.
+                        r = '@'
+                    else: 
+                        # Otherwise, we don't refine the lattice parameters.
+                        r = ''
+                else:
+                    r = '@' #This sets the refinement tag.
             #Triclinic{{{
             if crystal_system == 'Triclinic':
                 inp_file.write(triclinic.format(
@@ -572,16 +635,24 @@ with tqdm(total=len(cif_files)) as pbar:
                     refine_atomic_x = '{}{}_x'.format(mixed_occ_atom_number_1,i)
                     refine_atomic_y = '{}{}_y'.format(mixed_occ_atom_number_1,i)
                     refine_atomic_z = '{}{}_z'.format(mixed_occ_atom_number_1,i)
+                    
                     #}}}
                     # B- Value Stuff {{{
                     b_value = 1 #We are going to set all b values as 1. I can make this change as I see fit later. 
+                    if b_value_refinement:
+                        ref_b = '{}{}_b'.format(mixed_occ_atom_number_1,i)
+                    else: 
+                        ref_b = '' #This defines the b value refinement variable
                     if atom_name == 'Bi':
-                        b_value = b_value_bi
+                        b_value = b_value_bi 
                     elif atom_name == 'V' or atom_name == 'Mo':
                         b_value = b_value_v
+                    elif atom_name == 'O':
+                        #Ensures that the b values arent refined
+                        ref_b = ''
                     #}}}
                     #TOPAS Text variable (Writes each atomic site) {{{
-                    topas_site_text = "\t\tsite {specie}{num} \tnum_posns {num_posns} \tx {ref_x} {x:0.8f} \ty {ref_y} {y:0.8f} \tz {ref_z} {z:0.8f} \tocc {species} {occu} \tbeq {beq} \t'Wyckoff: {mult}_{wyckoff}\n"
+                    topas_site_text = "\t\tsite {specie}{num} \tnum_posns {num_posns} \tx {ref_x} {x:0.8f} \ty {ref_y} {y:0.8f} \tz {ref_z} {z:0.8f} \tocc {species} {occu} \tbeq {ref_b} {beq} \t'Wyckoff: {mult}_{wyckoff}\n"
                     #}}}
                     #x,y,z positions{{{
                     x = site.frac_coords[0]
@@ -679,6 +750,7 @@ with tqdm(total=len(cif_files)) as pbar:
                             z = z,
                             species = atom_name,  
                             occu = specie_dict[entry],
+                            ref_b = ref_b,
                             beq = b_value,
                             mult= count_equiv_sites,
                             wyckoff = wyckoffs[i]

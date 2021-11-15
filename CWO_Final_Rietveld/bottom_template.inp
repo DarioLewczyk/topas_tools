@@ -1,10 +1,10 @@
 
 		'The @ symbol goes after the 3rd comma in the LVol and e0 functions. 
-		LVol_FWHM_CS_G_L( 1, 99.66912938, 0.89, 139.3383131,,,@, 156.5599023)
-		e0_from_Strain( 0.0005432401363,@, 0.2081863643,@, 0.07088221361)	
+		LVol_FWHM_CS_G_L( 1, 420.0417258, 0.89, 587.222,,,@, 659.8)
+		e0_from_Strain( 0.0005223944607,,,@, 0.2395771)
 
 		r_bragg  15.7655576
 		phase_MAC 180.8337435
 		phase_name "CaWO4_derived_BVO_Supercell"
 		MVW( 0, 1565.099833, 0)
-
+	
