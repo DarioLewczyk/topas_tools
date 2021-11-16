@@ -284,7 +284,12 @@ class Analyzer:
             for i, f in enumerate(self.data_dict): 
                 if i !=0:
                     dataframes.append(self.data_dict[self.filenumbers[i]]['df']) # Add the df with the filenames into the list. 
-            self.complete_df = self.data_dict[self.filenumbers[0]]['df'].append(dataframes)
+            #print(self.filenumbers)
+            #print(self.data_dict[self.filenumbers[0]]['df'])
+            if len(self.filenumbers) > 1:
+                self.complete_df = self.data_dict[self.filenumbers[0]]['df'].append(dataframes)
+            else:
+                self.complete_df = self.data_dict[self.filenumbers[0]]['df']
             ##################################
             #Saving to Excel
             ##################################
@@ -315,7 +320,8 @@ class Analyzer:
             show_rwp=True, 
             close_all=False,
             leave_lowest =True, 
-            num_figs_to_keep = 5):
+            num_figs_to_keep = 5,
+            usr_title = ''):
         plot_diff = show_diff #I am being lazy here. 
         if show_diff == False:
             pbar = tqdm(total= len(self.data_dict), desc='Making y_calc_Figures...') 
@@ -402,9 +408,9 @@ class Analyzer:
                 fn_list[-2] = 'Rietveld' #This replaces the word 'simulation' with 'Rietveld'  
             title = ' '.join(fn_list)
             if plot_diff == True:
-                ax2.set_title(title+' Difference')
+                ax2.set_title(title+' Difference'+' {}'.format(usr_title))
             if plot_diff == False:
-                ax.set_title(title)
+                ax.set_title(title+' {}'.format(usr_title))
                 ax.set_ylabel('Intensity')
                 ax.set_xlabel(r'$2{\theta}^\circ$')
             plt.tight_layout(w_pad=1,h_pad=1)
@@ -413,6 +419,8 @@ class Analyzer:
             # here.
             ######################################
             if save_figs == True:
+                split_usr_title = usr_title.split(' ') #makes a list of words if the user uses spaces so the saved file has none.
+                joined_usr_title = '_'.join(split_usr_title)
                 #with tqdm(total = len(self.data_dict), desc= 'Saving y_calc Figures...') as pbar3: 
                 figure_directory = self.data_folder+'/figures' #This gives the absolute path of the directory
                 if os.path.isdir(figure_directory):
@@ -424,18 +432,19 @@ class Analyzer:
                 if plot_diff == False:
                     if self.rietveld == True:
                         ####### Changes the name to rietveld. 
-                        fig.savefig('{}_Rietveld_{}.png'.format(first_word,dict_entry['number']))
+                        fig.savefig('{}_Rietveld_{}_{}.png'.format(first_word,joined_usr_title,dict_entry['number']))
                     elif self.rietveld ==False:
-                        fig.savefig('{}_Pattern_Sim_{}.png'.format(first_word,dict_entry['number']))
+                        fig.savefig('{}_Pattern_Sim_{}_{}.png'.format(first_word,joined_usr_title,dict_entry['number']))
                     pbar3.update(1) #Saving of y_calc happens here
                 ###################################################### 
                 elif plot_diff == True:
                     #with tqdm(total=len(self.data_dict),desc='Saving Difference Figures...') as pbar4:
                     if self.rietveld == True:
                         ##### Changes the name to rieteveld
-                        fig2.savefig('{}_Rietveld_diff_{}.png'.format(first_word, dict_entry['number']))
+                        
+                        fig2.savefig('{}_Rietveld_diff_{}_{}.png'.format(first_word,joined_usr_title, dict_entry['number']))
                     elif self.rietveld == False:
-                        fig2.savefig('{}_Pattern_Sim_diff_{}.png'.format(first_word, dict_entry['number']))
+                        fig2.savefig('{}_Pattern_Sim_diff_{}_{}.png'.format(first_word, joined_usr_title, dict_entry['number']))
                     pbar4.update(1) # Saving of y_diff happens here 
                 #####################################################
 
@@ -502,7 +511,7 @@ class Analyzer:
             #####################
             self.rwp_ax.set_xlabel('Enumeration Figure')
             self.rwp_ax.set_ylabel(r'R$_{wp}$')
-            self.rwp_ax.set_title(r'R$_{wp}$ Results')
+            self.rwp_ax.set_title(r'R$_{wp}$ Results'+' {}'.format(usr_title))
             
         
             #################
@@ -516,7 +525,7 @@ class Analyzer:
             self.vol_fig.set_size_inches(15,10)
             self.vol_ax.set_xlabel('Enumeration Figure')
             self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
-            self.vol_ax.set_title('Volume Results')
+            self.vol_ax.set_title('Volume Results {}'.format(usr_title))
             #}}}
             #################
             # Save figs
@@ -524,8 +533,10 @@ class Analyzer:
 
             if save_figs == True:
                 first_word = self.data_dict[self.filenumbers[0]]['filename'].split('_')[0] #First word in filename
-                self.rwp_fig.savefig('{}_Enumeration_Rwp_Plot.png'.format(first_word))
-                self.vol_fig.savefig('{}_Enumeration_Volume_Plot.png'.format(first_word))
+                split_usr_title = usr_title.split(' ')
+                joined_usr_title = '_'.join(split_usr_title)
+                self.rwp_fig.savefig('{}_Enumeration_Rwp_Plot_{}.png'.format(first_word,joined_usr_title))
+                self.vol_fig.savefig('{}_Enumeration_Volume_Plot_{}.png'.format(first_word,joined_usr_title))
             ###################
             # leave lowest
             ###################
