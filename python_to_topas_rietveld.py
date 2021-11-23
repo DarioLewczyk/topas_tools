@@ -321,7 +321,8 @@ class Analyzer:
             close_all=False,
             leave_lowest =True, 
             num_figs_to_keep = 5,
-            usr_title = ''):
+            usr_title = '',
+            show_titles = True):
         plot_diff = show_diff #I am being lazy here. 
         if show_diff == False:
             pbar = tqdm(total= len(self.data_dict), desc='Making y_calc_Figures...') 
@@ -408,9 +409,11 @@ class Analyzer:
                 fn_list[-2] = 'Rietveld' #This replaces the word 'simulation' with 'Rietveld'  
             title = ' '.join(fn_list)
             if plot_diff == True:
-                ax2.set_title(title+' Difference'+' {}'.format(usr_title))
+                if show_titles:
+                    ax2.set_title(title+' Difference'+' {}'.format(usr_title))
             if plot_diff == False:
-                ax.set_title(title+' {}'.format(usr_title))
+                if show_titles:
+                    ax.set_title(title+' {}'.format(usr_title))
                 ax.set_ylabel('Intensity')
                 ax.set_xlabel(r'$2{\theta}^\circ$')
             plt.tight_layout(w_pad=1,h_pad=1)
@@ -511,7 +514,8 @@ class Analyzer:
             #####################
             self.rwp_ax.set_xlabel('Enumeration Figure')
             self.rwp_ax.set_ylabel(r'R$_{wp}$')
-            self.rwp_ax.set_title(r'R$_{wp}$ Results'+' {}'.format(usr_title))
+            if show_titles:
+                self.rwp_ax.set_title(r'R$_{wp}$ Results'+' {}'.format(usr_title))
             
         
             #################
@@ -525,7 +529,8 @@ class Analyzer:
             self.vol_fig.set_size_inches(15,10)
             self.vol_ax.set_xlabel('Enumeration Figure')
             self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
-            self.vol_ax.set_title('Volume Results {}'.format(usr_title))
+            if show_titles:
+                self.vol_ax.set_title('Volume Results {}'.format(usr_title))
             #}}}
             #################
             # Save figs
@@ -567,7 +572,12 @@ class Analyzer:
         os.chdir(self.data_folder)
     #}}}
     #Subplots{{{
-    def subplot_creator(self, rows = 3,cols = 3,save_figs=True,show_diff = False, show_rwp = True):
+    def subplot_creator(self, 
+            rows = 3,
+            cols = 3,
+            save_figs=True,
+            show_diff = False, 
+            show_rwp = True):
         num_plots = len(self.data_dict)#This is the total number of plots to make. 
         plots_per_subplot = rows*cols #This defines the total number of plots per subplot. 
         if num_plots > plots_per_subplot:
