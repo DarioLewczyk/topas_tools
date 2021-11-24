@@ -322,7 +322,9 @@ class Analyzer:
             leave_lowest =True, 
             num_figs_to_keep = 5,
             usr_title = '',
-            show_titles = True):
+            show_titles = True,
+            only_show_sample_name_and_number = True,
+            select_figures = False):
         plot_diff = show_diff #I am being lazy here. 
         if show_diff == False:
             pbar = tqdm(total= len(self.data_dict), desc='Making y_calc_Figures...') 
@@ -402,15 +404,24 @@ class Analyzer:
             # This up if you are not 
             # Looking at BiVO4.
             ##########################
-            fn_list = fn_no_xy.split('_')
+            if only_show_sample_name_and_number:
+                fn_list = ['','Trial','Structure','{}'.format(self.data_dict[i]['number'])]
+            else:
+                fn_list = fn_no_xy.split('_')
             
             fn_list[0] = r'{}'.format(formatted_formula) #This is the formatted formula.
             if self.rietveld == True:
-                fn_list[-2] = 'Rietveld' #This replaces the word 'simulation' with 'Rietveld'  
+                if only_show_sample_name_and_number:
+                    fn_list.append('Rietveld') #If you only want to show the simple title, it doesnt need to replace anything with Rietveld.
+                else:
+                    fn_list[-2] = 'Rietveld' #This replaces the word 'simulation' with 'Rietveld'  
             title = ' '.join(fn_list)
             if plot_diff == True:
                 if show_titles:
-                    ax2.set_title(title+' Difference'+' {}'.format(usr_title))
+                    if only_show_sample_name_and_number:
+                        ax2.set_title(title+' {}'.format(usr_title))
+                    else:
+                        ax2.set_title(title+' Difference'+' {}'.format(usr_title))
             if plot_diff == False:
                 if show_titles:
                     ax.set_title(title+' {}'.format(usr_title))
@@ -461,7 +472,15 @@ class Analyzer:
             # Rwp Plot
             ################
             self.rwp_fig, self.rwp_ax = plt.subplots()
-            lowest_rwp = self.complete_df.nsmallest(num_figs_to_keep,['Rwp']) #Creates a new table with just the 5 lowest RWP
+            if select_figures:
+                lowest_rwp_list = []
+                for i in self.complete_df.values:
+                    fn = int(i[0].split('_')[-1])
+                    if fn in select_figures:
+                        lowest_rwp_list.append(i)
+                lowest_rwp = pd.DataFrame(lowest_rwp_list) #This makes a dataframe with the selected figures. 
+            else:
+                lowest_rwp = self.complete_df.nsmallest(num_figs_to_keep,['Rwp']) #Creates a new table with just the 5 lowest RWP
             lowest_rwp_dictionary = {} #Indices are the number of the filename. Values are the sg and the rwp
             lowest_rwp_integers = []
             ####################
@@ -485,8 +504,8 @@ class Analyzer:
             # Rwp points with their 
             # labels
             #########################
-            cmap = cm.get_cmap('winter_r') #Setting the active colormap
-            norm = matplotlib.colors.Normalize(vmin=lowest_rwp['Rwp'].min(),vmax=lowest_rwp['Rwp'].max()) #Normalizes the color bar to the numbers we have.
+            #cmap = cm.get_cmap('winter_r') #Setting the active colormap
+            #norm = matplotlib.colors.Normalize(vmin=lowest_rwp['Rwp'].min(),vmax=lowest_rwp['Rwp'].max()) #Normalizes the color bar to the numbers we have.
             
             for i, v in enumerate(tqdm(self.data_dict, desc='Rwp Figure')):
                 i = self.filenumbers[i] #Redefines i so that when we dont have sequential numbers, it still works.
@@ -512,7 +531,7 @@ class Analyzer:
             #####################
             # Decorations
             #####################
-            self.rwp_ax.set_xlabel('Enumeration Figure')
+            self.rwp_ax.set_xlabel('Trial Structure')
             self.rwp_ax.set_ylabel(r'R$_{wp}$')
             if show_titles:
                 self.rwp_ax.set_title(r'R$_{wp}$ Results'+' {}'.format(usr_title))
@@ -547,6 +566,7 @@ class Analyzer:
             ###################
             #Leave Lowest open{{{
             if leave_lowest == True:
+                
                 figure_numbers = [] #stores all of the figures created.  
                 for dict_entry in self.data_dict.values():
                     figure_number = int(dict_entry['number'])
