@@ -80,7 +80,7 @@ os.system('clear') #This clears the output
 ############################
 os.system('clear')
 cif_dir_choice = input('______________________________________________\n'
-        'What folder do you want to work from?\n'
+        'Where do you want to work from to find the .cif files?\n'
         '0 | {}\n'.format(khalifah_research)+
         '1 | {}\n'.format(working_dir)+
         'Default is 0\n'
@@ -177,7 +177,17 @@ os.system('clear') #clears the output
 #}}}
 # excel_file_fullpath{{{
 excel_file_present = False #This tells the system there is no excel file to reference.
-if refine_xyz:
+if refine_xyz == False:
+    excel_file_template = input('______________________________________________\n'
+            'Do you want to use an excel file template?\n'
+            'y / (n)\n'
+            '______________________________________________\n'
+            )
+    if excel_file_template == 'y':
+        excel_file_template == True
+    else:
+        excel_file_template == False
+if refine_xyz or excel_file_template:
     excel_reference = input('______________________________________________\n'
             'Do you have an excel file from the previous refinement?\n'
             '(y) / n\n'

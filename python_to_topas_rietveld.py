@@ -388,7 +388,7 @@ class Analyzer:
                         rwp = float(dict_entry['rwp']) #This casts the Rwp as a float. 
                         sg = dict_entry['space group'] #This pulls the space group. 
                         ax2.plot(0,0,linestyle = None,color ='white', label = r'R$_{wp}$: '+'{:.4f}'.format(rwp))
-                        ax2.plot(0,0,linestyle = None,color ='white', label = 'Space Group: {}'.format(sg))
+                        ax2.plot(0,0,linestyle = None,color ='white', label = 'Space Group: '+r'${}$'.format(sg))
                         ax2.legend(prop={'size':legend_size})
 
                             #ax2.legend(['Difference','Observed','Calculated\n'+'\t'+r'R$_{wp}$: '+'{}'.format(rwp)+'\n'+'SG: {}'.format(sg)])
@@ -515,7 +515,7 @@ class Analyzer:
                     if i == j:
                         current_rwp = lowest_rwp_dictionary[j]['rwp']
                         current_sg = lowest_rwp_dictionary[j]['sg']
-                        label = 'rs:{}, '.format(i)+r'R$_{wp}$:'+'{:0.2f}, '.format(float(current_rwp))+'SG:{}'.format(current_sg)
+                        label = 'rs:{}, '.format(i)+r'R$_{wp}$:'+' {:0.2f}, '.format(float(current_rwp))+'SG: '+r'${}$'.format(current_sg)
 
                         #self.rwp_ax.scatter(i,current_rwp, norm=norm, c=current_rwp,cmap=cmap,label = label)  
                         self.rwp_ax.scatter(i,current_rwp, color='r',label = label) #Just the plain red labeling for the lowest rwps.
@@ -713,7 +713,7 @@ class Analyzer:
                                 rwp = float(v['rwp']) #This casts the Rwp as a float. 
                                 sg =v['space group'] #This pulls the space group. 
                                 self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(0,0,linestyle = None,color ='white', label = r'R$_{wp}$: '+'{:.4f}'.format(rwp))
-                                self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(0,0,linestyle = None,color ='white', label = 'SG: {}'.format(sg))
+                                self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].plot(0,0,linestyle = None,color ='white', label = 'SG: '+r'${}$'.format(sg))
                                 self.figure_dictionary[fig_num]['ax_{}'.format(corrected_i)].legend()
 
                                 #rwp_text_box = AnchoredText(r'R$_{wp}$'+': {}'.format(v['rwp']), loc=1) #This anchors the rwp in the top right
