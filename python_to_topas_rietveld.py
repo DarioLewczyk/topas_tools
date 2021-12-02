@@ -122,7 +122,11 @@ def topas_refinement(working_directory = os.getcwd(), del_out = False):
     # Default is to keep these
     # Files and move them. 
     ###########################
-    with tqdm(total=len(out_files), desc='Moving .out Files: {}'.format(del_out)) as pbar: 
+    if del_out == False:
+        description = 'Moving .out Files: '
+    elif del_out == True:
+        description = 'Deleting .out Files: '
+    with tqdm(total=len(out_files), desc=description.format(del_out)) as pbar: 
         for f in out_files:
             if del_out == True:  
                 os.remove(f)

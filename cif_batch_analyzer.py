@@ -69,6 +69,7 @@ class BatchAnalyzer:
                                                         'gamma':angles[2],
                                                         'volume': struct.lattice.volume,
                                                         'space group': struct.get_space_group_info()[0],
+                                                        'sg num': struct.get_space_group_info()[1],
                                                         'unique sites': num_unique_sites 
                                                         }
             if len(wyck) <= self.wyckoff_cutoff:  
@@ -99,7 +100,15 @@ class BatchAnalyzer:
         self.df_no_unique_sites = self.df.drop(labels = ['unique sites']) #This generates another table without unique sites.
         self.df_transposed = self.df.T #Puts names as rows 
         self.df_transposed_no_us = self.df_no_unique_sites.T #Puts names as rows.
-        self.space_group_table = pd.DataFrame(self.df_transposed['space group'].value_counts())#This creates the space group count table.
+        ##########
+        # Getting the
+        # Correct 
+        # SG Number 
+        ##########
+        sgs = self.df_transposed['space group']
+        sg_nums = self.df_transposed['sg num']
+        sg_and_num_df = pd.concat([sgs,sg_nums],axis=1) #THis adds the sg_num Column right next to the space group one
+        self.space_group_table = pd.DataFrame(sg_and_num_df.value_counts(),columns=['counts'])#This creates the space group count table.
         self.unique_sites_table = pd.DataFrame(self.df_transposed['unique sites'].value_counts())#Thic creates the unique site count table.  
 
         self.all_counts = self.df_transposed_no_us.apply(pd.Series.value_counts)
