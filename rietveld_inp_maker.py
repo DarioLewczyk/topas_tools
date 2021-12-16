@@ -20,6 +20,7 @@ from pymatgen.core.structure import Structure
 from pymatgen.core.periodic_table import Specie
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer# This helps us to read the equiv sites in cifs.
 import numpy as np
+import re #This is essential to avoid potential TOPAS errors due to charged species
 #}}}
 #Defining the directories we need.{{{
 '''
@@ -177,6 +178,7 @@ os.system('clear') #clears the output
 #}}}
 # excel_file_fullpath{{{
 excel_file_present = False #This tells the system there is no excel file to reference.
+refine_lattice = True
 if refine_xyz == False:
     excel_file_template = input('______________________________________________\n'
             'Do you want to use an excel file template?\n'
@@ -276,6 +278,14 @@ if refine_xyz or excel_file_template:
         os.system('clear')
 if excel_file_present:
     full_df = pd.read_excel(excel_file_fullpath) #This imports the excel file.
+    ref_lat = input('______________________________________________\n'
+            'Do you want to allow the lattice to refine?\n'
+            'y/(n)\n'
+            '______________________________________________\n')
+    if ref_lat == 'y':
+        refine_lattice = True
+    else:
+        refine_lattice = False
 #}}}
 #b_value_refinement{{{
 ######################
@@ -290,13 +300,16 @@ b_value_refinement = input('______________________________________________\n'
 refine_lattice_and_b = False
 if b_value_refinement == 'y':
     b_value_refinement = True
-    ref_lattice = input('______________________________________________\n'
-            'Do you want to refine the lattice parameters?\n'
-            'y / (n)\n'
-            '______________________________________________\n'
-            )
-    if ref_lattice == 'y':
-        refine_lattice_and_b = True
+    if refine_lattice == False:
+        ref_lattice = input('______________________________________________\n'
+                'Do you want to refine the lattice parameters?\n'
+                'y / (n)\n'
+                '______________________________________________\n'
+                )
+        if ref_lattice == 'y':
+            refine_lattice = True
+        else:
+            pass
     else:
         pass
 else:
@@ -510,11 +523,14 @@ with tqdm(total=len(cif_files)) as pbar:
             # should be fixed.
             #################
             if excel_file_present:
-                r = '' #This makes sure that the lattice is not refined.
+                if refine_lattice:
+                    r = '@' #Ensures the lattice is refined.
+                else:
+                    r = '' #This makes sure that the lattice is not refined.
             else:
                 if b_value_refinement:
                     #This allows us the determine whether or not we want to refine the a,b,c when we refine b-values
-                    if refine_lattice_and_b:
+                    if refine_lattice:
                         #This allows us to refine lattice parameters for the final refinement.
                         r = '@'
                     else: 
@@ -635,7 +651,7 @@ with tqdm(total=len(cif_files)) as pbar:
                     # We also need to add in 
                     # B values here using the term: "beq"
                     ###########################
-                    atom_name = entry 
+                    atom_name = re.sub(r'[\W\d]','',entry) #This searches to see if there is a charged atom and removes the charge so it doesn't mess TOPAS up.
                     
                     #Refine Atomic Position setup{{{
                     if j == 0:

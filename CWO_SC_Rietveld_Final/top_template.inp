@@ -1,12 +1,12 @@
 
-r_exp 2.195827293 r_exp_dash 0.4932815511 r_wp 4.067471653 r_wp_dash 0.9137370375 r_p 2.930319022 r_p_dash 0.7194975604 weighted_Durbin_Watson 0.9277758149 gof 1.852364102
+r_exp 2.237345952 r_exp_dash 0.4987969372 r_wp 5.641943892 r_wp_dash 1.257822614 r_p 3.820579289 r_p_dash 0.9328675498 weighted_Durbin_Watson 0.6009323969 gof 2.521712785
 iters 100000
 xdd "Z:\Documents\Stony_Brook\Khalifah_Research_Group\BiVO4_Work\Rietveld_Analysis\Cc_Superstructure\625Mo_BiVO4_6hrscan.raw"
-	r_exp 2.195827293 r_exp_dash 0.4932815511 r_wp 4.067471653 r_wp_dash 0.9137370375 r_p 2.930319022 r_p_dash 0.7194975604 weighted_Durbin_Watson 0.9277758149 gof 1.852364102
-	bkg @ -7028.03864 9053.018365 -5142.724896 3012.308512 -1579.107802 788.4280683 -373.1204909 130.4119677 4.149344664 7.43026325 80.88462145
+	r_exp 2.237345952 r_exp_dash 0.4987969372 r_wp 5.641943892 r_wp_dash 1.257822614 r_p 3.820579289 r_p_dash 0.9328675498 weighted_Durbin_Watson 0.6009323969 gof 2.521712785
+	bkg @ -7054.365347 9087.168019 -5122.179666 2933.384275 -1534.5049 728.2418515 -303.836437 104.8210026 40.66656099 -13.47262507 71.10760625
 	LP_Factor( 0)
-	One_on_X(@, 282540.7837)
-	Specimen_Displacement( -0.06309763889)
+	One_on_X(@, 286846.1614)
+	Specimen_Displacement( -0.07522380928)
 	Rp 217.5
 	Rs 217.5
 	lpsd_th2_angular_range_degrees  3
@@ -25,14 +25,13 @@ xdd "Z:\Documents\Stony_Brook\Khalifah_Research_Group\BiVO4_Work\Rietveld_Analys
 		la  0.0762 lo  1.541058 lh  0.6
 		la  0.2417 lo  1.54441 lh  0.52
 		la  0.0871 lo  1.544721 lh  0.62
-	'Background Peaks Phase
 	xo_Is 
 		xo  9.990215186
 		LVol_FWHM_CS_G_L( 1, 4.094141844, 0.89, 5.723646043,,,!bg_l, 6.43106297)
 		I  7.870645981
-		peak_type fp
+		'peak_type fp
 	xo_Is 
 		xo  11.56986207
 		LVol_FWHM_CS_G_L( 1, 4.094141844, 0.89, 5.723646043,,,!bg_l, 6.43106297)
 		I  6.930065002
-		peak_type fp
+		'peak_type fp

@@ -321,14 +321,22 @@ class Analyzer:
             show_diff = False, 
             show_text_on_scatter = True, 
             legend_size = 18,
+            title_size = 20,
+            axes_size = 15,
             show_rwp=True, 
             close_all=False,
             leave_lowest =True, 
             num_figs_to_keep = 5,
             usr_title = '',
+            fully_custom_title = '',
             show_titles = True,
             only_show_sample_name_and_number = True,
-            select_figures = False):
+            lower_case_title = False,
+            select_figures = False,
+            xlim = False,
+            ylim= False,
+            no_bottom_ylim=False,
+            only_obs = False):
         plot_diff = show_diff #I am being lazy here. 
         if show_diff == False:
             pbar = tqdm(total= len(self.data_dict), desc='Making y_calc_Figures...') 
@@ -373,15 +381,25 @@ class Analyzer:
                 #with tqdm(total=len(self.data_dict),desc='Making Difference Figs') as pbar2:
                 fig2,ax2 = plt.subplots()
                 fig2.set_size_inches(15,8)
-                ax2.plot(angle,modified_diff_curve,'grey'); #plots the fixed difference curve
+                if only_obs ==False:
+                    ax2.plot(angle,modified_diff_curve,'grey'); #plots the fixed difference curve
                 ax2.plot(angle,y_obs,'b'); #Plots observed
-                ax2.plot(angle,y_calc,'r');
+                if only_obs == False:
+                    ax2.plot(angle,y_calc,'r');
                 ax2.ticklabel_format(axis='y',style='sci',scilimits=(0,0)) #This forces scientific notation
                 ax2.set_xticks(xinterval) #sets the x label ticks.
-                ax2.set_xlim(angle.min()-0.5,angle.max()+0.5) #This sets the min and max range for plotting
+                if xlim:
+                    ax2.set_xlim(angle.min()-0.01, xlim)
+                else:
+                    ax2.set_xlim(angle.min()-0.5,angle.max()+0.5) #This sets the min and max range for plotting
+                if ylim:
+                    if no_bottom_ylim:
+                        ax2.set_ylim(top=ylim)
+                    else:
+                        ax2.set_ylim(y_diff.min(),ylim)
                 fig2.suptitle(' ') #Trying to get the title to not be cut off.  
-                ax2.set_ylabel('Intensity')
-                ax2.set_xlabel(r'$2{\theta}^\circ$')
+                ax2.set_ylabel('Intensity',size=axes_size)
+                ax2.set_xlabel(r'$2{\theta}^\circ$',size=axes_size)
                 dict_entry.update({
                     'diff_fig': fig2,
                     'diff_ax': ax2
@@ -416,21 +434,37 @@ class Analyzer:
             fn_list[0] = r'{}'.format(formatted_formula) #This is the formatted formula.
             if self.rietveld == True:
                 if only_show_sample_name_and_number:
-                    fn_list.append('Rietveld') #If you only want to show the simple title, it doesnt need to replace anything with Rietveld.
+                    pass
+                    #fn_list.append('Rietveld') #If you only want to show the simple title, it doesnt need to replace anything with Rietveld.
                 else:
                     fn_list[-2] = 'Rietveld' #This replaces the word 'simulation' with 'Rietveld'  
+            if lower_case_title:
+                copy_of_fn_list = fn_list.copy()
+                tmp_fn_list = []
+                for i, word in enumerate(copy_of_fn_list):
+                    if i!=0 and word!= 'Rietveld':
+                        tmp_fn_list.append(word.lower()) #This lowercases every word except the first one. 
+                    else:
+                        tmp_fn_list.append(word)
+                fn_list = tmp_fn_list #Redefines fn_list so it can be used to make the title. 
             title = ' '.join(fn_list)
             if plot_diff == True:
-                if show_titles:
+                if show_titles or fully_custom_title:
                     if only_show_sample_name_and_number:
-                        ax2.set_title(title+' {}'.format(usr_title))
+                        if fully_custom_title:
+                            title = fully_custom_title
+                        ax2.set_title(title+' {}'.format(usr_title),size=title_size)
                     else:
-                        ax2.set_title(title+' Difference'+' {}'.format(usr_title))
+                        if fully_custom_title:
+                            title = fully_custom_title
+                        ax2.set_title(title+' Difference'+' {}'.format(usr_title),size=title_size)
             if plot_diff == False:
                 if show_titles:
-                    ax.set_title(title+' {}'.format(usr_title))
-                ax.set_ylabel('Intensity')
-                ax.set_xlabel(r'$2{\theta}^\circ$')
+                    if fully_custom_title:
+                        title = fully_custom_title
+                    ax.set_title(title+' {}'.format(usr_title),size = title_size)
+                ax.set_ylabel('Intensity',size=axes_size)
+                ax.set_xlabel(r'$2{\theta}^\circ$',size=axes_size)
             plt.tight_layout(w_pad=1,h_pad=1)
             #####################################
             # Saving of figures happens
@@ -535,10 +569,10 @@ class Analyzer:
             #####################
             # Decorations
             #####################
-            self.rwp_ax.set_xlabel('Trial Structure')
-            self.rwp_ax.set_ylabel(r'R$_{wp}$')
+            self.rwp_ax.set_xlabel('Trial Structure',size=axes_size)
+            self.rwp_ax.set_ylabel(r'R$_{wp}$',size=axes_size)
             if show_titles:
-                self.rwp_ax.set_title(r'R$_{wp}$ Results'+' {}'.format(usr_title))
+                self.rwp_ax.set_title(r'{}'.format(formatted_formula)+r' R$_{wp}$'+' {}'.format(usr_title),size=title_size)
             
         
             #################
@@ -553,7 +587,7 @@ class Analyzer:
             self.vol_ax.set_xlabel('Enumeration Figure')
             self.vol_ax.set_ylabel(r'Volume $\AA^3$') # \AA adds the angstrom symbol. 
             if show_titles:
-                self.vol_ax.set_title('Volume Results {}'.format(usr_title))
+                self.vol_ax.set_title('Volume Results {}'.format(usr_title),size = title_size)
             #}}}
             #################
             # Save figs

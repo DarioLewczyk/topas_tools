@@ -1,10 +1,11 @@
-		'The @ symbol goes after the 3rd comma in the LVol and the e0 functions
-		LVol_FWHM_CS_G_L( 1, 88.18452027, 0.89, 123.2827293,,,, 138.5199205)
-		e0_from_Strain( 0.0003573456892,,,, 0.1638835217)
 
-		r_bragg  0.1973400769
+		'The @ symbol goes after the 3rd comma to refine the LVol and e0
+		LVol_FWHM_CS_G_L( 1, 252.4435225, 0.89, 352.9182485,,,, 396.5373579)
+		e0_from_Strain( 0.0004029973645,,,, 0.1848199917)
+
+		r_bragg  0.5087200299
 		phase_MAC 0
 		phase_name "hkl_CWO_22_SC_Latt_CORRECT"	
-		MVW( 0, 1601.266567, 0)
-		
+		MVW( 0, 1603.239304, 0)
+	
 	

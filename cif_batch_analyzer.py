@@ -50,12 +50,13 @@ class BatchAnalyzer:
             cols.append(filename.strip('.cif'))
             struct = Structure.from_file(filename)
             analyzed_struct = SpacegroupAnalyzer(struct) # This will analyze the symmetry of the structure. 
+            equivalent_atoms = analyzed_struct.get_symmetry_dataset()['equivalent_atoms']
             '''
             Here we are extracting important parameters that we need. 
             '''
             symmetrized_struct = analyzed_struct.get_symmetrized_structure() 
             counter_object = Counter(symmetrized_struct.as_dict()['equivalent_positions']) #Allows us to count equiv positions
-            unique_sites = counter_object.keys() #Creates a list of all the unique sites. 
+            unique_sites = np.unique(equivalent_atoms)#counter_object.keys() #Creates a list of all the unique sites. 
             num_unique_sites = len(unique_sites) #This counts all of the unique sites.
             abc = struct.lattice.abc
             angles = struct.lattice.angles
@@ -108,7 +109,8 @@ class BatchAnalyzer:
         sgs = self.df_transposed['space group']
         sg_nums = self.df_transposed['sg num']
         sg_and_num_df = pd.concat([sgs,sg_nums],axis=1) #THis adds the sg_num Column right next to the space group one
-        self.space_group_table = pd.DataFrame(sg_and_num_df.value_counts(),columns=['counts'])#This creates the space group count table.
+        self.space_group_and_number_table = pd.DataFrame(sg_and_num_df.value_counts(),columns=['counts']) #Creates the space group count table with sg #
+        self.space_group_table = pd.DataFrame(sgs.value_counts())#This creates the space group count table.
         self.unique_sites_table = pd.DataFrame(self.df_transposed['unique sites'].value_counts())#Thic creates the unique site count table.  
 
         self.all_counts = self.df_transposed_no_us.apply(pd.Series.value_counts)
