@@ -10,7 +10,7 @@ xdd "Z:\Documents\Stony_Brook\Khalifah_Research_Group\BiVO4_Work\Rietveld_Analys
 	Rp 217.5
 	Rs 217.5
 	lpsd_th2_angular_range_degrees  3
-		lpsd_equitorial_divergence_degrees  0.3
+		lpsd_equitorial_divergence_degrees  0.0395
 	axial_conv 
 		filament_length  12
 		sample_length  15

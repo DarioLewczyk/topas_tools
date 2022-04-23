@@ -43,7 +43,7 @@ cif_directory =  where you have your .cif files saved.
 '''
 python_tools_dir = os.path.dirname(os.path.realpath(__file__)) #This grabs the location of this script. 
 working_dir = os.getcwd() #lists the current directory.
-#khalifah_research{{{
+#Locating My Research Folder{{{
 path = python_tools_dir.split('/') #This splits the path to python_tools up. 
 throw_away = path.pop(-1) #This gets rid of the python_tools folder. 
 khalifah_research = '/'.join(path) #This re-assembles the path to the enclosing folder. 
@@ -75,8 +75,8 @@ os.system('clear') #This clears the output
 #Choosing where the cif_directory is.{{{
 ############################
 # Select where you want to
-# Start from?
-# Options are the 'Khalifah research' folder
+# Start from.
+# Options are the 'Research' folder found above.
 # Or the 'working directory'
 ############################
 os.system('clear')
@@ -163,7 +163,19 @@ while choosing_cif_folder == True:
 #sys.exit()
 #}}}
 #}}}
-#Do you want to refine sites?{{{
+#Do you want to refine the lattice? {{{
+os.system('clear')
+refine_lattice = input('______________________________________________\n'
+        'Do you want to refine the lattice parameters?\n'
+        '[y] / n\n'
+        '______________________________________________\n'
+        )
+if refine_lattice == 'n':
+    refine_lattice == False
+else: 
+    refine_lattice == True
+#}}}
+#Do you want to refine site positions (xyz)?{{{
 os.system('clear')
 refine_xyz = input('______________________________________________\n'
         'Do you want to allow x,y,z to refine?\n'
@@ -176,7 +188,7 @@ else:
     refine_xyz = False
 os.system('clear') #clears the output
 #}}}
-# excel_file_fullpath{{{
+# excel_file_fullpath (If you want to use an excel file for your starting point){{{
 excel_file_present = False #This tells the system there is no excel file to reference.
 refine_lattice = True
 if refine_xyz == False:
@@ -528,6 +540,7 @@ with tqdm(total=len(cif_files)) as pbar:
                 else:
                     r = '' #This makes sure that the lattice is not refined.
             else:
+                #This else statement is for when you have b-value refinement or neither b-value refinement nor xyz refinement.
                 if b_value_refinement:
                     #This allows us the determine whether or not we want to refine the a,b,c when we refine b-values
                     if refine_lattice:
@@ -537,7 +550,10 @@ with tqdm(total=len(cif_files)) as pbar:
                         # Otherwise, we don't refine the lattice parameters.
                         r = ''
                 else:
-                    r = '@' #This sets the refinement tag.
+                    if refine_lattice:
+                        r = '@' #This sets the refinement tag.
+                    else:
+                        r = '' #This makes sure we don't refine. 
             #Triclinic{{{
             if crystal_system == 'Triclinic':
                 inp_file.write(triclinic.format(
