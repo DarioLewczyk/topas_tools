@@ -8,6 +8,8 @@ import time
 import shutil
 import pandas as pd
 import pyFAI, fabio
+import dask.array as da #This is extremely important so you don't spend days integrating!
+import numpy as np #Needed to load in the mask file.
 from datetime import datetime
 #System functions{{{
 def clear():
@@ -42,10 +44,92 @@ home_directory = None #Home directory where the tiff folders are.
 bypass_paths = None#These are the paths to bypass when integrating
 npts = None #These are the number of points for integration
 #}}}
+#Defining "mask_folder"{{{
+selecting_mask_folder = True
+clear()
+print('Current folder = {}'.format(os.getcwd()))
+stay_in_current_folder = input('Is the mask file in this folder?\n' 
+        'y/(n)\n'
+        '____________________________________________\n')
+if stay_in_current_folder == 'y':
+    selecting_mask_folder = False
+    mask_folder = os.getcwd()
+previous_dir = os.getcwd() #This stores the previous directory for the loop. 
+while selecting_mask_folder:
+    folders_in_cd = {}
+    folder_count = 0
+    for f in os.listdir():
+        if os.path.isdir(f):
+            folders_in_cd[folder_count]=f
+            folder_count+=1
+    clear()
+    print('Folders in current directory:\n')
+    for i, f in enumerate(folders_in_cd.values()):
+        print('index: {}\t {}\n'.format(i,f)) #prints the folder and index of each folder.
+    print('____________________________________________\n')
+    selection = input('Choose a directory by typing its number.\n'
+            'or go back a directory by typing "b"\n'
+            '____________________________________________\n')
+    if selection == 'b':
+        new_dir = '/'.join(previous_dir.split('/')[0:-1])# This goes back a directory
+    elif selection == '':
+        clear()
+        print('Please select a valid option.')
+        new_dir = None
+    else:
+        clear()
+        if re.findall(r'\d',selection):
+            folder_num = int(selection)#converts text number into number.
+            new_dir = os.path.join(previous_dir,folders_in_cd[folder_num]) #makes the new path
+        else:
+            clear()
+            print('Please make a valid selection.')
+            new_dir = None
+    if new_dir:
+        previous_dir = new_dir
+        os.chdir(new_dir)
+        clear()
+        done_searching = input('Is {} the mask file directory?\n'.format(new_dir)+
+                'y / (n)\n'
+                '____________________________________________\n')
+        if done_searching == 'y':
+            selecting_mask_folder = False
+            mask_folder = new_dir #This sets the poni folder. 
+        else:
+            pass
+    else: 
+        pass
+
+#}}}
+#get variable: "mask"{{{
+'''
+The mask file MUST be saved as a numpy file 
+(extension: '.npy')
+'''
+os.chdir(mask_folder)#now we are in the mask folder.
+mask_files = glob.glob('*.npy') #This searches for all .npy files. 
+clear()
+print('Mask Files: \n Index\tFile\n_________________________________________\n')
+for i, f in enumerate(mask_files):
+    print('{}\t{}\n'.format(i,f))
+    print('____________________________________________\n')
+mask_file = False
+while mask_file == False:
+    mask_num = input('Please type the number of your selection\n'
+                        '_________________________________________\n')     
+    if re.findall(r'\d',mask_num):
+        mask_file =mask_files[int(mask_num)]
+        clear() 
+    else:
+        mask_file = False 
+mask = np.load(mask_file)#This loads the mask file to be used.
+
+#}}}
 #Defining "poni_folder"{{{
 
 selecting_poni_folder = True
 clear()
+print('Current directory: {}\n'.format(os.getcwd()))
 stay_in_current_folder = input('Is your PONI file in this folder?\n'
         'y/(n)\n'
         '____________________________________________\n')
@@ -67,7 +151,7 @@ while selecting_poni_folder:
     selection = input('Choose a directory by typing its number or go back by typing "b"\n'
             '____________________________________________\n')
     if selection == 'b':
-        new_dir = '/'.join(starting_dir.split('/')[0:-1])#This goes back one directory. 
+        new_dir = '/'.join(previous_dir.split('/')[0:-1])#This goes back one directory. 
     elif selection == '':
         clear()
         print('Please select an option.') 
@@ -76,7 +160,7 @@ while selecting_poni_folder:
         clear()
         if re.findall(r'\d',selection):
             folder_num = int(selection) #converts to number once it is confirmed to be a number. 
-            new_dir = '{}/{}'.format(previous_dir, folders_in_cd[folder_num])
+            new_dir = os.path.join(previous_dir, folders_in_cd[folder_num])
         else:
             clear()
             print('Please make a valid input. Either a number or "b"\n')
@@ -107,7 +191,7 @@ clear()
 print('PONI Files:\nI\t\tFile\n_________________________________________')
 for i,f in enumerate(poni_files):
     print('{}\t\t{}\n'.format(i,f))
-print('_________________________________________')
+print('_________________________________________\n')
 poni_file = False
 while poni_file == False:
     poni_num = input('Please type the number of your selection\n'
@@ -186,19 +270,19 @@ In this case, this will bypass any path that ends with:
 or starts with:
     "Si_calib"
 '''
-bypass_paths = glob.glob('*Integrated')+glob.glob('*integrated')+glob.glob('Si_calib*')+glob.glob('*analysis')
+bypass_paths = glob.glob('*integrated*'), glob.glob('*Integrated')+glob.glob('*integrated')+glob.glob('Si_calib*')+glob.glob('*analysis')
 #}}}
 #User Defines Parms for pyFAI Integrate{{{
 clear()
 print('Input params for pyFAI Integration\n')
-npts = input('How many points do you want? \n Default = 8000\n_________________________________________\n')
+npts = input('How many points do you want? \n Default = 6000\n_________________________________________\n')
 if npts:
     if re.findall(r'\d',npts):
         npts = int(npts)
     else:
         sys.exit()
 else:
-    npts = 8000
+    npts = 6000
 #}}}
 #Loop for all directories in "home_directory"{{{
 '''
@@ -246,20 +330,33 @@ for i, path in enumerate(pbar1):
         else:
             os.mkdir(integrated_folder)
         #}}} 
-        pbar2 = tqdm(tif_files) 
-        for j, f in enumerate(pbar2):  
-            image = fabio.open(f) #This opens up the image 
-            clear()
-            pbar2.set_description_str('{}, dir: {}/{}'.format(f, i, len(folders)))
-            #pbar2.display()
-            img_array = image.data #This converts the image into usable data.
+        #Make a dask array of the tiff files first.{{{
+        '''
+        The reason why we are doing this is so that all of the data is loaded upfront and chunked. 
+        The benefit of chunking is that it reduces the size of the data you are working with massively. 
+        It also allows us to maintain a constant speed throughout rather than slowing down overtime. 
+        Also, this way we don't run out of RAM.
+        '''
+        images = [] #This houses the numpy arrays produced from fabio.open. 
+        for img in tif_files:
+            data = fabio.open(img).data
+            images.append(data) #This adds all of the data to the list.
+            clear() #This clears the fabio output. 
+        tif_images = da.from_array(images) #This creates our dask array to reduce the size of our data. 
+        #}}}
+        pbar2 = tqdm(tif_images) #initialize the progress bar.  
+        for j, img_array in enumerate(pbar2):   
+            f = tif_files[j]
+            pbar2.set_description_str('{}, dir: {}/{}'.format(f, i, len(folders)))#This tells us our progress
+             
             '''
             The 'result' variable will do the integration
             It will name the file the same thing as the tif
             But will give it a ".dat" extension.
             '''
             result = ai.integrate1d(img_array,
-                    npts,
+                    npt = npts,
+                    mask = mask,
                     unit = '2th_deg',
                     correctSolidAngle= False,
                     method = ['full','*','*'],
