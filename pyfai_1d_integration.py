@@ -1,6 +1,7 @@
 #Authorship{{{
 
 #}}}
+#Imports{{{
 from tqdm import tqdm
 import os, glob,sys
 import re
@@ -11,6 +12,7 @@ import pyFAI, fabio
 import dask.array as da #This is extremely important so you don't spend days integrating!
 import numpy as np #Needed to load in the mask file.
 from datetime import datetime
+#}}}
 #System functions{{{
 def clear():
     os.system('clear')
@@ -25,15 +27,56 @@ def get_time():
     now = datetime.now()
     date_and_time= now.strftime("%d-%m-%Y_%H_%M_%S")
     return date_and_time
+'''
+This function gives us a printout of hours:mins:seconds for elapsed time in seconds
+'''
+def get_readable_time(time):
+    hrs = time // 60**2
+    mins = time // 60
+    if mins >59:
+        mins_already_accounted_for = hrs *60
+        mins = mins - mins_already_accounted_for
+    sec = time % 60
+    final_time = ('{:.0f}h:{:.0f}m:{:.2f}s'.format(hrs,mins,sec))#This gives us a nice printout with not too many figures.
+    return final_time
+    
+
+#}}}
+#"search_folder" function{{{
+def search_folder(search_term:str,folder_dict:dict, folder_count:int):
+    requested_folders = glob.glob('{}'.format(search_term))+glob.glob('*{}'.format(search_term))+glob.glob('{}*'.format(search_term))+glob.glob('*{}*'.format(search_term))+glob.glob('*{}*'.format(search_term.upper())) #this will get a list of everything containing the word you type.
+    for f in os.listdir():
+        if f in requested_folders:
+            if os.path.isdir(f):
+                folder_dict[folder_count] = f
+                folder_count+=1
+
+
 #}}}
 #Convert ".dat" to ".xy"{{{
-def convert_dat_to_xy(files:list):
-    dat_files = glob.glob('*.dat') #get all of the .dat files
-    for fn in dat_files:
-        xy_file = fn.replace('.dat', '.xy')
-        data = pd.read_csv(fn, skiprows=23, header=None, delim_whitespace=True)
-        data.columns = ['X', 'I']
-        data.to_csv(xy_file,index=False,float_format='%.8f', sep = '\t')
+#def convert_dat_to_xy(files:list):
+#    dat_files = glob.glob('*.dat') #get all of the .dat files
+#    for fn in dat_files:
+#        xy_file = fn.replace('.dat', '.xy')
+#        data = pd.read_csv(fn, skiprows=23, header=None, delim_whitespace=True)
+#        data.columns = ['X', 'I']
+#        data.to_csv(xy_file,index=False,float_format='%.8f', sep = '\t')
+def convert_dat_to_xy(fn:str):  
+    xy_file = fn.replace('.dat','.xy')
+    non_text = []
+    text_lines = []
+    with open(fn) as data:
+        for line in data.readlines():
+            if re.findall(r'\d+.\d+e\S\d+\n',line):
+                non_text.append(line)
+            else:
+                text_lines.append(line)
+        data.close()
+    with open(xy_file,'w') as data:
+        data.write('X\tI\n') #writes the header necessary
+        for line in non_text:
+            data.write(line.strip(','))
+        data.close() 
 #}}}
 #Variables to pay attention to{{{
 starting_dir = os.getcwd()
@@ -46,6 +89,8 @@ npts = None #These are the number of points for integration
 #}}}
 #Defining "mask_folder"{{{
 selecting_mask_folder = True
+globbed_search = False
+glob_search_term = None
 clear()
 print('Current folder = {}'.format(os.getcwd()))
 stay_in_current_folder = input('Is the mask file in this folder?\n' 
@@ -58,32 +103,46 @@ previous_dir = os.getcwd() #This stores the previous directory for the loop.
 while selecting_mask_folder:
     folders_in_cd = {}
     folder_count = 0
-    for f in os.listdir():
-        if os.path.isdir(f):
-            folders_in_cd[folder_count]=f
-            folder_count+=1
+    if globbed_search == False:
+        for f in os.listdir():
+            if os.path.isdir(f):  
+                folders_in_cd[folder_count]=f
+                folder_count+=1
+    elif globbed_search:
+        search_folder(glob_search_term, folders_in_cd, folder_count) #This searches for the search term
+        globbed_search = False #This resets the variable.
+
     clear()
-    print('Folders in current directory:\n')
+    print('Folders in current directory:\n'
+    '____________________________________________\n'
+    'Index\tFolder\n'
+    '____________________________________________\n') 
     for i, f in enumerate(folders_in_cd.values()):
-        print('index: {}\t {}\n'.format(i,f)) #prints the folder and index of each folder.
-    print('____________________________________________\n')
+        print('{}\t{}\n'.format(i,f)) #prints the folder and index of each folder.
     selection = input('Choose a directory by typing its number.\n'
+            'or search by entering some letters for the directory\n'
             'or go back a directory by typing "b"\n'
             '____________________________________________\n')
     if selection == 'b':
         new_dir = '/'.join(previous_dir.split('/')[0:-1])# This goes back a directory
     elif selection == '':
-        clear()
-        print('Please select a valid option.')
+        input('Please select a valid option.')
         new_dir = None
     else:
         clear()
         if re.findall(r'\d',selection):
             folder_num = int(selection)#converts text number into number.
             new_dir = os.path.join(previous_dir,folders_in_cd[folder_num]) #makes the new path
+        elif re.findall(r'\D+',selection)[0]:
+            #####
+            # The selection criteria will gather all letters to the first item in a list.
+            ####
+            globbed_search = True #This sets the globbed_search to active so it can show you only relevant folders
+            glob_search_term = selection 
+            new_dir= None
         else:
             clear()
-            print('Please make a valid selection.')
+            input('Please make a valid selection.')
             new_dir = None
     if new_dir:
         previous_dir = new_dir
@@ -140,13 +199,17 @@ previous_dir = os.getcwd() #This is the previous directory for the loop.
 while selecting_poni_folder:
     folders_in_cd = {}
     folder_count = 0
-    for f in os.listdir():
-        if os.path.isdir(f):
-            folders_in_cd[folder_count]= f
-            folder_count+=1
-    print('Folders in current directory:\n')
+    if globbed_search == False:
+        for f in os.listdir():
+            if os.path.isdir(f):
+                folders_in_cd[folder_count]= f
+                folder_count+=1
+    elif globbed_search == True:
+        search_folder(glob_search_term,folders_in_cd,folder_count) #This searches for the folder
+        globbed_search = False #This resets the globbed_search variable.
+    print('Folders in current directory:\nIndex\tFolder\n')
     for i,f in enumerate(folders_in_cd.values()):
-        print('index: {}, Name: {}\n'.format(i,f))
+        print('{}\t{}\n'.format(i,f))
     print('____________________________________________\n')
     selection = input('Choose a directory by typing its number or go back by typing "b"\n'
             '____________________________________________\n')
@@ -161,6 +224,10 @@ while selecting_poni_folder:
         if re.findall(r'\d',selection):
             folder_num = int(selection) #converts to number once it is confirmed to be a number. 
             new_dir = os.path.join(previous_dir, folders_in_cd[folder_num])
+        elif re.findall(r'\D+',selection):
+            globbed_search = True #This means you want to search for a folder.
+            glob_search_term = selection #This is the search term you want to use.
+            new_dir = None #We do not change the directory. Just search in the one we are in currently. 
         else:
             clear()
             print('Please make a valid input. Either a number or "b"\n')
@@ -270,7 +337,7 @@ In this case, this will bypass any path that ends with:
 or starts with:
     "Si_calib"
 '''
-bypass_paths = glob.glob('*integrated*'), glob.glob('*Integrated')+glob.glob('*integrated')+glob.glob('Si_calib*')+glob.glob('*analysis')
+bypass_paths = glob.glob('*integrated*'), glob.glob('*Integrated')+glob.glob('*integrated')+glob.glob('Si_calib*')+glob.glob('*analysis')+glob.glob('pyfai*')
 #}}}
 #User Defines Parms for pyFAI Integrate{{{
 clear()
@@ -305,11 +372,16 @@ folders_with_tiffs = [] #Stores a list of indices of folders that have tiff file
 for f in os.listdir():
     if os.path.isdir(f):
         if f not in bypass_paths:
-            folders[folder_count] = f
-            folder_count+=1
+            os.chdir(f)#This changes our path to check for tifs
+            tifs = glob.glob('*.tif') #makes a list if tifs exist.
+            if tifs:
+                folders[folder_count] = f
+                folder_count+=1
+            os.chdir(home_directory)
 integrated_folders = []#This produces a list of all integrated folders to move them later. 
+os.chdir(home_directory) #returns us home for the next loop
 pbar1 = tqdm(folders.values())
-for i, path in enumerate(pbar1): 
+for i, path in enumerate(pbar1):  
     pbar1.set_description('Processing: {}'.format(path))
     os.chdir(path)#change into the directory to check for tiffs
     path_with_tiffs = os.getcwd() #This saves that location. 
@@ -332,29 +404,38 @@ for i, path in enumerate(pbar1):
         #}}} 
         #Make a dask array of the tiff files first.{{{
         '''
+        This actually wasnt the problem. The problem was converting .dat to .xy files. 
+        That process took a long time because it was using pandas. 
+        Now it is much faster. 
+
         The reason why we are doing this is so that all of the data is loaded upfront and chunked. 
         The benefit of chunking is that it reduces the size of the data you are working with massively. 
         It also allows us to maintain a constant speed throughout rather than slowing down overtime. 
         Also, this way we don't run out of RAM.
         '''
-        images = [] #This houses the numpy arrays produced from fabio.open. 
-        for img in tif_files:
-            data = fabio.open(img).data
-            images.append(data) #This adds all of the data to the list.
-            clear() #This clears the fabio output. 
-        tif_images = da.from_array(images) #This creates our dask array to reduce the size of our data. 
+        #images = [] #This houses the numpy arrays produced from fabio.open. 
+        #for img in tif_files:
+        #    data = fabio.open(img).data
+        #    images.append(data) #This adds all of the data to the list.
+        #    clear() #This clears the fabio output. 
+        #tif_images = da.from_array(images) #This creates our dask array to reduce the size of our data.   
         #}}}
-        pbar2 = tqdm(tif_images) #initialize the progress bar.  
+        #pbar2 = tqdm(tif_images) #initialize the progress bar.  
+        pbar2 = tqdm(tif_files) #This is to check the speed of the old way with a new moving alg.
         for j, img_array in enumerate(pbar2):   
             f = tif_files[j]
-            pbar2.set_description_str('{}, dir: {}/{}'.format(f, i, len(folders)))#This tells us our progress
-             
+            t0_5 = time.time()#This gives us an intermediate time
+            img_array = fabio.open(img_array).data #This is the original way of doing it. 
+            clear() 
+            pbar2.set_description_str('{}, dir: {}/{}, Time: {}'.format(f, i, len(folders), get_readable_time(t0_5-t0)))#This tells us our progress 
+
             '''
             The 'result' variable will do the integration
             It will name the file the same thing as the tif
             But will give it a ".dat" extension.
-            '''
-            result = ai.integrate1d(img_array,
+            ''' 
+            #integrate_start = time.time() 
+            ai.integrate1d(img_array,
                     npt = npts,
                     mask = mask,
                     unit = '2th_deg',
@@ -362,10 +443,19 @@ for i, path in enumerate(pbar1):
                     method = ['full','*','*'],
                     filename = f.replace('.tif','.dat')
                     )
-            convert_dat_to_xy([f.replace('.tif','.dat')]) #This converts the current file to .xy
-            shutil.move(os.path.join(path_with_tiffs,f.replace('.tif','.xy')),integrated_folder) 
             clear()
-    os.chdir(home_directory)          
+            #integrate_end = time.time() 
+            #convert_start = time.time()
+            convert_dat_to_xy(f.replace('.tif','.dat')) #This converts the current file to .xy
+            os.remove(f.replace('.tif','.dat')) #This removes the dat file once it is converted.
+            #convert_end = time.time()
+            #move_start = time.time()
+            shutil.move(os.path.join(path_with_tiffs,f.replace('.tif','.xy')),integrated_folder) 
+            #move_end = time.time()
+            #print('Time to integrate: {}\nTime to convert: {}\nTime to move: {}\n'.format(integrate_end-integrate_start,convert_end-convert_start,move_end-move_start))
+            #time.sleep(1)
+   
+    os.chdir(home_directory)           
 #Moving all of the folders to a "final_destination"{{{
 final_destination = '/'.join(home_directory.split('/')[0:-1])+'/17_BM_Integrated_Files_{}'.format(get_time()) #Creates a unique end point for all of the folders
 os.mkdir(final_destination)
@@ -375,5 +465,6 @@ for folder in pbar3:
     shutil.move(folder,final_destination)#This moves each integrated folder to the final_destination
 #}}} 
 t1 = time.time()
-print('Total elapsed time: {:.2f}'.format(t1-t0)) #prints the total time of this operation.
+print('Total elapsed time:{}\n'.format(get_readable_time(t1-t0)))
+print('____________________________________________\n')
 #}}}
