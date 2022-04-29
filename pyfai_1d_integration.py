@@ -68,14 +68,17 @@ def convert_dat_to_xy(fn:str):
     with open(fn) as data:
         for line in data.readlines():
             if re.findall(r'\d+.\d+e\S\d+\n',line):
-                non_text.append(line)
+                split_line = re.findall(r'\d+.\d+e\S\d+',line)#This generates a list with just the numbers.
+                non_text.append('\t'.join(split_line))#This simplifies the syntax for the next step 
             else:
                 text_lines.append(line)
         data.close()
     with open(xy_file,'w') as data:
         data.write('X\tI\n') #writes the header necessary
         for line in non_text:
-            data.write(line.strip(','))
+            X = float(line.split('\t')[0]) #2theta 
+            I = float(line.split('\t')[1]) #Intensity
+            data.write('{:.8f}\t{:.8f}\n'.format(X,I)) #formats the xy files nicer. 
         data.close() 
 #}}}
 #Variables to pay attention to{{{
@@ -86,6 +89,24 @@ ai = None #Azimuthal integrator to integrate.
 home_directory = None #Home directory where the tiff folders are.
 bypass_paths = None#These are the paths to bypass when integrating
 npts = None #These are the number of points for integration
+method = None #This is the method you use to do the integration. Default is opencl.
+avg_int_time = None #This is the average time to complete one integration over the entirety of the data. 
+folders_with_tiffs = None #Stores a list of indices of folders that have tiff files. 
+#}}}
+#integrate1d method DEFAULT is OPENCL ON{{{
+clear()
+selection = input('Do you want to use OpenCL?\n'
+        '(y)/n\n'
+        '____________________________________________\n')
+if selection == 'y' or selection =='':
+    pyFAI.use_opencl = True #This toggles the opencl option on.
+    #method = ('full','*', 'opencl') #This is if you want to use a cpu in opencl mode
+    method = (1,'full','csr','opencl','gpu') #This makes sure that the gpu is used. 
+    
+else:
+    pyFAI.use_opencl = False #This will be the default. 
+    method = ('full','*','*') #This probably will not use the gpu at all. 
+
 #}}}
 #Defining "mask_folder"{{{
 selecting_mask_folder = True
@@ -274,7 +295,7 @@ while poni_file == False:
 ai = pyFAI.load(poni_file) #This loads the poni for integration. 
 clear()
 show_poni_info = input('Do you want to see what the PONI file: {}\n'.format(poni_file)+
-        'looks like?\n'
+        'looks like?\n' 
         'y / (n)\n'
         '____________________________________________\n')
 if show_poni_info == 'y':
@@ -366,9 +387,11 @@ Overview:
         
 '''
 t0 = time.time()
+avg_int_time = [] #This is going to keep track of all of the times for integration. 
 folders = {} #stores folder in home_directory
 folder_count = 0 #This counts the folders in home_directory
 folders_with_tiffs = [] #Stores a list of indices of folders that have tiff files. 
+
 for f in os.listdir():
     if os.path.isdir(f):
         if f not in bypass_paths:
@@ -413,38 +436,44 @@ for i, path in enumerate(pbar1):
         It also allows us to maintain a constant speed throughout rather than slowing down overtime. 
         Also, this way we don't run out of RAM.
         '''
-        #images = [] #This houses the numpy arrays produced from fabio.open. 
-        #for img in tif_files:
-        #    data = fabio.open(img).data
-        #    images.append(data) #This adds all of the data to the list.
-        #    clear() #This clears the fabio output. 
+        images = [] #This houses the numpy arrays produced from fabio.open. 
+        for img in tif_files:
+            data = fabio.open(img).data
+            images.append(data) #This adds all of the data to the list.
+            clear() #This clears the fabio output. 
         #tif_images = da.from_array(images) #This creates our dask array to reduce the size of our data.   
+
         #}}}
         #pbar2 = tqdm(tif_images) #initialize the progress bar.  
-        pbar2 = tqdm(tif_files) #This is to check the speed of the old way with a new moving alg.
+        pbar2 = tqdm(images) #This is loading all tiffs directly upfront.
+        #pbar2 = tqdm(tif_files) #This is to check the speed of the old way with a new moving alg.
         for j, img_array in enumerate(pbar2):   
             f = tif_files[j]
             t0_5 = time.time()#This gives us an intermediate time
-            img_array = fabio.open(img_array).data #This is the original way of doing it. 
-            clear() 
-            pbar2.set_description_str('{}, dir: {}/{}, Time: {}'.format(f, i, len(folders), get_readable_time(t0_5-t0)))#This tells us our progress 
+            #img_array = fabio.open(img_array).data #This is the original way of doing it. 
+            #clear() 
+            intermediate_avg = 0
+            if len(avg_int_time)>0:
+                intermediate_avg = np.average(avg_int_time) #gives us an intermediate average
+            pbar2.set_description_str('{}, dir:{}/{}, Time: {}, s/int{:.2f}'.format(f.strip('.tif'), i+1, len(folders), get_readable_time(t0_5-t0), intermediate_avg))#This tells us our progress 
 
             '''
             The 'result' variable will do the integration
             It will name the file the same thing as the tif
             But will give it a ".dat" extension.
             ''' 
-            #integrate_start = time.time() 
+            integrate_start = time.time() 
             ai.integrate1d(img_array,
                     npt = npts,
                     mask = mask,
                     unit = '2th_deg',
                     correctSolidAngle= False,
-                    method = ['full','*','*'],
+                    method = method,
                     filename = f.replace('.tif','.dat')
                     )
-            clear()
-            #integrate_end = time.time() 
+            #clear()
+            integrate_end = time.time() 
+            avg_int_time.append(integrate_end-integrate_start) #This logs the time that the first integration took
             #convert_start = time.time()
             convert_dat_to_xy(f.replace('.tif','.dat')) #This converts the current file to .xy
             os.remove(f.replace('.tif','.dat')) #This removes the dat file once it is converted.
@@ -466,5 +495,6 @@ for folder in pbar3:
 #}}} 
 t1 = time.time()
 print('Total elapsed time:{}\n'.format(get_readable_time(t1-t0)))
+print('With an average time per pattern of: {:.4f}\n'.format(np.average(avg_int_time))) #This gives us the average time.
 print('____________________________________________\n')
 #}}}
