@@ -486,7 +486,7 @@ for i, path in enumerate(pbar1):
    
     os.chdir(home_directory)           
 #Moving all of the folders to a "final_destination"{{{
-final_destination = '/'.join(home_directory.split('/')[0:-1])+'/17_BM_Integrated_Files_{}'.format(get_time()) #Creates a unique end point for all of the folders
+final_destination = '/'.join(home_directory.split('/')[0:-1])+'/Integrated_Files_{}'.format(get_time()) #Creates a unique end point for all of the folders
 os.mkdir(final_destination)
 pbar3 = tqdm(integrated_folders)
 for folder in pbar3:
