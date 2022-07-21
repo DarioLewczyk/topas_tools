@@ -546,7 +546,7 @@ def transform_3d_to_2d(plane_dictionary, metals, x_atoms, ligands):
 
 #}}}
 #add_transformed_2d_plot{{{
-def add_transformed_2d_plot(figure_object:go.Figure, metals_dict, x_atoms_dict, ligands_dict, plane_index, visible = True):
+def add_transformed_2d_plot(figure_object:go.Figure, metals_dict, x_atoms_dict, ligands_dict, plane_index, directions:dict, visible = True):
     '''
     This function will plot in-plane data given a plane on which to plot. 
     It will return a list of "True" statements that can be used to add buttons to an interactive plot. 
@@ -610,7 +610,10 @@ def add_transformed_2d_plot(figure_object:go.Figure, metals_dict, x_atoms_dict, 
     x_atom_labels = []
     
     for i in metal_idx:
-        metal_labels.append('M%s'%i)
+        if i == 0:
+            metal_labels.append('M%s'%i) # Center metal has no direction, so it is left as just the metal label. 
+        else:
+            metal_labels.append('M{}, {}'.format(i, directions['M%s'%i])) #This will add the associated direction to the metal 
     for i in x_atom_idx:
         x_atom_labels.append('X%s'%(i)) # Now we add the x labels so that they match with the metals. 
     #}}} 
@@ -783,6 +786,7 @@ def plot_2d_transformed(parsed_data:dict,directions:dict,index:int):
                                                      x_atoms_dict = x_atom_dict, 
                                                      ligands_dict = ligand_dict, 
                                                      plane_index = 0, 
+                                                     directions= directions[key],
                                                      visible = True
                                                     )
     plane_2_true_statements,plane2 = add_transformed_2d_plot(figure_object = fig, 
@@ -790,6 +794,7 @@ def plot_2d_transformed(parsed_data:dict,directions:dict,index:int):
                                                      x_atoms_dict = x_atom_dict, 
                                                      ligands_dict = ligand_dict, 
                                                      plane_index = 1, 
+                                                     directions= directions[key],
                                                      visible = False
                                                     )
     plane_3_true_statements,plane3 = add_transformed_2d_plot(figure_object = fig, 
@@ -797,6 +802,7 @@ def plot_2d_transformed(parsed_data:dict,directions:dict,index:int):
                                                      x_atoms_dict = x_atom_dict, 
                                                      ligands_dict = ligand_dict, 
                                                      plane_index = 2, 
+                                                     directions= directions[key],
                                                      visible = False
                                                     )
     #print('Plane 1: {}'.format(len(plane_1_true_statements)))
@@ -825,6 +831,7 @@ def plot_2d_transformed(parsed_data:dict,directions:dict,index:int):
     #print('Plane 2 Proj Args: {}'.format(len(plane_2_proj_args)))
     #print('Plane 3 Proj Args: {}'.format(plane_3_proj_args))
     #}}}
+    # Update Layout {{{
     fig.update_layout(
         updatemenus=[
             dict(
@@ -851,8 +858,8 @@ def plot_2d_transformed(parsed_data:dict,directions:dict,index:int):
                 ]),
             )
         ])
-
-    # Set title
+    #}}}
+    # Set title {{{
     fig.update_layout(
         title_text="{} – {} Projection".format(formula,plane1),
         autosize = False,
@@ -863,5 +870,6 @@ def plot_2d_transformed(parsed_data:dict,directions:dict,index:int):
     )
 
     fig.show()
+    #}}}
 #}}} 
 #}}}
