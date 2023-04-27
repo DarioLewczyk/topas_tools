@@ -165,11 +165,11 @@ while selecting_mask_folder:
             clear()
             input('Please make a valid selection.')
             new_dir = None
-    if new_dir:
+    if new_dir: 
         previous_dir = new_dir
         os.chdir(new_dir)
         clear()
-        done_searching = input('Is {} the mask file directory?\n'.format(new_dir)+
+        done_searching = input('Is {} the mask file directory?\n'.format(os.getcwd())+
                 'y / (n)\n'
                 '____________________________________________\n')
         if done_searching == 'y':
@@ -391,24 +391,40 @@ avg_int_time = [] #This is going to keep track of all of the times for integrati
 folders = {} #stores folder in home_directory
 folder_count = 0 #This counts the folders in home_directory
 folders_with_tiffs = [] #Stores a list of indices of folders that have tiff files. 
+'''
+If you are working with data from NSLS-II, the data are probably stored in a filestructure like: 
+    tiff_base -> Folder -> dark_sub
+    so if your home directory is chosen as "tiff_base" the program will go an extra layer in. 
+'''
+if 'tiff_base' in home_directory:
+    nslsii = True
+    file_ext = '.tiff' # This is for NSLS-II
+else:
+    nslsii = False
+    file_ext = '.tif' # This is for APS
+
 
 for f in os.listdir():
+    if nslsii:
+        # If you are working with NSLS-II data, this makes the program look a folder up
+        # into the "dark_sub" folder for tiffs. Not just at the user-defined folder 
+        f = os.path.join(f,'dark_sub') 
     if os.path.isdir(f):
-        if f not in bypass_paths:
-            os.chdir(f)#This changes our path to check for tifs
-            tifs = glob.glob('*.tif') #makes a list if tifs exist.
-            if tifs:
+        if f not in bypass_paths: 
+            os.chdir(f)#This changes our path to check for tifs 
+            tifs = glob.glob(f'*{file_ext}') #makes a list if tifs exist.
+            if tifs: 
                 folders[folder_count] = f
                 folder_count+=1
             os.chdir(home_directory)
 integrated_folders = []#This produces a list of all integrated folders to move them later. 
 os.chdir(home_directory) #returns us home for the next loop
 pbar1 = tqdm(folders.values())
-for i, path in enumerate(pbar1):  
+for i, path in enumerate(pbar1):   
     pbar1.set_description('Processing: {}'.format(path))
     os.chdir(path)#change into the directory to check for tiffs
     path_with_tiffs = os.getcwd() #This saves that location. 
-    tif_files = glob.glob('*.tif')# This will hold all of the tiff files per dir.
+    tif_files = glob.glob(f'*{file_ext}')# This will hold all of the tiff files per dir.
     # Remove all dat files leftover {{{
     dat_files = glob.glob('*.dat')#This gets any dat files
     for dat_file in dat_files:
@@ -416,6 +432,8 @@ for i, path in enumerate(pbar1):
     #}}}
     if tif_files:
         working_path = os.getcwd() #This gets our current path with the tif files
+        if 'dark_sub' in path:
+            path = os.path.split(path)[0] # We want a folder up
         integrated_folder = '{}/{}_integrated_{}'.format(home_directory,path,get_time())#This makes a folder in the home directory for the integrated files. It gives the time too so it never overwrites.
         integrated_folders.append(integrated_folder) #This saves the folder to our list.
         #Make the integrated_folder{{{ 
@@ -455,7 +473,7 @@ for i, path in enumerate(pbar1):
             intermediate_avg = 0
             if len(avg_int_time)>0:
                 intermediate_avg = np.average(avg_int_time) #gives us an intermediate average
-            pbar2.set_description_str('{}, dir:{}/{}, Time: {}, s/int{:.2f}'.format(f.strip('.tif'), i+1, len(folders), get_readable_time(t0_5-t0), intermediate_avg))#This tells us our progress 
+            pbar2.set_description_str('{}, dir:{}/{}, Time: {}, s/int{:.2f}'.format(f.strip(file_ext), i+1, len(folders), get_readable_time(t0_5-t0), intermediate_avg))#This tells us our progress 
 
             '''
             The 'result' variable will do the integration
@@ -469,17 +487,17 @@ for i, path in enumerate(pbar1):
                     unit = '2th_deg',
                     correctSolidAngle= False,
                     method = method,
-                    filename = f.replace('.tif','.dat')
+                    filename = f.replace(file_ext,'.dat')
                     )
             #clear()
             integrate_end = time.time() 
             avg_int_time.append(integrate_end-integrate_start) #This logs the time that the first integration took
             #convert_start = time.time()
-            convert_dat_to_xy(f.replace('.tif','.dat')) #This converts the current file to .xy
-            os.remove(f.replace('.tif','.dat')) #This removes the dat file once it is converted.
+            convert_dat_to_xy(f.replace(file_ext,'.dat')) #This converts the current file to .xy
+            os.remove(f.replace(file_ext,'.dat')) #This removes the dat file once it is converted.
             #convert_end = time.time()
             #move_start = time.time()
-            shutil.move(os.path.join(path_with_tiffs,f.replace('.tif','.xy')),integrated_folder) 
+            shutil.move(os.path.join(path_with_tiffs,f.replace(file_ext,'.xy')),integrated_folder) 
             #move_end = time.time()
             #print('Time to integrate: {}\nTime to convert: {}\nTime to move: {}\n'.format(integrate_end-integrate_start,convert_end-convert_start,move_end-move_start))
             #time.sleep(1)

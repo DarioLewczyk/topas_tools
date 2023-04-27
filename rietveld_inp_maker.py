@@ -21,6 +21,7 @@ from pymatgen.core.periodic_table import Specie
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer# This helps us to read the equiv sites in cifs.
 import numpy as np
 import re #This is essential to avoid potential TOPAS errors due to charged species
+from fractions import Fraction # This allows us to have more control over what the fraction converter gives us. 
 #}}}
 #Defining the directories we need.{{{
 '''
@@ -702,9 +703,16 @@ with tqdm(total=len(cif_files)) as pbar:
                     z = site.frac_coords[2] 
                     #}}}
                     # Here we are checking if x,y,z can be refined.{{{
-                    fract_x = float(x).as_integer_ratio()
-                    fract_y = float(y).as_integer_ratio()
-                    fract_z = float(z).as_integer_ratio()
+                    '''
+                    The Fraction module does the same thing as 
+                        'float.as_integer_ratio'
+                    But we are using the "limit_denominator" function 
+                    to keep us from always getting really big numbers for fractions that are
+                    close enough to an integer fraction. 
+                    '''
+                    fract_x = Fraction(float(x)).limit_denominator(100).as_integer_ratio()
+                    fract_y = Fraction(float(y)).limit_denominator(100).as_integer_ratio()
+                    fract_z = Fraction(float(z)).limit_denominator(100).as_integer_ratio()
                     #should x,y,z be refined? {{{
                     for integer in fract_x:
                         if len(str(integer)) == 1:

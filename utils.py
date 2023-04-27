@@ -14,6 +14,7 @@ import numpy as np #Needed to load in the mask file.
 from datetime import datetime
 import pickle
 from itertools import combinations # needed to generate polyhedra. 
+from scipy.spatial.distance import euclidean
 import plotly.graph_objects as go # Needed for graphing. 
 #import math as mth
 import numpy as np
@@ -66,6 +67,36 @@ def collect_data(directory):
         else:
             os.chdir(working_dir)
     return read_data
+#}}}
+#parse_zhuoying_output{{{
+def parse_zhuoying_output(read_data):
+    parsed_data = {} #This creates our dictionary to hold the data from Zhuoying's code
+    for i, struct in enumerate(read_data):
+        metals = []
+        x_atoms = []
+        ligands = []
+        formula = struct['structure'].formula
+        if 'mp_id' in list(struct.keys()):
+            mp_id = struct['mp_id'] # Gets the MP ID
+        else:
+            mp_id = '' # If there is no mp id, skip this.
+        site_index = struct['site_index'] # This will get the index of the center site in the structure.
+        center_atoms = struct['center_coords']
+        metals.append(center_atoms) #This makes sure the centroid is always first.
+        other_atoms = struct['other_coords']
+        parsed_data['struct_%s'%i] = {'formula': formula, 'mp_id':mp_id, 'site_index':site_index}
+        for j, coords in enumerate(other_atoms):
+            nn = coords['nn'] #These are the X atoms
+            nnn = coords['nnn'] #These are the M2 atoms
+            ligand = coords['ligands']#This retrieves the array of ligands from the dict.
+            metals.append(nnn) #This adds m2 to the metals list.
+            x_atoms.append(nn) #This adds the nonmetals ot the nonmetals list
+            ligands.append(ligand)#Add the list of ligands to the dict.
+        m = np.array(metals)#makes an array of the metals
+        o = np.array(x_atoms)#makes an array of the nonmetals.
+        l = np.array(ligands)#Makes an array of the ligands attached to NNN
+        parsed_data['struct_%s'%i].update({'metals':m, 'x_atoms':o, 'ligands':l}) #updates the dictionary.
+    return parsed_data
 #}}}
 # Original 2D Plotter Functions {{{
 # get_position_of_max_and_min_points_of_a_plane {{{
@@ -454,9 +485,13 @@ def get_plane_dictionary (metals:list, directions_dict:dict, key):
 def transform_2d(p0,p1,p2,n, point):
     u = p1 - p0 # This is essentially the new 'x' direction
     v = p2 - p0 # This is essentially the new 'y' direction
+    norm_u = u/euclidean(p1,p0) # This will take the vector and divide it by the magnitude of the vector
+    norm_v = v/euclidean(p2,p0) # This will take the vector, v and divide it by the magnitude of v. 
 
-    x = np.dot(u, point-p0) 
-    y = np.dot(v, point-p0)
+    x = np.dot(norm_u, point - p0)
+    y = np.dot(norm_v, point - p0)
+    #x = np.dot(u, point-p0) 
+    #y = np.dot(v, point-p0)
     return(x,y)
 #}}}
 #transform_3d_to_2d{{{
@@ -634,15 +669,16 @@ def add_transformed_2d_plot(figure_object:go.Figure, metals_dict, x_atoms_dict, 
                 x = x,
                 y = y, 
                 visible = visible,
-                mode = 'markers',
-                marker = dict(
-                    size = 0,
-                    #color = 'rgba(0,0,0,0)'
-                    ),
+                mode = 'none',
+                #marker = dict(
+                #    size = 0,
+                #    #color = 'rgba(0,0,0,0)'
+                #    ),
                 fill = 'toself',
                 fillcolor = 'rgba(5,20,70,0.3)',
                 showlegend = False,
                 hovertext = False,
+                hoverinfo = 'skip',
                 )
             )
         true_statements_generated.append(True)
@@ -670,15 +706,16 @@ def add_transformed_2d_plot(figure_object:go.Figure, metals_dict, x_atoms_dict, 
                     x = x,
                     y = y, 
                     visible = visible,
-                    mode = 'markers',
-                    marker = dict(
-                        size = 0,
-                        #color = 'rgba(0,0,0,0)',
-                    ),
+                    mode = 'none',
+                    #marker = dict(
+                    #    size = 0,
+                    #    #color = 'rgba(0,0,0,0)',
+                    #),
                     fill = 'toself',
                     fillcolor = 'rgba(70,5,20,0.1)',
                     showlegend = False,
                     hovertext = False,
+                    hoverinfo = 'skip',
                     )
                 )
     #}}}
