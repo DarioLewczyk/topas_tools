@@ -418,18 +418,19 @@ if __name__ == "__main__":
         num_max_buttons = 5
         num_min_buttons = 5
         # Set User values: {{{
-        usr_zmax = input(f'Min Value for Colorscale Max Default: {min_on_zmax}\n')
-        usr_zmin = input(f'Min Value for Colorscale Min Default: {min_on_zmin}\n')
-        usr_max_buttons = input(f'Number of Buttons for Max CS Default: {num_max_buttons}')
-        usr_min_buttons = input(f'Number of Buttons for Min CS Default: {num_min_buttons}')
-        if usr_zmax.isdigit():
-            min_on_zmax = int(usr_zmax)
-        if usr_zmin.isdigit():
-            min_on_zmin = int(usr_zmin)
-        if usr_max_buttons.isdigit():
-            num_max_buttons = int(usr_max_buttons)
-        if usr_min_buttons.isdigit():
-            num_min_buttons = int(usr_min_buttons)
+        usr_zmax = re.findall(r'\D?\d+\.?\d+',input(f'Min Value for Colorscale Max Default: {min_on_zmax}\n'))
+        usr_zmin = re.findall(r'\D?\d+\.?\d+',input(f'Min Value for Colorscale Min Default: {min_on_zmin}\n'))
+        usr_max_buttons = re.findall(r'\d+',input(f'Number of Buttons for Max CS Default: {num_max_buttons}'))
+        usr_min_buttons = re.findall(r'\d+',input(f'Number of Buttons for Min CS Default: {num_min_buttons}'))
+        
+        if usr_zmax:
+            min_on_zmax = float(usr_zmax[0])
+        if usr_zmin:
+            min_on_zmin = float(usr_zmin[0])
+        if usr_max_buttons:
+            num_max_buttons = int(usr_max_buttons[0])
+        if usr_min_buttons:
+            num_min_buttons = int(usr_min_buttons[0])
         #}}} 
         Run(
             min_on_zmax= min_on_zmax, 
