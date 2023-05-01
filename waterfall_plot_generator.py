@@ -136,12 +136,14 @@ class DataCollector:
             self,
             fileextension:str = 'xy', 
             position_of_time = 1,
+            len_of_time = 6,
             time_units:str = 'min', 
             file_time_units:str = 'sec',
             skiprows = 1,
         ):
         self.fileextension = fileextension
         self.position_of_time = position_of_time # This is the index of numbers in your filename that the time will be at 
+        self.len_of_time = len_of_time # This is the length of the time code in the File name
         self.time_units = time_units # The units of time to be plotted
         self.file_time_units = file_time_units # The units of time recorded in the filename
         self.skiprows = skiprows # Rows that do not contain data in your files.
@@ -152,7 +154,7 @@ class DataCollector:
         self.files = glob.glob(f'*.{self.fileextension}') 
         tmp = {}
         for f in self.files:
-            numbers = re.findall(r'\d{6}',f) # HAVE TO CHANGE MANUALLY IF YOU HAVE A DIFF LEN FOR TIMECODE
+            numbers = re.findall(r'\d{'+self.len_of_time+r'}',f) # HAVE TO CHANGE MANUALLY IF YOU HAVE A DIFF LEN FOR TIMECODE
             number = int(numbers[self.position_of_time])
             if number:
                 tmp[number] = f # The files will be indexed by their timecode
@@ -272,35 +274,57 @@ class DataCollector:
 #}}}
 # Plotter: {{{
 class Plotter(DataCollector):
+    # __init__: {{{
     def __init__(
             self, 
             min_on_zmax = 10, # This sets the minimum value you would like the colorscale to max out on. 
             min_on_zmin = -10, # This sets the max value you would like on the colorscale min
             num_max_buttons = 5,
             num_min_buttons = 5,
+            fileextension= 'xy',
+            position_of_time= 1,
+            len_of_time= 6,
+            time_units= 'min',
+            file_time_units= 'sec',
+            skiprows= 1,
 
         ):
-        DataCollector.__init__(self)
+        # Initialize DataCollector: {{{
+        DataCollector.__init__(self,
+            fileextension=fileextension,
+            position_of_time=position_of_time,
+            len_of_time=len_of_time,
+            time_units=time_units,
+            file_time_units=file_time_units,
+            skiprows=skiprows,
+        )
+        #}}}
+        # Unicode: {{{
         self.theta = u'\u03B8'
         self.degree = u'\u00B0'
-
+        #}}}
+        # Init vars: {{{
         self.min_on_zmax = min_on_zmax
         self.min_on_zmin = min_on_zmin
         self.num_max_buttons = num_max_buttons
         self.num_min_buttons = num_min_buttons
-
+        #}}}
+        # Collect Data: {{{
         self.scrape_files()
         self.set_time_range()
         self.get_arrs()
+        #}}}
+        # Get Plot Params: {{{
 
         min_steps = (0 - self.min_on_zmin)/(self.num_min_buttons -1)
         max_steps = (self.max_i - self.min_on_zmax)/ (self.num_max_buttons-1)
  
         self.zmin_arange = np.arange(self.min_on_zmin, 0+min_steps,min_steps)
         self.zmax_arange = np.arange(self.min_on_zmax, self.max_i+max_steps, max_steps)
-    
-        self.hovertemplate = f'2{self.theta}{self.degree}:'+'%{x}<br>Time/'+f'{self.time_units}: '+'%{y} <br>Intensity: %{z}'
 
+        self.hovertemplate = f'2{self.theta}{self.degree}:'+'%{x}<br>Time/'+f'{self.time_units}: '+'%{y} <br>Intensity: %{z}'
+        #}}}
+    #}}}
     # plot_waterfall: {{{
     def plot_waterfall(self):
         '''
@@ -381,30 +405,46 @@ class Run(Utils,Plotter):
     # __init__: {{{
     def __init__(
             self,
-            min_on_zmax = 200,
-            min_on_zmin = -100,
-            num_max_buttons = 5,
-            num_min_buttons = 5,
-            height = 800,
-            width = 1000, 
+            min_on_zmax = 200, # Minimum of the maximum colorscale value
+            min_on_zmin = -100, # Minimum of the minimum colorscale value
+            num_max_buttons = 5, # Number of buttons presented for maximum
+            num_min_buttons = 5, # Number of buttons presented for the minimum
+            height = 800, # Height of the plot
+            width = 1000,  # Width of the plot.
+            position_of_time = 1,  # Code position of the time (If there are other numbers at the same or greater length of the timecode, this will be nonzero)
+            len_of_time = 6, # Length of the timecode
+            fileextension = 'xy', # This is the file extension the code looks for.
+            time_units= 'min', # These are the plotted units
+            file_time_units= 'sec', # This is the unit used in the filename
+            skiprows= 1, # How many rows contain text, not data
             ):
         self.height = height
         self.width = width
         self.starting_dir = os.getcwd()
         self.starting_dir_contents = os.listdir()
+        # Initialize Utilities: {{{
         Utils.__init__(self) # Gives us access to the utilities.
         selection = input('Do you need to navigate to another folder before running?\n(y/n)\n')
         if selection:
             if selection.lower() == 'y' or selection.lower() == 'yes':
                 self.navigate_filesystem()
         self.clear()
+        #}}}
+        # Initialize the plotter: {{{
         Plotter.__init__(
             self,
             min_on_zmax = min_on_zmax, # This sets the minimum value you would like the colorscale to max out on. 
             min_on_zmin = min_on_zmin, # This sets the max value you would like on the colorscale min
             num_max_buttons = num_max_buttons,
             num_min_buttons = num_min_buttons,
+            fileextension=fileextension,
+            position_of_time=position_of_time,
+            len_of_time=len_of_time,
+            time_units=time_units,
+            file_time_units=file_time_units,
+            skiprows=skiprows,
         )
+        #}}}
         self.plot_waterfall()
         os.chdir(self.starting_dir) # Return us to the beginning.
     #}}} 
