@@ -20,6 +20,7 @@ from tqdm import tqdm
 import plotly.graph_objects as go
 import numpy as np
 import texttable
+import copy
 #}}}
 # Utils: {{{
 class Utils:
@@ -154,7 +155,7 @@ class DataCollector:
         self.files = glob.glob(f'*.{self.fileextension}') 
         tmp = {}
         for f in self.files:
-            numbers = re.findall(r'\d{'+self.len_of_time+r'}',f) # HAVE TO CHANGE MANUALLY IF YOU HAVE A DIFF LEN FOR TIMECODE
+            numbers = re.findall(r'\d{'+str(self.len_of_time)+r'}',f) # HAVE TO CHANGE MANUALLY IF YOU HAVE A DIFF LEN FOR TIMECODE
             number = int(numbers[self.position_of_time])
             if number:
                 tmp[number] = f # The files will be indexed by their timecode
@@ -201,31 +202,57 @@ class DataCollector:
                 selecting = False 
     #}}}
     # get_arrs: {{{
-    def get_arrs(self):
+    def get_arrs(self,metadata:bool = False):
         '''
         This function is used to obtain the data from the files that fall within the time
         frame selected.
+
+
+        The time recorded in the filename will work to sort but will not work to plot. 
         ''' 
         ys = []
         files = []
+        temps = []
         first_time = min(list(self.file_dict.keys()))
-        # Filter the data by time range: {{{
-        for i, time in enumerate(self.file_dict): 
-            f = self.file_dict[time]
-            # Convert time to selected units: {{{
-            if self.time_units == 'min' and self.file_time_units == 'sec':
-                chosen_time_unit = (time-first_time)/60
-            elif self.time_units == 'h' and self.file_time_units == 'sec':
-                chosen_time_unit = (time-first_time)/60**2
-            elif self.time_units == 'sec' and self.file_time_units == 'sec':
-                chosen_time_unit = time-first_time
-            #}}}
-            # Get the times and files: {{{
-            if i >= self.first_pattern_idx and i <= self.last_pattern_idx:
-                ys.append(chosen_time_unit)
-                files.append(f)
-            #}}}
+        if not metadata:
+            # Filter the data by time range: {{{
+            for i, time in enumerate(self.file_dict): 
+                f = self.file_dict[time]
+                # Convert time to selected units: {{{
+                if self.time_units == 'min' and self.file_time_units == 'sec':
+                    chosen_time_unit = (time-first_time)/60
+                elif self.time_units == 'h' and self.file_time_units == 'sec':
+                    chosen_time_unit = (time-first_time)/60**2
+                elif self.time_units == 'sec' and self.file_time_units == 'sec':
+                    chosen_time_unit = time-first_time
+                #}}}
+                # Get the times and files: {{{
+                if i >= self.first_pattern_idx and i <= self.last_pattern_idx:
+                    ys.append(chosen_time_unit)
+                    files.append(f)
+                #}}}
         #}}}
+        else:
+            # Filter by the Metadata Time Range: {{{
+            t0 = self.metadata_data[first_time]['epoch_time']
+            for i, time in enumerate(self.file_dict):
+                temps.append(self.metadata_data[time]['temperature']) # Add the celsius temp
+                f = self.file_dict[time]
+                t1 = self.metadata_data[time]['epoch_time'] # Gives the correct time
+                # Convert time to selected units: {{{
+                if self.time_units == 'min' and self.file_time_units == 'sec':
+                    chosen_time_unit = (t1-t0)/60
+                elif self.time_units == 'h' and self.file_time_units == 'sec':
+                    chosen_time_unit = (t1-t0)/60**2
+                elif self.time_units == 'sec' and self.file_time_units == 'sec':
+                    chosen_time_unit = t1-t0
+                #}}}
+                # Get the times and files: {{{
+                if i >= self.first_pattern_idx and i <= self.last_pattern_idx:
+                    ys.append(chosen_time_unit)
+                    files.append(f)
+                #}}}
+            #}}} 
         # Get the tth and I vals: {{{
         zs = [] # This will be the length of the files but will hold lists of intensities for each.
         self.max_i = 0
@@ -269,7 +296,60 @@ class DataCollector:
         self.tth_arr = np.linspace(min_tth, max_tth, max_len)
         self.time_arr = np.array(ys)
         self.i_arr = np.array(zs)
+        if temps:
+            self.temp_arr = np.array(temps)
+        else:
+            self.temp_arr = None
         #}}}
+    #}}}
+#}}}
+# MetadataParser: {{{
+class MetadataParser():
+    # __init__{{{
+    def __init__(
+            self,
+            #nav_filesystem:bool = False,
+            time_key:str = 'time:',
+            temp_key:str = 'element_temp',
+            ):
+        #self._data_dir = os.getcwd() # PRESERVE THE ORIGINAL DIRECTORY. 
+        #Utils.__init__(self) # Gives access to the utils
+        #if nav_filesystem:
+        #    print('Please navigate to the METADATA folder for your data.')
+        #    self.navigate_filesystem() # This allows us to move to the directory with the metadata
+        #    self._metadata_dir = os.getcwd()
+        md = DataCollector(fileextension='yaml')
+        md.scrape_files() # This gives us the yaml files in order in data_dict 
+        self.metadata = md.file_dict # This is the dictionary with all of the files. 
+        self.get_metadata(time_key=time_key, temp_key=temp_key)
+        #os.chdir(self._data_dir) # Returns us to the original directory. 
+    #}}}
+    # get_metadata: {{{
+    def get_metadata(
+            self, 
+            time_key:str = 'time:', 
+            temp_key:str = 'element_temp',
+        ):
+        self.metadata_data = {} 
+        for i, key in enumerate(self.metadata):
+            filename = self.metadata[key] # Gives us the filename to read. 
+            time = None
+            temp = None
+            with open(filename,'r') as f:
+                lines = f.readlines() 
+                for line in lines:
+                    t = re.findall(r'\d+\.\d+',line) # This gives me the epoch time if it is on a line. 
+                    if time_key in line and t:
+                        time = float(t[0]) # Gives us the epoch time in float form. 
+                    if temp_key in line: 
+                        temp = np.around(float(re.findall(r'\d+\.\d?',line)[0]) - 273.15, 2) # This gives us the Celsius temperature of the element thermocouple. 
+            f.close()
+            self.metadata_data[key] = {
+                'readable_time': int(key),
+                'epoch_time': time,
+                'temperature': temp,
+                'pattern_index': i,
+            } 
     #}}}
 #}}}
 # Plotter: {{{
@@ -287,6 +367,9 @@ class Plotter(DataCollector):
             time_units= 'min',
             file_time_units= 'sec',
             skiprows= 1,
+            height = 800,
+            width = 1000,
+            metadata:bool=False,
 
         ):
         # Initialize DataCollector: {{{
@@ -308,11 +391,14 @@ class Plotter(DataCollector):
         self.min_on_zmin = min_on_zmin
         self.num_max_buttons = num_max_buttons
         self.num_min_buttons = num_min_buttons
+        self.height = height
+        self.width = width
+        
         #}}}
         # Collect Data: {{{
-        self.scrape_files()
-        self.set_time_range()
-        self.get_arrs()
+        self.scrape_files() 
+        self.set_time_range() # This simply sets the patterns we care about. 
+        self.get_arrs(metadata = metadata) # This gets the times. MUST TELL IF MEtATADA is present
         #}}}
         # Get Plot Params: {{{
 
@@ -331,8 +417,8 @@ class Plotter(DataCollector):
         This will plot a waterfall plot 
         You can change up the z scaling with buttons 
         '''
-        fig = go.Figure()
-        fig.add_heatmap(
+        self.fig = go.Figure()
+        self.fig.add_heatmap(
             x = self.tth_arr,
             y = self.time_arr,
             z = self.i_arr,
@@ -364,7 +450,7 @@ class Plotter(DataCollector):
         button_layer_1_height = 1.17
         button_layer_2_height = 1.1
 
-        fig.update_layout(
+        self.fig.update_layout(
             height = self.height,
             width = self.width,
             margin = dict(t=200,b=0,l=0,r=0),
@@ -397,11 +483,11 @@ class Plotter(DataCollector):
 
         )
         #}}}
-        fig.show()
+        self.fig.show()
     #}}}
 #}}}
 # Run: {{{
-class Run(Utils,Plotter):
+class Run(Utils,Plotter,MetadataParser):
     # __init__: {{{
     def __init__(
             self,
@@ -416,7 +502,9 @@ class Run(Utils,Plotter):
             fileextension = 'xy', # This is the file extension the code looks for.
             time_units= 'min', # These are the plotted units
             file_time_units= 'sec', # This is the unit used in the filename
-            skiprows= 1, # How many rows contain text, not data
+            skiprows= 1, # How many rows contain text, not data 
+            time_key:str = 'time:',
+            temp_key:str = 'element_temp',
             ):
         self.height = height
         self.width = width
@@ -424,12 +512,24 @@ class Run(Utils,Plotter):
         self.starting_dir_contents = os.listdir()
         # Initialize Utilities: {{{
         Utils.__init__(self) # Gives us access to the utilities.
-        selection = input('Do you need to navigate to another folder before running?\n(y/n)\n')
+        selection = input('Do you need to navigate to your data directory before running?\n(y/n)\n')
         if selection:
             if selection.lower() == 'y' or selection.lower() == 'yes':
                 self.navigate_filesystem()
         self.clear()
         #}}}
+        # Initialize MetadataParser: {{{
+        self._data_dir = os.getcwd() #Preserve the original directory. 
+        self.navigate_filesystem()
+        self._metadata_dir = os.getcwd()
+        MetadataParser.__init__(self,time_key=time_key, temp_key=temp_key)
+        os.chdir(self._data_dir) # Return to the data directory
+        if self.metadata_data:
+            metadata = True
+        else:
+            metadata = False
+        #}}}
+        
         # Initialize the plotter: {{{
         Plotter.__init__(
             self,
@@ -443,6 +543,9 @@ class Run(Utils,Plotter):
             time_units=time_units,
             file_time_units=file_time_units,
             skiprows=skiprows,
+            height = self.height,
+            width = self.width,
+            metadata=metadata,
         )
         #}}}
         self.plot_waterfall()
@@ -457,11 +560,15 @@ if __name__ == "__main__":
         min_on_zmin = -100
         num_max_buttons = 5
         num_min_buttons = 5
+        time_key = 'time:'
+        temp_key = 'element_temp'
         # Set User values: {{{
         usr_zmax = re.findall(r'\D?\d+\.?\d+',input(f'Min Value for Colorscale Max Default: {min_on_zmax}\n'))
         usr_zmin = re.findall(r'\D?\d+\.?\d+',input(f'Min Value for Colorscale Min Default: {min_on_zmin}\n'))
-        usr_max_buttons = re.findall(r'\d+',input(f'Number of Buttons for Max CS Default: {num_max_buttons}'))
-        usr_min_buttons = re.findall(r'\d+',input(f'Number of Buttons for Min CS Default: {num_min_buttons}'))
+        usr_max_buttons = re.findall(r'\d+',input(f'Number of Buttons for Max CS Default: {num_max_buttons}\n'))
+        usr_min_buttons = re.findall(r'\d+',input(f'Number of Buttons for Min CS Default: {num_min_buttons}\n'))
+        usr_time_key = input(f'Time Key for Metadata - Default: {time_key}\n')
+        usr_temp_key = input(f'Temp key - Default: {temp_key}\n')
         
         if usr_zmax:
             min_on_zmax = float(usr_zmax[0])
@@ -471,12 +578,18 @@ if __name__ == "__main__":
             num_max_buttons = int(usr_max_buttons[0])
         if usr_min_buttons:
             num_min_buttons = int(usr_min_buttons[0])
+        if usr_time_key:
+            time_key = usr_time_key
+        if usr_temp_key:
+            temp_key = usr_temp_key
         #}}} 
         Run(
             min_on_zmax= min_on_zmax, 
             min_on_zmin=min_on_zmin, 
             num_max_buttons=num_max_buttons, 
-            num_min_buttons=num_min_buttons
+            num_min_buttons=num_min_buttons,
+            time_key= time_key,
+            temp_key= temp_key,
         )
     else:
         pass
