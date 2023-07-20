@@ -783,7 +783,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
     # plot_pattern: {{{
     def plot_pattern(self,
             index:int = 0, 
-            time_units:str = 'min',
+            time_units:str = 'min', 
             height = 800,
             width = 1000,
             font_size:int = 20,
@@ -827,7 +827,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         self.pattern_plot.update_layout(
             height = height,
             width = width,
-            title_text = f'Time: {self._current_time} {time_units}, (Element Temp: {temp}{self._deg_c}) Rwp: {self._rwp}',
+            title_text = f'Time: {np.around(self._current_time,2)} {time_units}, (Element Temp: {temp}{self._deg_c}) Rwp: {self._rwp}',
             xaxis_title = f'2{self._theta}{self._degree}',
             yaxis_title = 'Intensity',
             template = 'simple_white',
@@ -892,6 +892,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             plot_temp:bool = True,
             time_units:str = 'min', 
             normalized:bool = False,
+            time_range:list = None,
             height = 800,
             width = 1100,
             font_size = 20,
@@ -986,6 +987,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     y = y,
                     hovertemplate = hovertemplate, 
                     yaxis = 'y1',
+                    name = 'Rwp',
             )
             
 
@@ -1070,11 +1072,17 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             third_yaxis = True
         #}}}
         # Update layout: {{{
+        if time_range == None:
+            time_range = [min(x), max(x)]
         fig.update_layout(
             height = height,
             width = width,
             title_text = f'Plot of Time vs. {plot_type}',
-            xaxis_title = xaxis_title,
+            xaxis = dict(
+                title = xaxis_title,
+                domain = [yaxis_2_position, 1], # the active area for x axis
+                range = time_range
+            ), 
             yaxis = dict(
                 title = yaxis_title,
             ),
