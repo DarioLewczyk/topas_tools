@@ -8,6 +8,7 @@ from tqdm import tqdm
 import os, glob,sys
 import re
 import time
+import texttable
 import shutil
 import pandas as pd
 import numpy as np #Needed to load in the mask file.
@@ -909,4 +910,70 @@ def plot_2d_transformed(parsed_data:dict,directions:dict,index:int):
     fig.show()
     #}}}
 #}}} 
+#}}}
+# Utils: {{{
+class Utils:
+    def __init__(self):
+        pass
+    #"_get_time" {{{
+    '''
+    This will be in the format:
+    Month-day-year_hour-minute-second
+    '''
+    def _get_time(self):
+        now = datetime.now()
+        date_and_time= now.strftime("%d-%m-%Y_%H:%M:%S")
+        return date_and_time
+    #}}}
+    # _get_readable_time: {{{
+    def _get_readable_time(self,time):
+        '''
+        This function gives us a printout of hours:mins:seconds for elapsed         time in seconds
+        '''
+           
+        hrs = time // 60**2
+        mins = time // 60
+        if mins >59:
+            mins_already_accounted_for = hrs *60
+            mins = mins - mins_already_accounted_for
+            sec = time % 60
+            final_time = ('{:.0f}h:{:.0f}m:{:.2f}s'.format(hrs,mins,                sec))#This gives us a nice printout with not too many figures.
+        return final_time
+    #}}}
+    # generate_table: {{{
+    def generate_table(self,
+        iterable:list = None,
+        header= None,
+        index_list:list = None,
+        cols_align:list = ['c','l'],
+        cols_dtype:list = ['i', 't'],
+        cols_valign:list = ['b','b'],
+        ):
+        '''
+        This function allows us to generate clean looking tables
+        in a text format.
+        Now, you can actually generate tables with more than just 2 columns
+        '''
+        if isinstance(header,str):
+            header = ['Index', header] # If you just give a string, then this will make a list for you.
+        if index_list:
+            if len(iterable) != len(index_list):
+                print('Your index_list must be equal to your iterable!')
+                print('len iterable: {}\nlen index_list: {}'.format(len(iterable),len(index_list)))
+ 
+        table = texttable.Texttable()
+        table.set_cols_align(cols_align) #This sets alignment of cols to center for the index and left for the             vals.
+        table.set_cols_dtype(cols_dtype) #This sets the d type of the first column as integers and the second as           text.
+        table.set_cols_valign(cols_valign) # This sets the values to be bottom aligned in the cells.
+        table.add_row(header) #This adds the header to the table.
+        for i, v in enumerate(iterable):
+            if index_list and cols_align == ['c','l']:
+                table.add_row([index_list[i], v]) # Add your custom labels with the values.
+            elif cols_align != ['c','l']:
+                # This means that we are trying to add more columns.
+                table.add_row(v) # This will just contain all of the index and value information
+            else:
+                table.add_row([i,v])
+        print(table.draw())
+    #}}}
 #}}}
