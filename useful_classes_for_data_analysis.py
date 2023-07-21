@@ -659,6 +659,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     'readable_time':md['readable_time'],
                     'epoch_time':md['epoch_time'],
                     'temperature':md['temperature'],
+                    'corrected_temperature': self.correct_t(md['temperature']), # Correct the temperature using the function
+                    'min_t':self.min_tcalc,  # Min temp (error bar)
+                    'max_t':self.max_tcalc, # Max temp (error bar)
                     'pattern_index':md['pattern_index'],
                 })
             #}}}
@@ -666,6 +669,33 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             
         #}}} 
         self._data_collected = True #Now, the data have been collected and plot pattern will be informed
+    #}}}
+    # correct_t: {{{
+    def correct_t(
+        self,
+        t:float = None,
+        ):
+        '''
+        This function was made on 07/21/2023
+        It uses the "a_corr" corrected lattice parameter values
+        from the Okado (1974) paper
+        A function was made to fit those data very well (R^2 ~0.99993)
+        That function fit the Si data collected in the beam
+        The T from that correction and the thermocouple were plotted and a new function generated
+        The final function's parameters and functional form are presented in this function. 
+        '''
+        p1 = 0.69234863 # Slope
+        p2 = -15.5280975 # Intercept
+    
+        p1_err = 0.00516 # Slope Error
+        p2_err = 4.14 # Intercept Error
+     
+        self.tcalc = p1*t + p2 # This will be used
+        self.min_tcalc = (p1-p1_err)*t + (p2 - p2_err) # This is the low reference
+        self.max_tcalc = (p1 + p1_err)*t + (p2 + p2_err) # This is the high reference
+
+        return self.tcalc
+     
     #}}}
     # _create_string_from_csv_data: {{{
     def _create_string_from_csv_data(self, index):
@@ -786,9 +816,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             index:int = 0, 
             time_units:str = 'min', 
             tth_range:list = None,
+            use_calc_temp:bool = True,
             height = 800,
             width = 1000,
             font_size:int = 20,
+            rwp_decimals:int = 2,
+            temp_decimals:int = 2,
+            printouts:bool = True,
         ):
         '''
         This will allow us to plot any of the loaded patterns 
@@ -808,7 +842,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         # Get the plot values and labels: {{{
         tth = self.rietveld_data[index]['xy']['2theta'] # this is the array of 2 theta values
         keys = list(self.rietveld_data[index]['xy'].keys())[1:] # These are the keys we care about. 
-        temp = self.rietveld_data[index]['temperature']
+        if use_calc_temp:
+            temp = self.rietveld_data[index]['corrected_temperature'] 
+            temp_label = 'Corrected Temp'
+        else:
+            temp = self.rietveld_data[index]['temperature']
+            temp_label = 'Element Temp'
         #}}}
         # Generate the figure: {{{
         self.pattern_plot = go.Figure()
@@ -832,7 +871,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         self.pattern_plot.update_layout(
             height = height,
             width = width,
-            title_text = f'Time: {np.around(self._current_time,2)} {time_units}, (Element Temp: {temp}{self._deg_c}) Rwp: {self._rwp}',
+            title_text = f'Time: {np.around(self._current_time,2)} {time_units}, ({temp_label}: {np.around(temp,temp_decimals)}{self._deg_c}) Rwp: {np.around(self._rwp,rwp_decimals)}',
             xaxis_title = f'2{self._theta}{self._degree}',
             yaxis_title = 'Intensity',
             template = 'simple_white',
@@ -851,8 +890,20 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         )
         #}}}
         #}}}
-        print('Additional Refinement Information:')
-        print(self._csv_string)
+        # Printouts: {{{
+        if printouts:
+            print('Additional Refinement Information:')
+            print(self._csv_string)
+            el_t = np.around(self.rietveld_data[index]["temperature"],2)
+            c_t = np.around(self.rietveld_data[index]["corrected_temperature"],2)
+            mint = np.around(self.rietveld_data[index]["min_t"],2)
+            maxt = np.around(self.rietveld_data[index]["max_t"],2)
+
+            print(f'Element Temperature: {el_t}{self._deg_c}\n'+
+                    f'Corrected Temperature: {c_t}{self._deg_c}\n'+
+                    f'Min Corrected Temperature: {mint}{self._deg_c}, Max Corrected Temperature: {maxt}{self._deg_c}'
+                    )
+        #}}}
         self.pattern_plot.show()
     #}}}
     # plot_times: {{{ 
@@ -896,6 +947,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
     def plot_csv_info(self, 
             plot_type:str = 'rwp',
             plot_temp:bool = True,
+            use_calc_temp:bool = True,
             time_units:str = 'min', 
             normalized:bool = False,
             time_range:list = None,
@@ -976,7 +1028,14 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             if plot_temp:
                 if 'temperature' not in self._csv_plot_data:
                     self._csv_plot_data['temperature'] = []
-                self._csv_plot_data['temperature'].append(self.rietveld_data[entry]['temperature']) # Record the temperature
+                if use_calc_temp:
+                    t = self.rietveld_data[entry]['corrected_temperature']
+                    temp_label = 'Corrected Temperature'
+                else:
+                    t = self.rietveld_data[entry]['temperature']
+                    temp_label = 'Element Temperature'
+
+                self._csv_plot_data['temperature'].append(t) # Record the temperature
             if 'time' not in self._csv_plot_data:
                 self._csv_plot_data['time'] = []
             self._get_time(entry,time_units) # This gives us the time in the units we wanted (self._current_time)
@@ -1067,14 +1126,14 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                         #}}}
         # Plot temp data: {{{
         if plot_temp:
-            yaxis3_title = f'Temperature /{self._deg_c}'
-            hovertemplate = base_ht + f'Temperature/{self._deg_c}: '+'%{y}'
+            yaxis3_title = f'{temp_label} /{self._deg_c}'
+            hovertemplate = base_ht + f'{temp_label}/{self._deg_c}: '+'%{y}'
             fig.add_scatter(
                 x = x,
                 y = self._csv_plot_data['temperature'],
                 hovertemplate = hovertemplate,
                 yaxis = 'y3',
-                name = f'Temperature/{self._deg_c}',
+                name = f'{temp_label}/{self._deg_c}',
                 mode = 'lines+markers',
                 marker = dict(color = 'red'),
                 line = dict(color = 'red'),
