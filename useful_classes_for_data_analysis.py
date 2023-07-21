@@ -619,10 +619,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             # If you have provided CSV labels: {{{
             if csv_labels:
                 for j, line in enumerate(csv_contents):
-                    if j <= len(csv_labels)-j: 
-                        self.rietveld_data[i]['csv'][csv_labels[j]] = np.around(line, 4) # This records a dictionary entry with the name of the float
+                    if j <= len(csv_labels)-1: 
+                        self.rietveld_data[i]['csv'][csv_labels[j]] = line # This records a dictionary entry with the name of the float
                     else:
-                        self.rietveld_data[i][f'csv_data_{j}'] = np.around(line,4) # If too few labels given
+                        self.rietveld_data[i][f'csv_data_{j}'] = line # If too few labels given
             #}}}
             # If No Provided CSV labels: {{{
             else:
@@ -739,16 +739,17 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 We need to go through all of the keys to match the first word to the unique substances then match the next word to what we are looking for. 
                 '''
                 for i, unique_element in enumerate(self._unique_substances):
-                    for j, csv_key in enumerate(csv_keys):
+                    for j, csv_key in enumerate(csv_keys): 
                         if unique_element in csv_key:
                             if unique_element not in self._csv_plot_data:
                                 self._csv_plot_data[unique_element] = {}
                             # This means that we have found an entry related to the substance
                             intermediate_identifier = re.findall(r'\w+',csv_key)
                             intermediate_identifier.pop(0) # Get rid of the element. 
-                            intermediate = '_'.join(intermediate_identifier) # This will give us a 1 word phrase
+                            intermediate = '_'.join(intermediate_identifier) # This will give us a 1 word phrase 
                             for key in keys:
-                                if intermediate == key:
+                                #print(f'Intermediate: {intermediate}\tKey: {key}')
+                                if intermediate.lower() == key:
                                     if key not in self._csv_plot_data[unique_element]:
                                         self._csv_plot_data[unique_element][key] = [] #This gives an empty list
                                     self._csv_plot_data[unique_element][key].append(csv[csv_key]) # This adds the value for the dictionary
@@ -784,6 +785,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
     def plot_pattern(self,
             index:int = 0, 
             time_units:str = 'min', 
+            tth_range:list = None,
             height = 800,
             width = 1000,
             font_size:int = 20,
@@ -824,6 +826,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             )
         #}}}
         #Update the layout: {{{
+        if tth_range == None:
+            tth_range = [min(tth), max(tth)] # plot the whole range
+        
         self.pattern_plot.update_layout(
             height = height,
             width = width,
@@ -840,6 +845,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 xanchor = 'right',
                 x = 0.99,
             ),
+            xaxis = dict(
+                range = tth_range,
+            )
         )
         #}}}
         #}}}
@@ -882,9 +890,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
     #}}}
     # _normalize: {{{
     def _normalize(self, data:list = None):
-        max_val = max(data)
-        normalized = [val/max_val for val in data]
-        return normalized
+        return [v/max(data) for v in data]
     #}}}
     # plot_csv_info: {{{
     def plot_csv_info(self, 
@@ -942,22 +948,26 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             keys = ['a','b','c', 'al','be','ga', 'alpha', 'beta', 'gamma'] # These are the 
             yaxis_title = f'Lattice Parameter / {self._angstrom}' # This is the a, b, c lattice parameter title
             yaxis2_title = f'Lattice Parameter / {self._degree}' # this is the al, be, ga lattice parameter title
+            title = 'Lattice Parameters'
         #}}}
         # Scale Factor: {{{
         elif plot_type == 'scale factor' or plot_type == 'sf':
             keys = ['scale_factor', 'sf','scale factor'] # These are the variations likely to be used
             yaxis_title = 'Scale Factor'
+            title = 'Scale Factor'
             normalized = True
         #}}}
         # Rwp: {{{
         elif plot_type == 'rwp':
             keys = ['rwp']
             yaxis_title = 'Rwp'
+            title = 'Rwp'
         #}}}
         # Volume: {{{
         elif plot_type == 'volume' or plot_type == 'vol':
             keys = ['vol', 'volume', 'cell volume', 'cell_volume']
             yaxis_title = f'Volume / {self._angstrom}{self._cubed}'
+            title = 'Volume'
         #}}}
         #}}}
         # Get a dictionary containing only the data we care about: {{{
@@ -1077,7 +1087,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         fig.update_layout(
             height = height,
             width = width,
-            title_text = f'Plot of Time vs. {plot_type}',
+            title_text = f'Plot of Time vs. {title}',
             xaxis = dict(
                 title = xaxis_title,
                 domain = [yaxis_2_position, 1], # the active area for x axis
