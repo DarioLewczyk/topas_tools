@@ -963,6 +963,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             2.) "scale factor" or "sf"
             3.) "rwp" 
             4.) "volume" or "vol"
+            5.)"Rbragg" or "rb"
+            6.) "Weight Percent" or "wp"
 
         The purpose of this function is to give the user a 
         look at the data output in csv form by TOPAS at the 
@@ -1020,6 +1022,18 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             keys = ['vol', 'volume', 'cell volume', 'cell_volume']
             yaxis_title = f'Volume / {self._angstrom}{self._cubed}'
             title = 'Volume'
+        #}}}
+        # R Bragg: {{{
+        if plot_type == 'rbragg' or plot_type == 'rb':
+            keys = ['r bragg','r_bragg'] # this tells the code what to search for
+            yaxis_title = 'R Bragg'
+            title = 'R Bragg'
+        #}}}
+        # Weight Percent: {{{
+        if plot_type == 'weight percent' or plot_type == 'wp': 
+            keys = ['weight percent', 'weight_percent']
+            yaxis_title = 'Weight Percent'
+            title = 'Weight Percent'
         #}}}
         #}}}
         # Get a dictionary containing only the data we care about: {{{
