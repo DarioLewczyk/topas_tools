@@ -1619,12 +1619,14 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     correlation = corrent['correlation']
                     name2 = corrent['name']
                     flag = corrent['flag']
-                    if flag == flag_search:
+                    if flag == flag_search and name1!= name2:
                         corr_dict[i][name1].update({
                             j:{name2:correlation} 
                         })
                         if debug:
                             print(f'\t{j} ({name2}): {correlation}')
+                if corr_dict[i][name1] == {}:
+                    corr_dict.pop(i) # If there is only one value, it is the value itself. 
             #}}} 
         return corr_dict
     #}}}
