@@ -444,20 +444,24 @@ class MetadataParser:
         temp_key:str = 'element_temp',
         ):
         self.metadata_data = {}
-        for i, key in enumerate(self.metadata):
+        metadata = tqdm(self.metadata)
+        for i, key in enumerate(metadata):
+            metadata.set_description_str(f'Working on Metadata {key}:')
             filename = self.metadata[key] # Gives us the filename to read.
             time = None
             temp = None
             # Work to parse the data: {{{
             with open(filename,'r') as f:
                 lines = f.readlines()
-                for line in lines:
-                    t = re.findall(r'\d+\.\d+',line) # This gives me the epoch time if it is on a        line.
-                    if time_key in line and t:
-                        time = float(t[0]) # Gives us the epoch time in float form.
+                for line in lines: 
+                    if time_key in line:
+                        t = re.findall(r'\d+\.\d+',line) # This gives me the epoch time if it is on a        line.
+                        if t:
+                            time = float(t[0]) # Gives us the epoch time in float form.   
                     if temp_key in line:
-                        temp = np.around(float(re.findall(r'\d+\.\d?',line)[0]) - 273.15, 2) #           This gives us the Celsius temperature of the element thermocouple.
-            f.close()
+                        temp = np.around(float(re.findall(r'\d+\.\d?',line)[0]) - 273.15, 2) #           This gives us the Celsius temperature of the element thermocouple.  
+                        
+                f.close() 
             #}}}
             # Update Metadata Dictionary Entry: {{{
             self.metadata_data[key] = {
@@ -466,6 +470,7 @@ class MetadataParser:
                 'temperature': temp,
                 'pattern_index': i,
             }
+            
             #}}}
     #}}}
 #}}}
@@ -474,14 +479,23 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
     # __init__: {{{
     def __init__(self,
             topas_version:int = 6,
-            fileextension:str = 'xy', 
+            fileextension:str = 'xy',  
         ):
+        '''
+        topas_version: just sets what what number to use when looking for the TOPAS directory. 
+        fileextension: sets the fileextension of your datafiles. In my case, this is .xy
+        reverse_order: This tells the program whether or not to analyze the data chronologically or reverse chronologically.
+        '''
+        # Make attrs based on inputs: {{{ 
         self.topas_dir = 'C:\\TOPAS%s'%topas_version # sets the directory
-        self.fileextension= fileextension# This is the extension of your data.
+        self.fileextension= fileextension# This is the extension of your data. 
+        #}}}
+        # Additional initialization tasks: {{{
         self.current_dir = os.getcwd() # This saves the original location
         Utils.__init__(self)
         UsefulUnicode.__init__(self)
         self._data_collected = False # This tracks if the "get_data" function was run
+        #}}}
     #}}}
     # refine_pattern: {{{
     def refine_pattern(self, input_file):
@@ -500,11 +514,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
     def run_auto_rietveld(self,
             num_of_scans_to_refine:int = 200, 
             data_dir:str = None, 
-            template_dir:str = None
+            template_dir:str = None,
+            reverse_order:bool = False,
         ):
         '''
         Code to run automated Rietveld Refinements based on Adam/Gerry's Code
         '''
+        self.reverse_order = reverse_order # This will keep track of if you chose to reverse the order in case that info is needed elsewhere.
         # Navigate the Filesystem to the appropriate directories: {{{
         if not data_dir:
             print('Navigate to the "Data Directory"')
@@ -534,7 +550,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 xy_out_linenum = i 
             if 'out_prm_vals_on_convergence' in line:
                 csv_out_linenum = i
-            if 'Results_1.csv' in line:
+            if 'out' in line:
+                # Don't need to look for anything but out by itself. 
                 my_csv_line = i
             if 'xdd' in line:
                 pattern_linenum = i
@@ -545,11 +562,17 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         data = DataCollector(fileextension=self.fileextension) # Initialize the DataCollector
         data.scrape_files() # This collects and orders the files
         data_dict_keys = list(data.file_dict.keys()) # Filename timecodes in order
-        os.chdir(template_dir) # Return to the template directory
+        os.chdir(template_dir) # Return to the template directory 
         tmp_rng = np.linspace(1, len(data_dict_keys), num_of_scans_to_refine) # Gives a range over the total number of scans that we want to refine. 
+        if self.reverse_order:
+            tmp_rng = tmp_rng[::-1] # This reverses the order of the array by converting it to a list slice 
         #}}}
         # Begin the Refinements: {{{
-        rng = tqdm([int(fl) for fl in tmp_rng])
+        '''
+        This part uses a range made by the selection of the user. 
+        Since we don't need to pair the data with the metadata, we should be able to simply reverse the order of the range. 
+        '''
+        rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine. 
         for number in rng:
             pattern = f'{data_dir}\\{data.file_dict[data_dict_keys[number-1]]}' # Use the custom range we defined. Must subtract 1 to put it in accordance with the index. 
             output = f'result_{data_dict_keys[number-1]}_{str(number).zfill(6)}' # zfill makes sure that we have enough space to record all of the numbers of the index, also use "number" to keep the timestamp. 
@@ -559,7 +582,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 template[xy_out_linenum] = f'Out_X_Yobs_Ycalc_Ydiff("{output}.xy")\n'
             if csv_out_linenum:
                 template[csv_out_linenum] = template[csv_out_linenum].split()[0]+f'"{output}.csv"\n'
-            if my_csv_line:
+            if my_csv_line: 
                 template[my_csv_line] = f'out "{output}.csv"\n'
             # Use the Dummy.inp file: {{{
             with open('Dummy.inp','w') as dummy:
@@ -576,8 +599,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             csv_labels:list = None, # This is a list of what each entry in the csvs is 
             csv_prefix:str = 'result', 
             xy_prefix:str = 'result',
+            out_prefix:str = 'result',
             print_files:bool = False,
             get_orig_patt_and_meta:bool = True,
+            parse_c_matrices:bool = False,
+            correlation_threshold:int = 50,
+            flag_search:str = 'CHECK',
         ):
         '''
         This will gather and sort all of the output files from your refinements for you. 
@@ -588,6 +615,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         self.rietveld_data = {}
         self.sorted_csvs = sorted(glob.glob(f'{csv_prefix}_*.csv')) #gathers csvs with the given prefix
         self.sorted_xy = sorted(glob.glob(f'{xy_prefix}_*.xy'))
+        self.sorted_out = sorted(glob.glob(f'{out_prefix}_*.out'))
         # Print Statements: {{{
         if print_files:
             print('I   CSV\tXY')
@@ -595,15 +623,29 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 print(f'{i}: {fn}\t{self.sorted_xy[i]}')
         #}}}
         # Categorize the Refined Data: {{{ 
-        for i, csv in enumerate(self.sorted_csvs):     
+        csvs = tqdm(self.sorted_csvs)
+        # import and process CSV, XY, OUT:     
+        for i, csv in enumerate(csvs):
+            csvs.set_description_str(f'Reading {csv}: ')
             csv_contents = [float(line) for line in open(csv)] # This gives us the values in the csv. 
             # Handle the XY Data: {{{
+            csvs.set_description_str(f'Reading {self.sorted_xy[i]}: ')
             xy_data = np.loadtxt(self.sorted_xy[i], delimiter=',') # imports the xy data to an array
             ttheta = xy_data[:,0]
             yobs = xy_data[:,1]
             ycalc = xy_data[:,2]
             ydiff = xy_data[:,3]
             #}}}
+            # Handle the OUT files: {{{
+            if parse_c_matrices:
+                csvs.set_description_str(f'Reading {self.sorted_out[i]}: ')
+                c_matrix = self._parse_c_matrix(out_file=self.sorted_out[i],correlation_threshold= correlation_threshold)
+                corr_dict = self._get_correlations(c_matrix,flag_search)
+            else:
+                c_matrix = None
+                corr_dict = None
+            #}}}
+            # UPDATE Rietveld Data: {{{
             self.rietveld_data[i] = {
                 'csv': {},
                 'csv_name': csv,
@@ -615,7 +657,11 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     'ydiff':ydiff,
                 },
                 'xy_name':self.sorted_xy[i],
+                'out_name': self.sorted_out[i],
+                'c_matrix': c_matrix,
+                'c_matrix_filtered': corr_dict,
             } # Create an entry for the csv data
+            #}}}
             # If you have provided CSV labels: {{{
             if csv_labels:
                 for j, line in enumerate(csv_contents):
@@ -663,6 +709,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     'min_t':self.min_tcalc,  # Min temp (error bar)
                     'max_t':self.max_tcalc, # Max temp (error bar)
                     'pattern_index':md['pattern_index'],
+                })
+            for i in self.rietveld_data:
+                entry = self.rietveld_data[i] # Get the current entry 
+                self._get_time(i,time_units='s') # get the time in seconds
+                self.rietveld_data[i].update({
+                    'corrected_time': self._current_time
                 })
             #}}}
             
@@ -737,7 +789,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
 
     #}}}
     # _sort_csv_keys: {{{
-    def _sort_csv_keys(self,keys:list = None):
+    def _sort_csv_keys(self,keys:list = None,debug:bool = False):
         '''
         This will sort the csvs to give you unique results grouped together 
         with only the key values you care about. 
@@ -777,12 +829,15 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                             intermediate_identifier = re.findall(r'\w+',csv_key)
                             intermediate_identifier.pop(0) # Get rid of the element. 
                             intermediate = '_'.join(intermediate_identifier) # This will give us a 1 word phrase 
+                            if debug and i == 0:
+                                print(f'csv_key: {csv_key}\nintermediate_identifier: {intermediate_identifier}\nintermediate: {intermediate}')
                             for key in keys:
                                 #print(f'Intermediate: {intermediate}\tKey: {key}')
-                                if intermediate.lower() == key:
-                                    if key not in self._csv_plot_data[unique_element]:
-                                        self._csv_plot_data[unique_element][key] = [] #This gives an empty list
-                                    self._csv_plot_data[unique_element][key].append(csv[csv_key]) # This adds the value for the dictionary
+                                if intermediate.lower() == key or '_'.join(intermediate.split('_')[:-1]).lower() == key:
+                                    if intermediate.lower() not in self._csv_plot_data[unique_element]:
+                                        self._csv_plot_data[unique_element][intermediate.lower()] = [] #This gives an empty list
+                                    self._csv_plot_data[unique_element][intermediate.lower()].append(csv[csv_key]) # This adds the value for the dictionary
+                                
 
                             
             #}}}
@@ -811,18 +866,59 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
 
 
     #}}}
+    # _update_pattern_layout: {{{
+    def _update_pattern_layout(self,
+            fig:go.Figure = None,  
+            title_text:str = None, 
+            xaxis_title:str = None,
+            yaxis_title:str = None,
+            tth_range:list = None,
+            template:str = None, 
+            font_size:int = None,
+            height =800,
+            width =1000,
+            show_legend:bool = True,
+            ):
+        #Update the layout: {{{
+        
+        fig.update_layout(
+            height = height,
+            width = width,
+            title_text = title_text,
+            xaxis_title = xaxis_title,
+            yaxis_title = yaxis_title,
+            template = template,
+            font = dict(
+                size = font_size,
+            ),
+            legend = dict(
+                yanchor = 'top',
+                y = 0.99,
+                xanchor = 'right',
+                x = 0.99,
+            ),
+            showlegend = show_legend,
+            xaxis = dict(
+                range = tth_range,
+            )
+        )
+        #}}}
+    #}}}
     # plot_pattern: {{{
     def plot_pattern(self,
             index:int = 0, 
+            template:str = 'simple_white',
             time_units:str = 'min', 
             tth_range:list = None,
             use_calc_temp:bool = True,
             height = 800,
             width = 1000,
+            show_legend:bool = True,
             font_size:int = 20,
             rwp_decimals:int = 2,
             temp_decimals:int = 2,
             printouts:bool = True,
+            run_in_loop:bool = False,
         ):
         '''
         This will allow us to plot any of the loaded patterns 
@@ -865,29 +961,26 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             )
         #}}}
         #Update the layout: {{{
+        #Get Info for Updating Layout: {{{
         if tth_range == None:
             tth_range = [min(tth), max(tth)] # plot the whole range
         
-        self.pattern_plot.update_layout(
-            height = height,
+        title_text = f'Time: {np.around(self._current_time,2)} {time_units}, ({temp_label}: {np.around(temp,temp_decimals)}{self._deg_c}) Rwp: {np.around(self._rwp,rwp_decimals)}'
+        xaxis_title = f'2{self._theta}{self._degree}'
+        yaxis_title = 'Intensity'
+        #}}}
+        self._update_pattern_layout(
+            fig=self.pattern_plot,
+            title_text=title_text,
+            xaxis_title=xaxis_title,
+            yaxis_title=yaxis_title,
+            tth_range=tth_range,
+            template=template,
+            font_size=font_size,
+            height=height,
             width = width,
-            title_text = f'Time: {np.around(self._current_time,2)} {time_units}, ({temp_label}: {np.around(temp,temp_decimals)}{self._deg_c}) Rwp: {np.around(self._rwp,rwp_decimals)}',
-            xaxis_title = f'2{self._theta}{self._degree}',
-            yaxis_title = 'Intensity',
-            template = 'simple_white',
-            font = dict(
-                size = font_size,
-            ),
-            legend = dict(
-                yanchor = 'top',
-                y = 0.99,
-                xanchor = 'right',
-                x = 0.99,
-            ),
-            xaxis = dict(
-                range = tth_range,
-            )
-        )
+            show_legend=show_legend,
+        ) 
         #}}}
         #}}}
         # Printouts: {{{
@@ -904,7 +997,19 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     f'Min Corrected Temperature: {mint}{self._deg_c}, Max Corrected Temperature: {maxt}{self._deg_c}'
                     )
         #}}}
-        self.pattern_plot.show()
+        # Standard Output: {{{
+        if not run_in_loop:
+            self.pattern_plot.show()
+        #}}}
+        # Loop Output: {{{
+        else:
+            yobs = self.rietveld_data[index]['xy']['yobs']
+            ycalc = self.rietveld_data[index]['xy']['ycalc']
+            ydiff = self.rietveld_data[index]['xy']['ycalc']
+            hovertemplate = f'{title_text}<br>Pattern Index: {index}<br>' + hovertemplate
+            #title = f'Time: {np.around(self._current_time,2)} {time_units}, ({temp_label}: {np.around(temp,temp_decimals)}{self._deg_c}) Rwp: {np.around(self._rwp,rwp_decimals)}',
+            return (tth, yobs,ycalc,ydiff, hovertemplate, title_text,xaxis_title,yaxis_title)
+        #}}}
     #}}}
     # plot_times: {{{ 
     def plot_times(self,):
@@ -943,6 +1048,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
     def _normalize(self, data:list = None):
         return [v/max(data) for v in data]
     #}}}
+    # _get_random_color: {{{
+    def _get_random_color(self,):
+        rand_color = list(np.random.choice(range(256),size = 3)) # This generates a random color for each of the substances
+        color = f'rgb({rand_color[0]},{rand_color[1]},{rand_color[2]})'
+        return color
+    #}}}
     # plot_csv_info: {{{
     def plot_csv_info(self, 
             plot_type:str = 'rwp',
@@ -951,11 +1062,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             time_units:str = 'min', 
             normalized:bool = False,
             time_range:list = None,
+            y_range:list = None,
             height = 800,
             width = 1100,
             font_size = 20,
             yaxis_2_position = 0.15,
-
+            additional_title_text:str = None,
+            specific_substance:str = None,
             ):
         ''' 
         plot_type: This can be any of the below. 
@@ -963,8 +1076,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             2.) "scale factor" or "sf"
             3.) "rwp" 
             4.) "volume" or "vol"
-            5.)"Rbragg" or "rb"
+            5.) "Rbragg" or "rb"
             6.) "Weight Percent" or "wp"
+            7.) "B values" or "beq" or "bvals" 
 
         The purpose of this function is to give the user a 
         look at the data output in csv form by TOPAS at the 
@@ -972,6 +1086,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
 
         This is a little complex since we do not necessarily know what we want to plot 
         the user will decide that. 
+
+        "specific_substance": Allows you to plot only data from one substance at a time
 
         some things I am thinking about are: 
 
@@ -1035,6 +1151,16 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             yaxis_title = 'Weight Percent'
             title = 'Weight Percent'
         #}}}
+        # B-values: {{{
+        if plot_type == 'b values' or plot_type == 'beq' or plot_type == 'bvals':
+            keys = ['bvals', 'beq','bval', 'b value', 'b val', 'b values', 'b_value','b_val','b_values'] # tells the code what the likely keywords to look for are.
+            yaxis_title = 'B-Values'
+            title = 'B-Values'
+        #}}}
+        #}}}
+        # Update the title text: {{{
+        if additional_title_text:
+            title = f'{additional_title_text} {title}' # combines what the user wrote with the original title.
         #}}}
         # Get a dictionary containing only the data we care about: {{{
         self._sort_csv_keys(keys) 
@@ -1076,14 +1202,19 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
 
         else:
             for substance in self._csv_plot_data:
-                rand_color = list(np.random.choice(range(256),size = 3)) # This generates a random color for each of the substances
-                color = f'rgb({rand_color[0]},{rand_color[1]},{rand_color[2]})'
-                if substance != 'time' and substance != 'temperature':
+                color = self._get_random_color() # This gives us a color
+                if not specific_substance:
+                    usr_substance = substance.lower() # If a specific substance is not given, it is set as the current. 
+                else:
+                    usr_substance = specific_substance.lower()
+                if substance != 'time' and substance != 'temperature' and substance.lower() == usr_substance:
                     entry = self._csv_plot_data[substance] # This will be a dictionary entry with keys. 
                     entry_keys = list(entry.keys()) # These will be the keys for the entry. 
                     for plot_key in entry_keys:
                         # Handle most cases: {{{ 
                         if plot_key != 'al' or plot_key != 'be' or plot_key != 'ga' or plot_key != 'alpha' or plot_key != 'beta' or plot_key != 'gamma':
+                            if specific_substance:
+                                color = self._get_random_color() # Set a specific color for each lattice parameter if only one substance plotted. 
                             # This is the default section since units should be consistent enough. 
                             # Get the data: {{{
                             if normalized:
@@ -1157,6 +1288,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         # Update layout: {{{
         if time_range == None:
             time_range = [min(x), max(x)]
+        # Update the first y axis and plot: {{{
         fig.update_layout(
             height = height,
             width = width,
@@ -1181,6 +1313,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             ),
 
         )
+        #}}}
+        if y_range:
+            fig.update(layout_yaxis_range = y_range)
+        # if second y axis: {{{
         if second_yaxis:
             fig.update_layout(
                 yaxis2 = dict(
@@ -1191,6 +1327,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     position = yaxis_2_position,
                 ),
             )
+        #}}}
+        # if third axis: {{{
         if third_yaxis:
             fig.update_layout(
                 yaxis3 = dict(
@@ -1202,11 +1340,293 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 ),
             )
         #}}}
+        #}}}
 
         #}}}
-        fig.show()
-       
+        fig.show()     
+    #}}}
+    # plot_multiple_patterns: {{{
+    def plot_multiple_patterns(self,
+            indices= None, 
+            template:str = 'simple_white',
+            offset:float = 0,
+            show_ycalc:bool = True,
+            show_ydiff:bool = False,
+            time_units:str = 'min', 
+            tth_range:list = None,
+            use_calc_temp:bool = True,
+            height = 800,
+            width = 1000,
+            show_legend:bool = True,
+            font_size:int = 20,
+            rwp_decimals:int = 2,
+            temp_decimals:int = 2, 
+            standard_colors:bool = False,
+            ):
+        '''
+        This function will run a loop mode of "plot_pattern"
+        This allows us to have multiple pattern fits overlaid on 
+        one-another.
+
+        Use the "offset" to change the spacing of the patterns.
+
+        The "indices" can be either a list of specific files or a
+        3-tuple that goes into np.linspace(low, high, number) 
+
+        "standard_colors": If True, this will default to the standard color scheme
+        '''
+        if type(indices) == tuple:
+            lo,hi,num = indices
+            indices= np.around(np.linspace(lo,hi,num),0) #Creates a range
+            
+
+        self.multi_pattern = go.Figure()
+        for index, i in enumerate(indices):
+            # Get the data for current index: {{{
+            tth, yobs, ycalc,ydiff, hovertemplate,title_text,xaxis_title,yaxis_title = self.plot_pattern(
+                index= i, 
+                template= template,
+                time_units= time_units, 
+                tth_range=tth_range,
+                use_calc_temp=use_calc_temp,
+                height =height,
+                width =width,
+                font_size=font_size,
+                rwp_decimals= rwp_decimals,
+                temp_decimals= temp_decimals,
+                printouts=False,
+                run_in_loop=True,
+            )
+            #}}}
+            # Generate the figure: {{{
+            color1 = self._get_random_color()
+            color2 = self._get_random_color()
+            color3 = self._get_random_color()
+            if standard_colors:
+                colors = ['blue','red','grey']
+            else:
+                colors = [color1, color2, color3]
+            ydict = {'yobs':yobs,'ycalc':ycalc,'ydiff':ydiff}
+            # Add the plots: {{{
+            for j, key in enumerate(ydict):
+                if key == 'yobs' or key == 'ycalc' and show_ycalc or key == 'ydiff' and show_ydiff:
+                    self.multi_pattern.add_scatter(
+                        x = tth,
+                        y = np.array(ydict[key])+(offset*index),
+                        hovertemplate = hovertemplate,
+                        marker = dict(
+                            color = colors[j],
+                        ),
+                        name = f'Pattern # {i}: {key}',
+                    )
+            #}}}
+        # Update Layout: {{{
+        self._update_pattern_layout(
+            fig = self.multi_pattern,
+            title_text=f'Patterns {indices}',
+            xaxis_title=xaxis_title,
+            yaxis_title=yaxis_title,
+            tth_range=tth_range,
+            template=template,
+            font_size=font_size,
+            height=height,
+            width=width,
+            show_legend=show_legend,
+        )
+        #}}} 
+        #}}}
+        self.multi_pattern.show()
+    #}}}
+    # get_pattern_from_time: {{{
+    def get_pattern_from_time(self, time:float = None, units:str = 'min'):
+        '''
+        The purpose of this function is to get the number of the pattern in a time series
+        by inputting the time you find from looking at a plot. 
+
+        It gives the index of the pattern relative to the number of patterns you refined. 
+        ''' 
+        # Convert time to seconds: {{{
+        if units == 's':
+            conv_time = time
+        elif units == 'min':
+            conv_time = time*60 # Convert minutes to seconds
+        elif units == 'h':
+            conv_time = time*60**2 # Convert hours to seconds
+
+        #}}}
+        closest_pattern_below = 0
+        closest_pattern_above = 0
+        pattern_above_idx = None
+        exact_pattern = None
+        # Go through the patterns and determine if the time given is greater than or less than the recorded time: {{{
+        for i, pattern in enumerate(self.rietveld_data):
+            p_time = self.rietveld_data[pattern]['corrected_time'] # This gives the time for the pattern
+            if p_time < conv_time:
+                closest_pattern_below = pattern
+            elif p_time > conv_time:
+                if not pattern_above_idx:
+                    closest_pattern_above = pattern
+                    pattern_above_idx = i
+            if p_time == conv_time:
+                exact_pattern = pattern
+                break
+        #}}} 
+        # Check for the exact pattern: {{{
+        if not exact_pattern:
+            if closest_pattern_above - 1 > closest_pattern_below:
+                exact_pattern = closest_pattern_above - 1 # This will be the pattern between 
+            else:
+                exact_pattern = f'Either: {closest_pattern_below} or {closest_pattern_above}'
+        #}}}
+        # Create the Output Printout: {{{ 
+        rr_data_below = self.rietveld_data[closest_pattern_below]
+        rr_data_above = self.rietveld_data[closest_pattern_above]
+        below_csv = rr_data_below['csv_name']
+        above_csv = rr_data_above['csv_name']
         
+        below_orig = rr_data_below['original_name']
+        above_orig = rr_data_above['original_name']
+
+
+        final_printout = f'{exact_pattern}\nPoss Low IDX:\n\t{below_csv}\n\t{below_orig}\nPoss High IDX:\n\t{above_csv}\n\t{above_orig}'
+        #}}}
+        print(final_printout)
+
+    #}}}
+    # _parse_c_matrix: {{{
+    def _parse_c_matrix(self, 
+            out_file:str = None,
+            correlation_threshold:int = None,
+            ):
+        '''
+        The purpose of this function is to automatically generate a dictionary
+        for the user to quickly view the c matrices for any of the refined patterns.  
+        We want to also have each of the correlations be clearly labeled.
+        '''
+        c_matrix = {} # This is the matrix object we create
+        c_matrix_lines = []
+        c_matrix_var_names = [] # We want to correlate the variable names with the correlation values
+        # Get the rows of the matrix: {{{
+        with open(out_file,'r') as out:
+            lines = out.readlines()
+            c_mat_line = None
+            for i, line in enumerate(lines):
+                if 'C_matrix_normalized' in line: 
+                    c_mat_line = i
+                if c_mat_line:
+                    if i > c_mat_line:
+                        # At this point, we have passed the point of introduction of the matrix. 
+                        splitline = line.split(' ') # The vars and numbers are separated by whitespace
+                        corrected_line = [] # We need to do some post-processing before we pass the lines onward.
+                        if len(splitline) > 1 and '\n' not in splitline:
+                            # This check ensures we do not get unimportant lines.
+                            for l in splitline:
+                                if l != '':
+                                    corrected_line.append(l) # Add only non-blank entries
+                            c_matrix_lines.append(corrected_line)
+                            #print(i,corrected_line)
+            out.close() # We are done with the file now. 
+        #}}}
+        # Generate the C matrix Object: {{{
+        if c_matrix_lines:
+            for i, row in enumerate(c_matrix_lines):
+                if i == 0:
+                    # The first entry should be the top row of the matrix with variable indices.
+                    ints = np.loadtxt(row)
+                    #print(ints)
+                    #print(len(ints))
+                    for num in ints:
+                        c_matrix[int(num)] = {} # Initialize the entry
+                else:
+                    # Get the Var names and Numbers: {{{
+                    var_name = row[0]
+                    c_matrix_var_names.append(var_name) # Store the name
+                    var_num = int(row[1].strip(':')) # The number correlated to the variable name is recorded next
+                    # Update the C Matrix: 
+                    c_matrix[var_num].update({
+                        'name': var_name,
+                        'correlations':{},
+                    })
+                    #}}}
+                    # GET Correlations: {{{
+                    numbers = row[2:]
+                    fixed_numbers = []
+                    for v in numbers: 
+                        combined_num = re.findall(r'\D?\d+',v) # This gets any digit (either positive or negative) and can split combined numbers
+                        if combined_num:
+                            fixed_numbers.extend(combined_num) # This adds the positive and negative numbers
+                    correlations = np.loadtxt(fixed_numbers)
+                    #print(len(correlations))
+                    #}}}
+                    # UPDATE THE MATRIX: {{{
+                    for j, v in enumerate(correlations):
+                        j = j+1 # This brings the variable numbers in line with the correlations
+                        c_matrix[var_num]['correlations'].update({
+                            j:v
+                        })
+                    #}}}
+        #}}}
+        # Update the correlations with the names of the variables: {{{ 
+        for i in c_matrix:
+            entry = c_matrix[i]
+            correlations = entry['correlations']
+            for j in correlations:
+                correlation = correlations[j]
+                # Get correlation Flags: {{{
+                if correlation_threshold:
+                    if correlation > correlation_threshold or correlation < -1*correlation_threshold:
+                        flag = 'CHECK'
+                    else:
+                        flag = 'OK'
+                else:
+                    flag = 'N/A'
+
+                #}}}
+                correlations[j] = {
+                        'name': c_matrix_var_names[j-1], # Need the index, so j-1
+                        'correlation': correlation,
+                        'flag':flag,
+                }
+
+        #}}}
+        return c_matrix
+    #}}}
+    # _get_correlations: {{{
+    def _get_correlations(self, c_matrix:dict = None, flag_search:str = 'CHECK',debug:bool = False):
+        '''
+        pattern_idx: This is the pattern number you want to investigate
+        flag_search: This is the flag to find under the correlations dictionary.
+
+        corr_dict: This is a clearer filtered dictionary of correlations
+        '''
+        corr_dict = {} 
+        if type(c_matrix) == None:
+            print('No C Matrix Present.')
+            sys.exit() 
+        else:
+            # Find the correlations matching your search flag: {{{ 
+            for i in c_matrix:
+                cent = c_matrix[i]
+                name1 = cent['name']
+                corr_dict.update({
+                    i: {name1: {}},
+                })
+                correlations = cent['correlations']
+                if debug:
+                    print(f'{i}: {name1}')
+                for j in correlations:
+                    corrent = correlations[j]
+                    correlation = corrent['correlation']
+                    name2 = corrent['name']
+                    flag = corrent['flag']
+                    if flag == flag_search:
+                        corr_dict[i][name1].update({
+                            j:{name2:correlation} 
+                        })
+                        if debug:
+                            print(f'\t{j} ({name2}): {correlation}')
+            #}}} 
+        return corr_dict
     #}}}
 #}}}
 
