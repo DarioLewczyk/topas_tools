@@ -518,10 +518,25 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             template_dir:str = None,
             reverse_order:bool = False,
             get_individual_phases:bool = False,
+            subtract_bkg:bool = True,
+            scale_factors_to_monitor:list = None,
+            threshold_for_scale_factor:float = 0.01,
         ):
         '''
         Code to run automated Rietveld Refinements based on Adam/Gerry's Code
+
+        subtract_bkg: This will remove background terms from the individual phase contributions to ycalc
+        scale_factors_to_monitor: you can give either a list or a string of the phase scale factor to monitor.
+        threshold_for_scale_factor: This is the value the normalize scale factor can be below which, the program will set the scale factor to 0.
         '''
+        # IF Scale Factor to Monitor is a String: {{{
+        if type(scale_factors_to_monitor) == list:
+            pass
+        else:
+            scale_factors_to_monitor = [scale_factors_to_monitor]
+        if scale_factors_to_monitor:
+            self._monitored_scale_factors = {} # initialize the tracker
+        #}}}
         self.reverse_order = reverse_order # This will keep track of if you chose to reverse the order in case that info is needed elsewhere.
         # Navigate the Filesystem to the appropriate directories: {{{
         if not data_dir:
@@ -580,7 +595,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         Since we don't need to pair the data with the metadata, we should be able to simply reverse the order of the range. 
         '''
         rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine. 
-        for number in rng:
+        for index,number in enumerate(rng):
             pattern = f'{data_dir}\\{data.file_dict[data_dict_keys[number-1]]}' # Use the custom range we defined. Must subtract 1 to put it in accordance with the index. 
             output = f'result_{data_dict_keys[number-1]}_{str(number).zfill(6)}' # zfill makes sure that we have enough space to record all of the numbers of the index, also use "number" to keep the timestamp. 
             if pattern_linenum:
@@ -605,17 +620,111 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 for line in template:
                     dummy.write(line)
             self.refine_pattern('Dummy.inp') # Run the actual refinement
+            # Monitor Scale Factors: {{{
+            '''
+            If you want to monitor scale factor values, it MUST
+            happen before the Dummy file is copied to a new file. 
+            '''
+            if scale_factors_to_monitor != None:
+                self._monitor_scale_factor(out = f'Dummy.out',scale_factors=scale_factors_to_monitor, threshold=threshold_for_scale_factor, current_idx=index)
+            #}}}
             copyfile('Dummy.out',f'{output}.out')
             template = [line for line in open('Dummy.out')] # Make the new template the output of the last refinement. 
             #}}}
             # Get the single phase patterns: {{{ 
             if get_individual_phases:
-                self._calculate_phase_from_out(out = f'{output}.out')
+                self._calculate_phase_from_out(out = f'{output}.out',subtract_bkg=subtract_bkg)
             #}}}
         #}}}
     #}}}
+    # _monitor_scale_factor: {{{
+    def _monitor_scale_factor(self,out:str = None, scale_factors:list = None, threshold:float = None, current_idx:int = None, debug:bool = False, sf_value:float = 1.0e-100):
+        '''
+        This function will monitor a scale factor or a series of scale factors
+        to determine when they fall below a certain threshold. When they do, the program sets their scale factor to 0.0
+
+        scale factors MUST be strings with the phase name you care about.
+
+        eg: scale factor name in .inp: "Ta2O5_scale_factor"
+        you would input: "Ta2O5"
+        
+        The function will parse the output file for the keyword "scale" and then find the word that you put in after scale. 
+        '''
+        
+        relevant_lines = {}
+        # Get the relevant lines: {{{
+        with open(out,'r') as f:
+            lines = f.readlines()
+            for i,line in enumerate(lines):
+                for j,sf in enumerate(scale_factors): 
+                    scale_kwd = re.findall(r'^\s*scale',line) # This will have values ONLY IF the line starts with scale 
+                    if scale_kwd:
+                        line_prms = re.findall(r'\S+',line) # This will split the line into only words and values.
+                        prm_name = line_prms[1] # The second word should always be a parameter name for the scale factor.
+                        str_value = line_prms[2] # The third item is the value (may include an error too.) 
+                        if  sf.lower() in prm_name.lower():
+                            number =re.findall(r'(\d+?\.\d+e?\-?\+?\d+)',line) # This will find any value that could possibly show up.     
+                            if len(number) == 0:
+                                print(line)
+                                number = re.findall(r'\d?\.?\d+?',line)
+                            number = number[0]
+                            value = float(number)
+                            relevant_lines[j] = {'linenumber': i, 'line': line,'value': value, 'name': prm_name, 'string_number':str_value}# Record the line
+                    if j == len(scale_factors)-1: 
+                        break # If you reach the end, no point in reading more lines. 
+            f.close() 
+        #}}} 
+        # Do the check: {{{
+        if current_idx == 0: 
+            for i,key in enumerate(relevant_lines):
+                entry = relevant_lines[key]
+                value = entry['value'] # This is the value of the scale factor
+                name = entry['name'] # This is the prm name
+                self._monitored_scale_factors[i] = {'values': [value], 'name': name, 'stopped':False} # Record the value and name
+        #}}}
+        else:
+            # Check the current value against the max of the series to this point.
+            for i, sf in enumerate(scale_factors):
+                monitored_scale_factor = self._monitored_scale_factors[i]
+                max_value = max(monitored_scale_factor['values'])
+                current_value = relevant_lines[i]['value']
+                norm_value =current_value/max_value
+                if norm_value > threshold:
+                    # No need to disable the phase
+                    self._monitored_scale_factors[i]['values'].append(current_value)
+                elif not self._monitored_scale_factors[i]['stopped'] and norm_value <= threshold:
+                    # Need to tell the program to stop paying attention after this so that nothing gets messed up.
+                    self._monitored_scale_factors[i].update({
+                        'stopped': True,
+                    })
+                    # Need to disable the phase
+                    with open(out,'r') as f:
+                        lines = f.readlines() 
+                        f.close()
+                    line_idx = relevant_lines[i]['linenumber']
+                    relevant_line = lines[line_idx] # Recall the line we stored
+                    
+                    name = relevant_lines[i]['name']
+                    str_num = relevant_lines[i]['string_number'] #Need this to find the value we need to replace with zero 
+                    relevant_line = relevant_line.replace(str_num, str(sf_value)) # Replace the value with zero must be like this to not mess up other things.
+                    #relevant_line = relevant_line.replace(name, f'!{name}') # Replace the variable name with the variable name plus ! which will fix the value to zero 
+                    lines[line_idx] = relevant_line
+                    #line.replace(name,f'!{name}') # This locks the phase to 0
+                    if debug:
+                        print(f'relevant_line: {line_idx}, line to be written: {relevant_line}, TEST: {lines[line_idx]}')
+                    with open(out,'w') as f:
+                        f.writelines(lines) # Just rewrite the lines to the file 
+                        f.close()
+    #}}}
     # _calculate_phase_from_out: {{{
-    def _calculate_phase_from_out(self,out:str = None,str_end:str = "Create_hklm_d_Th2_Ip_file",xy_out_prefix:str = 'result',iters:int = 0):
+    def _calculate_phase_from_out(
+            self,
+            out:str = None,
+            str_end:str = "Create_hklm_d_Th2_Ip_file",
+            xy_out_prefix:str = 'result',
+            iters:int = 0, 
+            subtract_bkg:bool = True
+        ):
         '''
         This function will take the .out file generated by TOPAS and 
         will parse through the file gathering: 
@@ -623,6 +732,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             2. the lines for each phase omitting the line: "Create_hklm_d_Th2_Ip_file" (change this if your strs end with something else.)
             3. the output lines (for the xy file)
         for the output file given as "out"
+
+        This function also creates an input file with only background terms and instrumental profile stuff
+        By default, the program removes all background terms from the phase outputs. 
         '''
         # Parse the OUT file: {{{
         with open(out) as f: 
@@ -683,7 +795,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             output = inp_dict['out']['line'].replace('result',substance)
             output_line = inp_dict['out']['start']
             for line in header:
-                inp_file.append(line)
+                if subtract_bkg:
+                    if 'bkg' not in line and 'One_on_X' not in line:
+                        # Only add a line from the header if it is not a background term. 
+                        inp_file.append(line)
+                else:  
+                    inp_file.append(line)
             for line in phase_lines:
                 inp_file.append(line)
             inp_file.append(output)
@@ -691,10 +808,27 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             with open('Dummy_PS.inp','w') as dummy:
                 for line in inp_file:
                     dummy.write(line)
+                dummy.close()
             self.refine_pattern('Dummy_PS.inp') # Run the actual refinement
             #copyfile('Dummy.out',f'{output}.out')
             #template = [line for line in open('Dummy.out')] # Make the new template the output of the last refinement. 
-            #}}}
+        #}}}
+        # Make a BKG xy file: {{{
+        bkg_inp = []
+        for line in header:
+            bkg_inp.append(line) 
+        output = inp_dict['out']['line'].replace('result','bkg')
+        bkg_inp.append(output) # Make an output file with "bkg" as the xy name
+        #print(output)
+        #print(bkg_inp)
+        # Use the dummy.inp; {{{
+        with open('Dummy_PS.inp','w') as dummy:
+            for line in bkg_inp:
+                dummy.write(line)
+            dummy.close()
+            self.refine_pattern('Dummy_PS.inp') # Run the actual refinement.
+        #}}}
+        #}}}
         #}}}
 
 
@@ -710,6 +844,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             get_orig_patt_and_meta:bool = True,
             parse_c_matrices:bool = False,
             parse_hkli:bool = False,
+            sort_hkli:bool = False,
             correlation_threshold:int = 50,
             flag_search:str = 'CHECK',
         ):
@@ -718,12 +853,15 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         
         csv_labels: 
             This tells the program what each individual entry of the labels mean. 
+        sort_hkli:
+            This will sort each hkli file by tth but doing so results in a significantly slower processing time.
         '''
         self.rietveld_data = {}
         self.sorted_csvs = sorted(glob.glob(f'{csv_prefix}_*.csv')) #gathers csvs with the given prefix
         self.sorted_xy = sorted(glob.glob(f'{xy_prefix}_*.xy'))
         self.sorted_out = sorted(glob.glob(f'{out_prefix}_*.out')) 
         self.sorted_phase_xy = None # This will stay none unless you also parse hkli. 
+        self.sorted_bkg_xy = sorted(glob.glob('bkg*.xy')) # These are the background curves if they are there.
         if parse_hkli:
             self.sorted_hkli = sorted(glob.glob(f'*_{hkli_prefix}_*.hkli')) # These files should be in the format: Substance_result_Info.hkli
         else:
@@ -733,15 +871,19 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             self._hkli = {} # Create a dictionary for the sorted files. 
             self._phase_xy = {} # Create a dictionary for the sorted phase xy files
             substances = [] 
+            # Get unique substances: {{{
             for f in self.sorted_hkli:
                 substance = f.split('_')[0] # Since this substance should be exactly the same as for the xy files, we will also match them here too.
                 if substance not in substances: 
                     substances.append(substance)
-                    relevant_files = sorted(glob.glob(f'{substance}_{hkli_prefix}_*.hkli')) # This gives only files pertaining to your substance. 
-                    self.sorted_phase_xy = sorted(glob.glob(f'{substance}_*.xy')) # This gives only the xy files pertaining to your substance.
-                    self._phase_xy[substances.index(substance)] = {'substance': substance, 'files': self.sorted_phase_xy}
-                    self._hkli[substances.index(substance)] = {'substance': substance,'files': relevant_files} 
-
+            #}}}
+            # Create the necessary variables: {{{
+            for substance in substances:
+                relevant_files = sorted(glob.glob(f'{substance}_{hkli_prefix}_*.hkli')) # This gives only files pertaining to your substance. 
+                self.sorted_phase_xy = sorted(glob.glob(f'{substance}_*.xy')) # This gives only the xy files pertaining to your substance.
+                self._phase_xy[substances.index(substance)] = {'substance': substance, 'files': self.sorted_phase_xy}
+                self._hkli[substances.index(substance)] = {'substance': substance,'files': relevant_files} 
+            #}}}
         #}}}
 
         # Print Statements: {{{
@@ -782,12 +924,22 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     csvs.set_description_str(f'Reading {hkli_file}: ')
                     hkli_data_dict.update({si:{
                         'substance': hkli_substance,
-                        'hkli': self._parse_hkli(hkli_file=hkli_file),
+                        'hkli': self._parse_hkli(hkli_file=hkli_file,sort_hkli=sort_hkli),
                         'file':hkli_file,
                         }
                     })
                     
 
+            #}}}
+            # Handle BKG: {{{ 
+            bkg_dict = {}
+            if self.sorted_bkg_xy:
+                csvs.set_description_str(f'Reading {self.sorted_bkg_xy[i]}: ') # The background should be only 1D with one bkg for each pattern.
+                bkg_tth, bkg_yobs,bkg_ycalc, bkg_ydiff = self._parse_xy(self.sorted_bkg_xy[i]) # Get the data. only care about tth and ycalc.
+                bkg_dict.update({
+                    'tth': bkg_tth,
+                    'ycalc': bkg_ycalc,
+                })
             #}}}
             # Handle the Phase XY files: {{{
             phase_xy_data_dict = {}
@@ -825,6 +977,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 'c_matrix_filtered': corr_dict,
                 'hkli':hkli_data_dict,
                 'phase_xy': phase_xy_data_dict,
+                'bkg': bkg_dict,
+                'bkg_name': self.sorted_bkg_xy[i],
+ 
             } # Create an entry for the csv data
             #}}}
             # If you have provided CSV labels: {{{
@@ -1016,8 +1171,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         '''
         This function will obtain for you, the time relative to the start of the run. 
         This uses the epoch time from metadata. SO MAKE SURE IT IS PRESENT. 
+        Also, this uses the absolute beginning pattern's epoch time
         '''
-        t0 = self.rietveld_data[0]['epoch_time'] # This gives us the epoch time for the first pattern. 
+        metadata_keys = list(self.metadata_data.keys()) #these are the "readable times" 0th index is the first pattern of the series. 
+        t0 = self.metadata_data[metadata_keys[0]]['epoch_time'] # This gives us the epoch time for the first pattern. 
         t1 = self.rietveld_data[index]['epoch_time'] # This is the time of the current pattern. 
         # Determine the appropriate divisor: {{{
         if time_units == 's':
@@ -1040,6 +1197,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             xaxis_title:str = None,
             yaxis_title:str = None,
             tth_range:list = None,
+            yrange:list = None,
             template:str = None, 
             font_size:int = None,
             height =800,
@@ -1067,8 +1225,16 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             showlegend = show_legend,
             xaxis = dict(
                 range = tth_range,
-            )
+            ),
         )
+        #}}}
+        # If yrange: {{{
+        if yrange:
+            fig.update_layout(
+                yaxis = dict(
+                    range = yrange,
+                ),
+            )
         #}}}
     #}}}
     # plot_pattern: {{{
@@ -1077,6 +1243,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             template:str = 'simple_white',
             time_units:str = 'min', 
             tth_range:list = None,
+            yrange:list = None,
             use_calc_temp:bool = True,
             height = 800,
             width = 1000,
@@ -1086,7 +1253,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             temp_decimals:int = 2,
             printouts:bool = True,
             run_in_loop:bool = False,
+            specific_substance:str= None,
             plot_hkli:bool = True,
+            single_pattern_offset:float = 0,
+            hkli_offset:float = -60,
         ):
         '''
         This will allow us to plot any of the loaded patterns 
@@ -1141,7 +1311,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 hkl_tth = hkli_data['tth']
                 ones = np.ones(len(hkl_tth)) 
 
-                hkl_intensity = [-60*(i+1)]*ones # Make a list of intensities arbitrarily starting from 10.
+                hkl_intensity = [hkli_offset*(i+1)]*ones # Make a list of intensities arbitrarily starting from 10.
                 hkl_d = hkli_data['d']
                 hkl_hovertemplate = []
                 hkl_ht = '{}<br>hkl: {}<br>d-spacing: {} {}<br>' 
@@ -1157,7 +1327,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     phase_ycalc= phase_data[i]['ycalc']
                     self.pattern_plot.add_scatter(
                             x = phase_tth,
-                            y = phase_ycalc,
+                            y = np.array(phase_ycalc)+single_pattern_offset*(i+1), #If you give an offset, it will apply to each pattern and will offset based upon the index of the pattern
                             hovertemplate = hovertemplate,
                             marker = dict(
                                 color = hkl_color,
@@ -1165,6 +1335,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                             name = f'{phase_substance} phase',
                     )
                 #}}}
+                # Plot the Actual HKLs: {{{
                 self.pattern_plot.add_scatter(
                     x = hkl_tth,
                     y = hkl_intensity,
@@ -1182,7 +1353,23 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     name = f'{substance} hkl',
                 )
 
+                #}}}
 
+        #}}}
+        # plot background: {{{
+        if self.sorted_bkg_xy:
+            bkg_data = data['bkg']
+            bkg_tth = bkg_data['tth']
+            bkg_ycalc = bkg_data['ycalc']
+            self.pattern_plot.add_scatter(
+                x = bkg_tth,
+                y = bkg_ycalc,
+                hovertemplate = hovertemplate,
+                marker = dict(
+                    color = 'black',
+                ),
+                name = 'Background',
+            )
         #}}}
         #Update the layout: {{{
         #Get Info for Updating Layout: {{{
@@ -1199,6 +1386,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             xaxis_title=xaxis_title,
             yaxis_title=yaxis_title,
             tth_range=tth_range,
+            yrange = yrange,
             template=template,
             font_size=font_size,
             height=height,
@@ -1230,12 +1418,24 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         #}}}
         # Loop Output: {{{
         else:
-            yobs = self.rietveld_data[index]['xy']['yobs']
-            ycalc = self.rietveld_data[index]['xy']['ycalc']
-            ydiff = self.rietveld_data[index]['xy']['ycalc']
-            hovertemplate = f'{title_text}<br>Pattern Index: {index}<br>' + hovertemplate
-            #title = f'Time: {np.around(self._current_time,2)} {time_units}, ({temp_label}: {np.around(temp,temp_decimals)}{self._deg_c}) Rwp: {np.around(self._rwp,rwp_decimals)}',
-            return (tth, yobs,ycalc,ydiff, hovertemplate, title_text,xaxis_title,yaxis_title)
+            if specific_substance == None:
+                yobs = self.rietveld_data[index]['xy']['yobs']
+                ycalc = self.rietveld_data[index]['xy']['ycalc']
+                ydiff = self.rietveld_data[index]['xy']['ycalc']
+                hovertemplate = f'{title_text}<br>Pattern Index: {index}<br>' + hovertemplate
+                #title = f'Time: {np.around(self._current_time,2)} {time_units}, ({temp_label}: {np.around(temp,temp_decimals)}{self._deg_c}) Rwp: {np.around(self._rwp,rwp_decimals)}',  
+            else:
+                phases = self.rietveld_data[index]['phase_xy'] 
+                for key in phases:
+                    entry = phases[key]
+                    substance = entry['substance']
+                    if substance == specific_substance:
+                        ycalc = entry['ycalc'] # This is the calculated y for the given substance.
+                title_text = f'{title_text} {specific_substance} Series'
+                yobs = None
+                ydiff = None
+                hovertemplate = f'{title_text}<br>Pattern Index: {index}<br>Substance: {specific_substance}<br>'+hovertemplate 
+            return(tth,yobs, ycalc, ydiff, hovertemplate, title_text, xaxis_title, yaxis_title)
         #}}}
     #}}}
     # _add_buttons: {{{
@@ -1255,6 +1455,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         phases_off  = copy.deepcopy(all_on) # Make a copy of all on to turn off all hkls
         hkls = [] # These are the indices for the "hkl" plots
         phases = []  # These are the indices for the "phase" plots
+        bkgs = [] # This is a list of the background curves
+        diff = [] # This is a list of the ydiff curves (should only be one)
         phase_names = [] # These will be the button names
         buttons.append(
             dict(
@@ -1264,7 +1466,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             )
         )
         #}}}
-        # Find the indices of HKLS and PHASES for buttons: {{{
+        # Find the indices of HKLS, PHASES, and BKG for buttons: {{{
         for i, plt in enumerate(data):
             plot_name = plt['name']
             if 'hkl' in plot_name:
@@ -1275,6 +1477,11 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 phases_off[i] = False # Turn off the phase plot
                 phases.append(i) 
                 phase_names.append(plot_name)
+            if plot_name.lower() == 'background':
+                phases_off[i] = False # Turn off the background
+                bkgs.append(i)
+            if plot_name.lower() == 'ydiff':
+                diff.append(i) 
         #}}}
         # Update Phase Buttons: {{{
         for i,hkl in enumerate(hkls):
@@ -1282,6 +1489,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             current_phase= copy.deepcopy(phases_off)
             current_phase[hkl] = True # Sets the current hkl to visible
             current_phase[phases[i]] = True # This sets the current phase to visible
+            current_phase[diff[0]] = False # This turns off the ydiff curve.
             buttons.append(
                 dict(
                     label = f'Show {phase_names[i]}',
@@ -1291,6 +1499,21 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                     }]
                 )
             )
+        #}}}
+        # Update the Background Button: {{{
+        if bkgs:
+            for bkg in bkgs:
+                curr = copy.deepcopy(phases_off)
+                curr[bkg] = True # Turns on the bkg
+                buttons.append(
+                    dict(
+                        label = f'Show Background',
+                        method = 'update',
+                        args = [{
+                            'visible': curr,
+                        }]
+                    )
+                )
         #}}}
         # Update Buttons to show only the regular data: {{{
         buttons.append(
@@ -1696,6 +1919,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
     # plot_multiple_patterns: {{{
     def plot_multiple_patterns(self,
             indices= None, 
+            fig_title:str = 'Multi Pattern Plot', 
             template:str = 'simple_white',
             offset:float = 0,
             show_ycalc:bool = True,
@@ -1710,8 +1934,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             rwp_decimals:int = 2,
             temp_decimals:int = 2, 
             standard_colors:bool = False,
+            specific_substance:str= None,
             ):
         '''
+        '
         This function will run a loop mode of "plot_pattern"
         This allows us to have multiple pattern fits overlaid on 
         one-another.
@@ -1722,6 +1948,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         3-tuple that goes into np.linspace(low, high, number) 
 
         "standard_colors": If True, this will default to the standard color scheme
+
+        using "specific_substance" you can plot the phase contribution of a single substance over time
         '''
         if type(indices) == tuple:
             lo,hi,num = indices
@@ -1744,6 +1972,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                 temp_decimals= temp_decimals,
                 printouts=False,
                 run_in_loop=True,
+                specific_substance = specific_substance,
             )
             #}}}
             # Generate the figure: {{{
@@ -1757,7 +1986,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             ydict = {'yobs':yobs,'ycalc':ycalc,'ydiff':ydiff}
             # Add the plots: {{{
             for j, key in enumerate(ydict):
-                if key == 'yobs' or key == 'ycalc' and show_ycalc or key == 'ydiff' and show_ydiff:
+                if not specific_substance:
                     self.multi_pattern.add_scatter(
                         x = tth,
                         y = np.array(ydict[key])+(offset*index),
@@ -1767,11 +1996,22 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
                         ),
                         name = f'Pattern # {i}: {key}',
                     )
+                else:
+                    self.multi_pattern.add_scatter(
+                        x = tth,
+                        y = np.array(ydict['ycalc'])+(offset*index),
+                        hovertemplate = hovertemplate,
+                        marker = dict(
+                            color = color1,
+                        ),
+                        name = f'Pattern #{i}: {specific_substance}'
+                    )
+
             #}}}
         # Update Layout: {{{
         self._update_pattern_layout(
             fig = self.multi_pattern,
-            title_text=f'Patterns {indices}',
+            title_text=fig_title,
             xaxis_title=xaxis_title,
             yaxis_title=yaxis_title,
             tth_range=tth_range,
@@ -1979,7 +2219,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         return corr_dict
     #}}}
     # _parse_hkli: {{{
-    def _parse_hkli(self,hkli_file:str = None):
+    def _parse_hkli(self,hkli_file:str = None,sort_hkli:bool = False):
         '''
         This allows us to parse files created by TOPAS6 using the: Create_hklm_d_Th2_Ip_file() macro
         format of data: 
@@ -1991,6 +2231,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
             5: 2 theta
             6: Intensity
         This will create a tuple from hkl
+
+        If you want to have the hkli sorted by tth, you can but it significantly slows processing.
         ''' 
         hkli_data = np.loadtxt(hkli_file) # This gives us our data in an array. Now just need to parse it.  
         # assign the columns to variables: {{{
@@ -2006,25 +2248,32 @@ class TOPAS_Refinements(Utils, UsefulUnicode):
         hkl = [(int(h[i]), int(k[i]), int(l[i])) for i, v in enumerate(hkli_data)]
         #}}}
         # Sort by 2theta: {{{
-        sorted_tth = sorted(tth) # This creates a separate list that is sorted from low to hi tth
-        j = list(tth) # Cast tth as a list so we can use the index functionality to sort the other arrays
-        sorted_hkl = []
-        sorted_m = []
-        sorted_d = []
-        sorted_i = []
-        for val in sorted_tth:
-            sorted_hkl.append(hkl[j.index(val)])
-            sorted_m.append(m[j.index(val)])
-            sorted_d.append(d[j.index(val)])
-            sorted_i.append(intensity[j.index(val)])
+        if sort_hkli:
+            sorted_tth = sorted(tth) # This creates a separate list that is sorted from low to hi tth
+            j = list(tth) # Cast tth as a list so we can use the index functionality to sort the other arrays
+            sorted_hkl = []
+            sorted_m = []
+            sorted_d = []
+            sorted_i = []
+            for val in sorted_tth:
+                sorted_hkl.append(hkl[j.index(val)])
+                sorted_m.append(m[j.index(val)])
+                sorted_d.append(d[j.index(val)])
+                sorted_i.append(intensity[j.index(val)])
+            
+            tth = sorted_tth
+            hkl = sorted_hkl
+            m = sorted_m
+            d = sorted_d
+            intensity = sorted_i
         #}}}
         # update the hkli out: {{{
         hkli_out = {
-            'hkl': sorted_hkl,
-            'm': sorted_m,
-            'd': sorted_d,
-            'tth': sorted_tth,
-            'i': sorted_i,
+            'hkl':hkl,
+            'm': m,
+            'd':d,
+            'tth':tth,
+            'i':intensity,
         }
         #}}} 
         return hkli_out
