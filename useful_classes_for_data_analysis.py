@@ -44,6 +44,7 @@ class UsefulUnicode:
         self._theta = u'\u03B8' # Theta symbol
         self._degree = u'\u00B0' # Degree symbol
         self._deg_c = u'\u2103' # Degree C symbol
+        self._subscript_zero = u'\u2080' # Subscript zero
         self._angstrom = u'\u212b' # Angstrom symbol
         self._cubed = u'\u00b3' # Cubed (superscript 3)
 #}}}
@@ -755,7 +756,8 @@ class OUT_Parser:
                         floats = re.findall(r'\d+\.\d+e\-?\d+|\d+\.\d+',line) 
                         if words[0] == 'prm':
                             words[0] = words[1]
-                        out_phase_dict[phase_num][words[0]] = float(floats[0]) # We are using the second match here because I am dividing by 1e-7 everytime and that is going to be the first match.
+                        out_phase_dict[phase_num]['scale_factor'] = float(floats[0]) # We are using the second match here because I am dividing by 1e-7 everytime and that is going to be the first match.
+                        out_phase_dict[phase_num]['usr_sf_name'] = words[0]
                  
                     #}}}
                     # Parse Phase_LAC_1_on_cm and Phase_Density_g_on_cm3: {{{
@@ -1422,7 +1424,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
 
     #}}}
     # _sort_csv_keys: {{{
-    def _sort_csv_keys(self,keys:list = None,debug:bool = False):
+    def _sort_csv_keys(self):
         '''
         This will sort the csvs to give you unique results grouped together 
         with only the key values you care about. 
@@ -1430,54 +1432,92 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         Example, if you want lattice parameters but scale factors also exist, this will 
         give you the lattice parameters for substance A and substance B separated  and ignore their scale factors
         '''
-        self._csv_plot_data = {}
+        self.csv_plot_data = {}
         # Get the unique substances: {{{
         self._create_string_from_csv_data(0)
+        #}}}  
+        # This code will produce a dictionary with data from the output file: {{{
+        for i, entry in enumerate((self.rietveld_data)):
+            csv = self.rietveld_data[entry]['csv'] # The keys here are integers. The names of the substances are one level deeper if there is a "phase_name" key in the entry. 
+            # Parse the CSV Dictionary to get data for plotting: {{{
+            for j, key in enumerate(csv):
+                # Remember that the first "phase" recorded is "Rwp". Skip this one. 
+                value = csv[key]
+                if j == 0:
+                    if 'rwp' not in self.csv_plot_data:
+                        self.csv_plot_data['rwp'] = [value]
+                    else:
+                        self.csv_plot_data['rwp'].append(value)
+                if j != 0:
+                    splitkey = re.findall(r'(\w+\d*)+',key) # This should only return substances.
+                    substance = splitkey[0] # This will be the substance name.
+                    key = '_'.join(splitkey[1:]).lower() # This will make keys from the other words in your csv entry label separated by _ and in lowercase.
+                    if substance in self._unique_substances:
+                        # If this is true, we can grab information from the output. 
+                        if substance not in self.csv_plot_data:
+                            # This is the first entry.
+                            self.csv_plot_data[substance] = {}
+                        # Update the dict with float and int values: {{{
+                        if type(value) == float or type(value) == int:
+                            if key not in self.csv_plot_data[substance]:
+                                self.csv_plot_data[substance][key] = [value]
+                            else:
+                                self.csv_plot_data[substance][key].append(value)
+                        #}}}
+                #}}}
         #}}} 
-        for entry in self.rietveld_data:
-            csv = self.rietveld_data[entry]['csv']
-            csv_keys = list(csv.keys()) #This gives us the csv keys
-            # If Rwp: {{{  
-            if keys[0].lower() == 'rwp':
-                if entry == 0:
-                    self._csv_plot_data['rwp'] = [csv[csv_keys[0]]] # This is the rwp
+    #}}}
+    # _sort_out_keys: {{{ 
+    def _sort_out_keys(self,):
+        '''
+        This function will create a dictionary of all of the TOPAS prms from the output file. 
+        The output dictionary being read was created in the output parser.  
+        '''
+        self.out_plot_dict = {}
+        # This code will produce a dictionary with data from the output file: {{{
+        for i, entry in enumerate((self.rietveld_data)):
+            out =self.rietveld_data[entry]['out_dict'] # The keys here are integers. The names of the substances are one level deeper if there is a "phase_name" key in the entry. 
+            for j, phase_num in enumerate(out):
+                # Remember that the first "phase" recorded is "Rwp". Skip this one. 
+                if j == 0:
+                    if 'rwp' not in self.out_plot_dict:
+                        self.out_plot_dict['rwp'] = [out[phase_num]] # In this case, phase_num is te key that gives Rwp
+                    else:
+                        self.out_plot_dict['rwp'].append(out[phase_num]) # Adds the rwp
                 else:
-                    self._csv_plot_data['rwp'].append(csv[csv_keys[0]]) # Add the next rwp
-            #}}}
-            # Other cases: {{{
-            else:
-                '''
-                Now, we have a list of the unique substances present. 
-
-                These will be listed as a list under: "self._unique_substances"
-                    ex: ["Si", "Ti", "Ta"]
-                We need to go through all of the keys to match the first word to the unique substances then match the next word to what we are looking for. 
-                '''
-                for i, unique_element in enumerate(self._unique_substances):
-                    for j, csv_key in enumerate(csv_keys): 
-                        if unique_element in csv_key:
-                            if unique_element not in self._csv_plot_data:
-                                self._csv_plot_data[unique_element] = {}
-                            # This means that we have found an entry related to the substance
-                            intermediate_identifier = re.findall(r'\w+',csv_key)
-                            intermediate_identifier.pop(0) # Get rid of the element. 
-                            intermediate = '_'.join(intermediate_identifier) # This will give us a 1 word phrase 
-                            #if debug and i == 0:
-                            #    print(f'csv_key: {csv_key}\nintermediate_identifier: {intermediate_identifier}\nintermediate: {intermediate}')
-                            for k,key in enumerate(keys):
-                                if debug and k==0:
-                                    print(f'Intermediate: {intermediate}\tKey: {key}')
-                                    print(f'{intermediate.lower()}')
-                                if intermediate.lower() == key or '_'.join(intermediate.split('_')[:-1]).lower() == key:
-                                    if intermediate.lower() not in self._csv_plot_data[unique_element]:
-                                        self._csv_plot_data[unique_element][intermediate.lower()] = [] #This gives an empty list
-                                    self._csv_plot_data[unique_element][intermediate.lower()].append(csv[csv_key]) # This adds the value for the dictionary
-                                
-
-                            
-            #}}}
-
-            
+                    phase = out[phase_num] # This is the phase entry. Could be hkl_Is, str, or xo_Is
+                    keys = list(phase.keys()) # This will be the list of each of the keys.
+                    if 'phase_name' in keys:
+                        phase_name = phase['phase_name'] # This is the phase name given in the UT file. Search this for a match to self._unique_substances.
+                        phase_isolated = phase_name.split('_')[0] # This will only be the substance name
+                        if phase_isolated in self._unique_substances:
+                            # If this is true, we can grab information from the output. 
+                            if phase_isolated not in self.out_plot_dict:
+                                # This is the first entry.
+                                self.out_plot_dict[phase_isolated] = {}
+                            for key in keys:
+                                value = phase[key] # This gives the entry
+                                # Update the dict with float and int values: {{{
+                                if type(value) == float or type(value) == int:
+                                    if key not in self.out_plot_dict[phase_isolated]:
+                                        self.out_plot_dict[phase_isolated][key] = [value]
+                                    else:
+                                        self.out_plot_dict[phase_isolated][key].append(value)
+                                #}}}
+                                # Update the dict with values from the sites dictionary: {{{
+                                elif type(value) == dict:
+                                    sites = value
+                                    for label in sites:
+                                        site = sites[label]
+                                        bval_label = site['b_val_prm']  # This is the label the user gave the B-value parameter
+                                        bval = site['bval'] # This is the refined parameter. 
+     
+                                        if bval_label not in self.out_plot_dict[phase_isolated]:
+                                            self.out_plot_dict[phase_isolated][bval_label] = [bval]
+                                        else:
+                                            self.out_plot_dict[phase_isolated][bval_label].append(bval)      
+                                    #}}}
+        #}}}
     #}}}
     # _get_time{{{
     def _get_time(self,index, time_units:str):
@@ -1933,6 +1973,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
     # plot_csv_info: {{{
     def plot_csv_info(self, 
             plot_type:str = 'rwp',
+            use_out_data:bool = False,
             plot_temp:bool = True,
             use_calc_temp:bool = True,
             time_units:str = 'min', 
@@ -1960,6 +2001,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             9.) "Size G" or "csg" or "sizeg"
             10.) "Strain L" or "strl" or 'strainl'
             11.) "Strain G" or "strg" or 'straing'
+
+
+        if you want to plot data from "out" files, set the "use_calc_temp" to True
 
         The purpose of this function is to give the user a 
         look at the data output in csv form by TOPAS at the 
@@ -2034,45 +2078,69 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         #}}}
         # B-values: {{{
         if plot_type == 'b values' or plot_type == 'beq' or plot_type == 'bvals':
-            keys = ['bvals', 'beq','bval', 'b value', 'b val', 'b values', 'b_value','b_val','b_values'] # tells the code what the likely keywords to look for are.
+            keys = ['bvals', 'beq','bval', 'b value', 'b val', 'b values', 'b_value','b_val','b_values','B'] # tells the code what the likely keywords to look for are.
             yaxis_title = 'B-Values'
             title = 'B-Values'
         #}}}
         # Size L: {{{
         if plot_type == 'size l' or plot_type == 'csl' or plot_type == 'sizel':
-            keys = ['size_l', 'csl','lorentzian_size','Size_L']
+            keys = ['size_l', 'csl','lorentzian_size','Size_L','cslv']
             yaxis_title = 'Lorentzian Size'
             title = 'Lorentzian Size'
         #}}}
         # Size G: {{{
         if plot_type == 'size g' or plot_type == 'csg' or plot_type == 'sizeg':
-            keys = ['size_g', 'csg','gaussian_size','Size_G']
+            keys = ['size_g', 'csg','gaussian_size','Size_G', 'csgv']
             yaxis_title = 'Gaussian Size'
             title = 'Gaussian Size' 
         #}}}
         # Strain L: {{{ 
         if plot_type == 'strain l' or plot_type == 'strl' or plot_type == 'strainl':
-            keys = ['strain_l', 'strl','lorentzian_strain','Strain_L']
+            keys = ['strain_l', 'strl','lorentzian_strain','Strain_L','slv']
             yaxis_title = 'Lorentzian Strain'
             title = 'Lorentzian Strain'
         #}}}
         # Strain G: {{{
         if plot_type == 'strain g' or plot_type == 'strg' or plot_type == 'straing':
-            keys = ['strain_g', 'strg','gaussian_strain','Strain_G']
+            keys = ['strain_g', 'strg','gaussian_strain','Strain_G','sgv']
             yaxis_title = 'Gaussian Strain'
-            title = 'Gaussian Srain' 
+            title = 'Gaussian Strain' 
+        #}}}
+        # Lvol: {{{ 
+        if plot_type.lower() == 'lvol':
+            keys = ['lvol']
+            yaxis_title = 'LVol'
+            title = 'LVol'
+        #}}}
+        # Lvolf: {{{
+        if plot_type.lower() == 'lvolf': 
+            keys = ['lvolf']
+            yaxis_title = 'Lvolf'
+            title = 'LVolf'
+        #}}}
+        # e0: {{{ 
+        if plot_type.lower() == 'e0':
+            keys = ['e0']
+            yaxis_title = f'e{self._subscript_zero}'
+            title = f'e{self._subscript_zero}'
+        #}}}
+        # phase_MAC: {{{
+        if plot_type.lower() == 'phase_mac':
+            keys = ['phase_MAC']
+            yaxis_title = 'Phase MAC'
+            title = 'Phase MAC'
         #}}}
         #}}}
         # Update the title text: {{{
         if additional_title_text:
             title = f'{additional_title_text} {title}' # combines what the user wrote with the original title.
         #}}}
-        # Get a dictionary containing only the data we care about: {{{
-        self._sort_csv_keys(keys,debug=debug) 
+        # For the CSV Data, we need to find the data that we care about inside of self.csv_plot_data: {{{
+        self._sort_csv_keys() # This gets self.csv_plot_data
         for entry in self.rietveld_data:
             if plot_temp:
-                if 'temperature' not in self._csv_plot_data:
-                    self._csv_plot_data['temperature'] = []
+                if 'temperature' not in self.csv_plot_data:
+                    self.csv_plot_data['temperature'] = []
                 if use_calc_temp:
                     t = self.rietveld_data[entry]['corrected_temperature']
                     temp_label = 'Corrected Temperature'
@@ -2080,22 +2148,31 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     t = self.rietveld_data[entry]['temperature']
                     temp_label = 'Element Temperature'
 
-                self._csv_plot_data['temperature'].append(t) # Record the temperature
-            if 'time' not in self._csv_plot_data:
-                self._csv_plot_data['time'] = []
+                self.csv_plot_data['temperature'].append(t) # Record the temperature
+            if 'time' not in self.csv_plot_data:
+                self.csv_plot_data['time'] = []
             self._get_time(entry,time_units) # This gives us the time in the units we wanted (self._current_time)
-            self._csv_plot_data['time'].append(self._current_time) # Add the time
+            self.csv_plot_data['time'].append(self._current_time) # Add the time
+        # IF YOU WANT TO USE THE OUTPUT, Also DEFINE plot_data : {{{
+        if use_out_data:
+            self._sort_out_keys() # This gets self.out_plot_dict
+            self.out_plot_dict['temperature'] = self.csv_plot_data['temperature']
+            self.out_plot_dict['time'] = self.csv_plot_data['time']
+            plot_data = self.out_plot_dict # This local dictionary will be used to make the plot in this function. 
+        else:
+            plot_data = self.csv_plot_data # This is the local dictionary used to make the plot. 
+        #}}}
         #}}}
         # plot the data: {{{
         fig = go.Figure()
         second_yaxis = False
         third_yaxis = False
-        x = self._csv_plot_data['time']
+        x = plot_data['time']
         base_ht = f'Time/{time_units}: '+'%{x}<br>' # This is the basis for all hovertemplates
         
         if keys == ['rwp']:
             hovertemplate = base_ht+'Rwp: %{y}'
-            y = self._csv_plot_data['rwp']
+            y = plot_data['rwp']
             fig.add_scatter(
                     x = x,
                     y = y,
@@ -2106,81 +2183,82 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             
 
         else:
-            for substance in self._csv_plot_data:
+            for substance in plot_data:
                 color = self._get_random_color() # This gives us a color
                 if not specific_substance:
                     usr_substance = substance.lower() # If a specific substance is not given, it is set as the current. 
                 else:
                     usr_substance = specific_substance.lower()
-                if substance != 'time' and substance != 'temperature' and substance.lower() == usr_substance:
-                    entry = self._csv_plot_data[substance] # This will be a dictionary entry with keys. 
+                if substance != 'time' and substance != 'temperature' and substance != 'rwp' and substance.lower() == usr_substance:
+                    entry = plot_data[substance] # This will be a dictionary entry with keys. 
                     entry_keys = list(entry.keys()) # These will be the keys for the entry. 
                     for plot_key in entry_keys:
-                        # Handle most cases: {{{ 
-                        if plot_key != 'al' or plot_key != 'be' or plot_key != 'ga' or plot_key != 'alpha' or plot_key != 'beta' or plot_key != 'gamma':
-                            if specific_substance:
-                                color = self._get_random_color() # Set a specific color for each lattice parameter if only one substance plotted. 
-                            # This is the default section since units should be consistent enough. 
-                            # Get the data: {{{
-                            if normalized:
-                                y = self._normalize(entry[plot_key]) # This will normalize the plot data
+                        if plot_key.lower() in keys or plot_key.strip(f'{substance}_') in keys: # Need to check if the keys we are searching for are present.
+                            # Handle most cases: {{{ 
+                            if plot_key != 'al' or plot_key != 'be' or plot_key != 'ga' or plot_key != 'alpha' or plot_key != 'beta' or plot_key != 'gamma':
+                                if specific_substance:
+                                    color = self._get_random_color() # Set a specific color for each lattice parameter if only one substance plotted. 
+                                # This is the default section since units should be consistent enough. 
+                                # Get the data: {{{
+                                if normalized:
+                                    y = self._normalize(entry[plot_key]) # This will normalize the plot data
+                                else:
+                                    y = entry[plot_key] # This will just give us the data
+                                #}}}
+                                hovertemplate = base_ht +f'{yaxis_title} ({substance}, {plot_key}): '+'%{y}' # This gives us the hovertemplate for this part.
+                                # Add the scatter (Y1): {{{
+                                fig.add_scatter(
+                                    x = x,
+                                    y = y,
+                                    hovertemplate = hovertemplate,
+                                    name = f'{substance} {plot_key}',
+                                    mode = 'lines+markers',
+                                    marker = dict(
+                                        color = color,
+                                    ),
+                                    line = dict(
+                                        color = color,
+                                    ),
+                                    yaxis = 'y1',
+                                )
+                                #}}}
+                             
+                            #}}}
+                            # Handle the case where we need to plot lattice angles: {{{
                             else:
-                                y = entry[plot_key] # This will just give us the data
+                                # In this case, we need a second y axis for the degrees.
+                                # get the data: {{{
+                                if normalized:
+                                    y = self._normalize(entry[plot_key])
+                                else:
+                                    y = entry[plot_key]
+                                #}}}
+                                hovertemplate = base_ht + f'{yaxis2_title} ({substance}, {plot_key}): '+'%{y}'
+                                # Add the scatter (Y2):{{{
+                                fig.add_scatter(
+                                    x = x,
+                                    y = y,
+                                    hovertemplate = hovertemplate,
+                                    name = f'{substance} {plot_key}',
+                                    mode = 'lines+markers',
+                                    marker = dict(
+                                        color = color,
+                                    ),
+                                    line = dict(
+                                        color = color,
+                                    ),
+                                    yaxis = 'y2',
+                                ) 
+                                second_yaxis = True
+                                #}}}
                             #}}}
-                            hovertemplate = base_ht +f'{yaxis_title} ({substance}, {plot_key}): '+'%{y}' # This gives us the hovertemplate for this part.
-                            # Add the scatter (Y1): {{{
-                            fig.add_scatter(
-                                x = x,
-                                y = y,
-                                hovertemplate = hovertemplate,
-                                name = f'{substance} {plot_key}',
-                                mode = 'lines+markers',
-                                marker = dict(
-                                    color = color,
-                                ),
-                                line = dict(
-                                    color = color,
-                                ),
-                                yaxis = 'y1',
-                            )
-                            #}}}
-                            
-                        #}}}
-                        # Handle the case where we need to plot lattice angles: {{{
-                        else:
-                            # In this case, we need a second y axis for the degrees.
-                            # get the data: {{{
-                            if normalized:
-                                y = self._normalize(entry[plot_key])
-                            else:
-                                y = entry[plot_key]
-                            #}}}
-                            hovertemplate = base_ht + f'{yaxis2_title} ({substance}, {plot_key}): '+'%{y}'
-                            # Add the scatter (Y2):{{{
-                            fig.add_scatter(
-                                x = x,
-                                y = y,
-                                hovertemplate = hovertemplate,
-                                name = f'{substance} {plot_key}',
-                                mode = 'lines+markers',
-                                marker = dict(
-                                    color = color,
-                                ),
-                                line = dict(
-                                    color = color,
-                                ),
-                                yaxis = 'y2',
-                            ) 
-                            second_yaxis = True
-                            #}}}
-                        #}}}
         # Plot temp data: {{{
         if plot_temp:
             yaxis3_title = f'{temp_label} /{self._deg_c}'
             hovertemplate = base_ht + f'{temp_label}/{self._deg_c}: '+'%{y}'
             fig.add_scatter(
                 x = x,
-                y = self._csv_plot_data['temperature'],
+                y = plot_data['temperature'],
                 hovertemplate = hovertemplate,
                 yaxis = 'y3',
                 name = f'{temp_label}/{self._deg_c}',
@@ -2197,7 +2275,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         fig.update_layout(
             height = height,
             width = width,
-            title_text = f'Plot of Time vs. {title}',
+            title_text = f'Plot of {title} vs. Time',
             xaxis = dict(
                 title = xaxis_title,
                 domain = [yaxis_2_position, 1], # the active area for x axis
