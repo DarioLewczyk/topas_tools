@@ -2331,6 +2331,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
     # plot_multiple_patterns: {{{
     def plot_multiple_patterns(self,
             indices= None, 
+            waterfall:bool = False,
             fig_title:str = 'Multi Pattern Plot', 
             template:str = 'simple_white',
             offset:float = 0,
@@ -2347,6 +2348,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             temp_decimals:int = 2, 
             standard_colors:bool = False,
             specific_substance:str= None,
+            zmin_args:tuple = (-10, 5), # The first is the minimum intensity button, the second is the number of buttons
+            zmax_args:tuple = (10, 5), # The first is the minimum I for the max buttons and the second is the number of buttons
+            button_layer_1_height = 1.17,
+            button_layer_2_height = 1.1,
             ):
         '''
         '
@@ -2363,12 +2368,23 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
 
         using "specific_substance" you can plot the phase contribution of a single substance over time
         '''
+        self._max_i = 0
+
+
+
         if type(indices) == tuple:
             lo,hi,num = indices
             indices= np.around(np.linspace(lo,hi,num),0) #Creates a range
             
 
         self.multi_pattern = go.Figure()
+        if waterfall:
+            # This necessitates a more complex list structure. 
+            self.x = [] # This is going to be 2 theta range
+            self.y = [] # This is the time axis
+            self.z = [] # This will be a list of lists for intensity.
+            hovertemplates = []  # This will hold a list of hovertemplates. 
+            
         for index, i in enumerate(indices):
             # Get the data for current index: {{{
             tth, yobs, ycalc,ydiff, hovertemplate,title_text,xaxis_title,yaxis_title = self.plot_pattern(
@@ -2386,53 +2402,138 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 run_in_loop=True,
                 specific_substance = specific_substance,
             )
-            #}}}
-            # Generate the figure: {{{
-            color1 = self._get_random_color()
-            color2 = self._get_random_color()
-            color3 = self._get_random_color()
-            if standard_colors:
-                colors = ['blue','red','grey']
+            if not specific_substance:
+                if max(yobs) > self._max_i:
+                    self._max_i = max(yobs)
             else:
-                colors = [color1, color2, color3]
-            ydict = {'yobs':yobs,'ycalc':ycalc,'ydiff':ydiff}
-            # Add the plots: {{{
-            for j, key in enumerate(ydict):
-                if not specific_substance:
-                    self.multi_pattern.add_scatter(
-                        x = tth,
-                        y = np.array(ydict[key])+(offset*index),
-                        hovertemplate = hovertemplate,
-                        marker = dict(
-                            color = colors[j],
-                        ),
-                        name = f'Pattern # {i}: {key}',
-                    )
-                else:
-                    self.multi_pattern.add_scatter(
-                        x = tth,
-                        y = np.array(ydict['ycalc'])+(offset*index),
-                        hovertemplate = hovertemplate,
-                        marker = dict(
-                            color = colors[0],
-                        ),
-                        name = f'Pattern #{i}: {specific_substance}'
-                    )
-
+                if max(ycalc) > self._max_i:
+                    self._max_i = max(ycalc)
             #}}}
+            if waterfall:
+                self.x = tth # This only needs to be 1 series.
+                self.y.append(self.rietveld_data[i]['corrected_time']/60) # This puts it into minutes
+                if not specific_substance:
+                    self.z.append(yobs) # This adds the observed intensity.
+                else:
+                    self.z.append(ycalc) # Adds calculated intensity
+                hovertemplates.append(hovertemplate)
+            else:
+                # Generate the figure: {{{
+                color1 = self._get_random_color()
+                color2 = self._get_random_color()
+                color3 = self._get_random_color()
+                if standard_colors:
+                    colors = ['blue','red','grey']
+                else:
+                    colors = [color1, color2, color3]
+                ydict = {'yobs':yobs,'ycalc':ycalc,'ydiff':ydiff}
+                # Add the plots: {{{
+                for j, key in enumerate(ydict):
+                    if not specific_substance:
+                        self.multi_pattern.add_scatter(
+                            x = tth,
+                            y = np.array(ydict[key])+(offset*index),
+                            hovertemplate = hovertemplate,
+                            marker = dict(
+                                color = colors[j],
+                            ),
+                            name = f'Pattern # {i}: {key}',
+                        )
+                    else:
+                        self.multi_pattern.add_scatter(
+                            x = tth,
+                            y = np.array(ydict['ycalc'])+(offset*index),
+                            hovertemplate = hovertemplate,
+                            marker = dict(
+                                color = colors[0],
+                            ),
+                            name = f'Pattern #{i}: {specific_substance}'
+                        )
+    
+                #}}}
+        # Waterfall Plot Added: {{{ 
+        if waterfall:
+            self.multi_pattern.add_heatmap(
+                x = self.x,
+                y = self.y,
+                z = self.z,
+                hovertemplate = hovertemplate,
+            )
+            yaxis_title = 'Time / min'
+            # Get Button Args: {{{ 
+            min_on_zmin, num_min_buttons = zmin_args # unpack the tuple
+            min_on_zmax, num_max_buttons = zmax_args # unpack the tuple
+            min_steps = (0 -min_on_zmin)/(num_min_buttons -1)
+            max_steps = (self._max_i -min_on_zmax)/ (num_max_buttons-1)
+  
+            zmin_arange = np.arange(min_on_zmin, 0+min_steps,min_steps)
+            zmax_arange = np.arange(min_on_zmax, self._max_i+max_steps, max_steps)
+            #}}}
+            # Make buttons to change scaling: {{{
+            zmin_buttons = [
+                dict(
+                    label = f'I_min: {np.around(v,2)}',
+                    method = 'restyle',
+                    args = [
+                        {'zmin': v},
+                    ]
+                ) for v in zmin_arange
+            ]
+            zmax_buttons = [
+                dict(
+                    label = f'I_max: {np.around(v,2)}',
+                    method = 'restyle',
+                    args = [
+                        {'zmax': v},
+                    ]
+                ) for v in zmax_arange
+            ]
+            #}}}
+        #}}}
         # Update Layout: {{{
+        
         self._update_pattern_layout(
-            fig = self.multi_pattern,
-            title_text=fig_title,
-            xaxis_title=xaxis_title,
-            yaxis_title=yaxis_title,
-            tth_range=tth_range,
-            template=template,
-            font_size=font_size,
-            height=height,
-            width=width,
-            show_legend=show_legend,
+                fig = self.multi_pattern,
+                title_text=fig_title,
+                xaxis_title=xaxis_title,
+                yaxis_title=yaxis_title,
+                tth_range=tth_range,
+                template=template,
+                font_size=font_size,
+                height=height,
+                width=width,
+                show_legend=show_legend,
         )
+        # Waterfall Update: {{{
+        if waterfall:
+            self.multi_pattern.update_layout( 
+                    margin = dict(t=200,b=0,l=0,r=0),
+                    autosize = False,
+                    updatemenus = [
+                    dict(
+                        buttons = zmax_buttons,
+                        yanchor = 'top',
+                        type = 'buttons',
+                        y = button_layer_1_height,
+                        x = 0,
+                        xanchor = 'left',
+                        pad = {'r':10, 't':10},
+                        direction = 'right',
+                    ),
+                    dict(
+                        buttons = zmin_buttons,
+                        yanchor = 'top',
+                        type = 'buttons',
+                        y = button_layer_2_height,
+                        x=0,
+                        xanchor = 'left',
+                        pad = {'r':10,'t': 10},
+                        direction = 'right',
+                    )
+                ],
+                
+            )
+        #}}} 
         #}}} 
         #}}}
         self.multi_pattern.show()
