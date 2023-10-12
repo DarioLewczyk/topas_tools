@@ -40,14 +40,20 @@ class GenericPlotter:
             show_legend:bool = True,
             font_size:int = 20,
             marker_size:int = 12,
+            color:str = None,
             show_figure:bool = False,
+            legend_xanchor:str = 'right',
+            legend_yanchor:str = 'top',
+            legend_x:float = 0.99,
+            legend_y:float = 0.99,
             ):
         '''
         This allows you to plot a dataset
         '''
         self._fig = go.Figure()
         # Plot Data: {{{
-        color = self._get_random_color()
+        if not color:
+            color = self._get_random_color()
         self._fig.add_scatter(
                 x = x,
                 y = y,
@@ -77,10 +83,10 @@ class GenericPlotter:
                 size = font_size,
             ),
             legend = dict(
-                yanchor = 'top',
-                y = 0.99,
-                xanchor = 'right',
-                x = 0.99,
+                yanchor = legend_yanchor,
+                y = legend_y,
+                xanchor = legend_xanchor,
+                x = legend_x,
             ),
             showlegend = show_legend,
             xaxis = dict(
@@ -108,7 +114,12 @@ class GenericPlotter:
             y2_position:float = 0,
             y3:bool = False,
             y3_title:str = 'Y3',
+            color:str = None,
             show_figure:bool = False,
+            legend_xanchor:str = 'right',
+            legend_yanchor:str = 'top',
+            legend_x:float = 0.99,
+            legend_y:float = 0.99,
             ):
         '''
         Allows you to add data to the existing plot 
@@ -124,7 +135,8 @@ class GenericPlotter:
         else:
             yaxis = 'y1'
         #}}}
-        color = self._get_random_color()
+        if not color:
+            color = self._get_random_color()
         # Plot: {{{
         self._fig.add_scatter(
             x = x,
@@ -142,6 +154,14 @@ class GenericPlotter:
         )
         #}}}
         # Update Layout: {{{
+        self._fig.update_layout(
+            legend = dict(
+                yanchor = legend_yanchor,
+                y = legend_y,
+                xanchor = legend_xanchor,
+                x = legend_x,
+            ),
+        )
         # Y2: {{{
         if y2: 
             self._fig.update_layout(

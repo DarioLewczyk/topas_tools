@@ -45,6 +45,15 @@ class UsefulUnicode:
         self._degree = u'\u00B0' # Degree symbol
         self._deg_c = u'\u2103' # Degree C symbol
         self._subscript_zero = u'\u2080' # Subscript zero
+        self._subscript_one =   u'\u2081'
+        self._subscript_two =   u'\u2082'
+        self._subscript_three = u'\u2083'
+        self._subscript_four =  u'\u2084'
+        self._subscript_five =  u'\u2085'
+        self._subscript_six =   u'\u2086'
+        self._subscript_seven = u'\u2087'
+        self._subscript_eight = u'\u2088'
+        self._subscript_nine =  u'\u2089'
         self._angstrom = u'\u212b' # Angstrom symbol
         self._cubed = u'\u00b3' # Cubed (superscript 3)
 #}}}
@@ -634,6 +643,19 @@ class OUT_Parser:
                         words = re.findall(r'a|b|c|al|be|ga',line)
                         out_phase_dict[phase_num][words[0]] = float(floats[0])
                     #}}}
+                    # MVW: {{{
+                    elif 'MVW' in line:
+                        split = line.split(',')
+                        macro_vars = ['m_v','v_v','w_v'] # This is the mass value, volume value, weight value.
+                        for j, value in enumerate(split):
+                            ints,floats,words = self._get_ints_floats_words(value)
+                            macro_var = macro_vars[j] # This is the current macro variable to look for. 
+                            rec = None
+                            if floats:
+                                rec = float(floats[0]) # This should give me the calculated value
+                            out_phase_dict[phase_num].update({macro_var:rec}) # This records the macro value
+
+                    #}}}
                     # Get the cell mass: {{{
                     elif 'cell_mass' in line: 
                         out_phase_dict[phase_num]['cell_mass'] = float(floats[0])
@@ -829,8 +851,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             reverse_order:bool = False,
             get_individual_phases:bool = False,
             subtract_bkg:bool = True,
-            scale_factors_to_monitor:list = None,
-            threshold_for_scale_factor:float = 0.01,
+            phases_to_disable:list = None,
+            threshold_for_off:float = 0.01,
+            phases_to_enable:list = None,
+            threshold_for_on:float = 0.0195, # this was obtained by looking at an Rwp curve 
+            off_sf_value:float = 1.0e-100,
+            on_sf_value:float = 1.0e-5,
+            debug:bool = False,
         ):
         '''
         Code to run automated Rietveld Refinements based on Adam/Gerry's Code
@@ -838,14 +865,20 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         subtract_bkg: This will remove background terms from the individual phase contributions to ycalc
         scale_factors_to_monitor: you can give either a list or a string of the phase scale factor to monitor.
         threshold_for_scale_factor: This is the value the normalize scale factor can be below which, the program will set the scale factor to 0.
+        
+        phases_to_add: This is a list of phases you would like to have added as the refinement progresses. 
+        threshold_to_add_phase: this is a percentage above your initial Rwp. When it passes this, the new phase turns on.
         '''
-        # IF Scale Factor to Monitor is a String: {{{
-        if type(scale_factors_to_monitor) == list or scale_factors_to_monitor == None:
+        # if you input a string for either "phases_to_disable" or "phases_to_enable": {{{
+        if type(phases_to_disable) == list or phases_to_disable== None:
             pass
         else:
-            scale_factors_to_monitor = [scale_factors_to_monitor]
-        if scale_factors_to_monitor:
-            self._monitored_scale_factors = {} # initialize the tracker
+            phases_to_disable= [phases_to_disable]
+        if type(phases_to_enable) == list or phases_to_enable== None:
+            pass
+        else:
+            phases_to_enable= [phases_to_enable] # Make it match the type expected.
+        self._out_file_monitor = {} # This is the monitoring dictionary.   
         #}}}
         self.reverse_order = reverse_order # This will keep track of if you chose to reverse the order in case that info is needed elsewhere.
         # Navigate the Filesystem to the appropriate directories: {{{
@@ -869,7 +902,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         template = [line for line in open(template_file)] # This reads the template file
         # Parse the template for important linenumbers: {{{
         xy_out_linenum = None
-        csv_out_linenum = None
+        txt_out_linenum = None
         my_csv_line = None
         pattern_linenum = None
         phase_hkli_out = []
@@ -878,7 +911,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             if 'Out_X_Yobs_Ycalc_Ydiff' in line:
                 xy_out_linenum = i 
             if 'out_prm_vals_on_convergence' in line:
-                csv_out_linenum = i
+                txt_out_linenum = i
             if 'out' in line:
                 # Don't need to look for anything but out by itself. 
                 my_csv_line = i
@@ -912,8 +945,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 template[pattern_linenum] = f'xdd "{pattern}"\n' # write the current pattern
             if xy_out_linenum:
                 template[xy_out_linenum] = f'Out_X_Yobs_Ycalc_Ydiff("{output}.xy")\n'
-            if csv_out_linenum:
-                template[csv_out_linenum] = f'out_prm_vals_on_convergence "{output}.csv"\n' # This is probably the best one to use since it automatically outputs all refined parameters
+            if txt_out_linenum:
+                template[txt_out_linenum] = f'out_prm_vals_on_convergence "{output}.txt"\n' # I am making this a text file since I manually output csv files. This would overwrite those.
             if my_csv_line: 
                 template[my_csv_line] = f'out "{output}.csv"\n'
             if phase_hkli_out:
@@ -930,16 +963,34 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 for line in template:
                     dummy.write(line)
             self.refine_pattern('Dummy.inp') # Run the actual refinement
-            # Monitor Scale Factors: {{{
+            # Monitor Refinement Parameters: {{{
             '''
             If you want to monitor scale factor values, it MUST
             happen before the Dummy file is copied to a new file. 
+
+            Likewise, if you want a phase to be added...
+
+            Both will be handled with the same function.
             '''
-            if scale_factors_to_monitor != None: 
-                self._monitor_scale_factor(out = f'Dummy.out',scale_factors=scale_factors_to_monitor, threshold=threshold_for_scale_factor, current_idx=index)
+            out = 'Dummy.out' # This is the name of the file we are looking for.
+            if phases_to_disable != None or phases_to_enable != None: 
+                
+                self._modify_out_for_monitoring(
+                        out=out, 
+                        on_phases=phases_to_enable,
+                        off_phases=phases_to_disable,
+                        threshold_for_on=threshold_for_on,
+                        threshold_for_off=threshold_for_off,
+                        current_idx=index,
+                        off_sf_value=off_sf_value,
+                        on_sf_value=on_sf_value,
+                        debug=debug
+                        )
+
+                
             #}}}
-            copyfile('Dummy.out',f'{output}.out')
-            template = [line for line in open('Dummy.out')] # Make the new template the output of the last refinement. 
+            copyfile(out,f'{output}.out')
+            template = [line for line in open(out)] # Make the new template the output of the last refinement. 
             #}}}
             # Get the single phase patterns: {{{ 
             if get_individual_phases:
@@ -947,6 +998,226 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             #}}}
         #}}}
     #}}}
+    # _parse_scale_factor_line: {{{
+    def _parse_scale_factor_line(self,line:str = None, debug:bool = False):
+        '''
+        This function allows us to quickly parse the text in the scale factor keyword line. 
+        It will find values in the form: 
+        1.2233e-2
+        or 
+        1e-100
+        '''
+        number =re.findall(r'(\d+?\.\d+e?\-?\+?\d+)',line) # This will find any value that could possibly show up.
+        if len(number) == 0:
+            if debug:
+                print(line)
+            number = re.findall(r'\d?\.?\d+?',line)
+        number = number[0]
+        return float(number)
+
+    #}}}
+    # _get_relevant_lines_for_monitoring: {{{ 
+    def _get_relevant_lines_for_monitoring(self,out:str = None,  off_phases:list = None, on_phases:list = None, debug:bool = False):
+        '''
+        Since we are adding more kinds of monitoring than simply scale factor to remove a phase, 
+        it seems fitting that we should create some kind of framework to make the task of accomplishing this easier.
+
+        turning off phases is accomplished by looking at the scale factors. 
+        turning on phases is accomplished by looking at the Rwp as a guide then changing scale factor.
+        '''
+        relevant_lines = {}
+        rwp = None # This will store the Rwp for those phases we want to turn on. 
+        # Open the Output File: {{{
+        with open(out,'r') as f:
+            lines = f.readlines()
+            # Go through each of the lines: {{{
+            for i, line in enumerate(lines):
+                scale_kwd = re.findall(r'^\s*scale',line) # Search the output for the line pertaining to scale factor
+                rwp_kwd = re.findall('r_wp\s+\d+\.\d+',line) # Search the ouput for the line pertaining to the Rwp
+                if rwp_kwd:
+                    rwp = float(rwp_kwd[0].split(' ')[-1]) # This should give me the rwp value
+                if scale_kwd:
+                    line_prms = re.findall(r'\S+',line) # This will split the line into only words and values.
+                    prm_name = line_prms[1] # The second word should always be a parameter name for the scale factor.
+                    str_value = line_prms[2] # The third item is the value (may include an error oo.)
+                    # Handle cases where you want to turn a phase off: {{{
+                    for j, off in enumerate(off_phases):
+                        #define the index for the dict: {{{ 
+                        if j == 0 and len(relevant_lines) == 0:
+                            # This is the first entry
+                            k = j
+                        else:
+                            k = len(relevant_lines)
+                        #}}}
+                        if debug: 
+                            print(off.lower()) 
+                            print(prm_name.lower())
+                        if  off.lower() in prm_name.lower():
+                            if debug:
+                                print('%s Inside'%off.lower()) 
+                                print('%s Inside'%prm_name.lower())
+                            value = self._parse_scale_factor_line(line,debug=debug)
+                            relevant_lines[k] = {
+                                    'linenumber': i,
+                                    'line': line,
+                                    'value': value, 
+                                    'name': prm_name, 
+                                    'string_number':str_value,
+                                    'type': 'off'
+                            }# Record the line
+                            if j == len(off_phases):
+                                break # If you reach the end, no point in reading more lines.
+                    #}}}
+                    # Handle the cases where you want to turn on a phase: {{{
+    
+                    for j, on in enumerate(on_phases):
+                        if j == 0 and len(relevant_lines) == 0:
+                            k = j
+                        else:
+                            k = len(relevant_lines)
+                        if on.lower() in prm_name.lower():
+                            value = self._parse_scale_factor_line(line,debug)
+                            relevant_lines[k] = {
+                                'linenumber': i, 
+                                'line': line, 
+                                'value': value, 
+                                'name':prm_name, 
+                                'string_number': str_value,
+                                'type': 'on',
+                                'rwp':rwp,
+                            } # record the line
+                            if j == len(off_phases)-1:
+                                break # IF you reach the end, stop reading
+    
+                    #}}}
+            #}}}
+            f.close()
+        #}}}
+        return relevant_lines
+    #}}} 
+    # _modify_sf_line: {{{
+    def _modify_sf_line(self, out:str = None, line_idx:int = None, str_num:str = None, replacement_value:float = None, debug:bool = False,):
+        '''
+        The purpose of this function is to make modifications to the scale factor line
+        of an output file to either turn on or off a phase. 
+        '''
+        with open(out,'r') as f:
+            lines = f.readlines() 
+            f.close()
+                        
+        relevant_line = lines[line_idx] # Recall the line we stored 
+                        
+        relevant_line = relevant_line.replace(str_num, str(replacement_value)) # Replace the value with zero must be like this to not mess up other things.
+        #relevant_line = relevant_line.replace(name, f'!{name}') # Replace the variable name with the variable name plus ! which will fix the value to zero 
+        lines[line_idx] = relevant_line
+        #line.replace(name,f'!{name}') # This locks the phase to 0
+        if debug:
+            print(f'relevant_line: {line_idx}, line to be written: {relevant_line}, TEST: {lines[line_idx]}')
+        with open(out,'w') as f:
+            f.writelines(lines) # Just rewrite the lines to the file 
+            f.close()
+
+    #}}}
+    # _modify_out_for_monitoring: {{{
+    def _modify_out_for_monitoring(self,
+            out:str = None,
+            on_phases:list = None, 
+            off_phases:list = None, 
+            threshold_for_on:float = None, 
+            threshold_for_off:float = None, 
+            current_idx:int = None,
+            off_sf_value:float = 1.0e-100,
+            on_sf_value:float = 1.0e-6,
+            debug:bool = False
+        ):
+        '''
+        This function handles the actual runtime modifications of output files 
+        It uses thresholds provided by the user to determine when to add or remove phases (it does this by
+        making scale factors either reasonable e.g. 1.5e-5 or extremely low e.g. 1e-100) to turn phases on or off.
+
+        on_phases = list of phases you want to monitor the Rwp to turn on
+        off_phases = list of phases you want to monitor the scale factor to turn off
+
+        The threshold for on should be a percent deviation from the initial Rwp
+        The threshold for off should be a percentage of the max value of a scale factor.
+        
+        current_idx: this is the current index of patterns you have refined.        
+
+        out: this is the output file's filename.
+        '''
+        # get the relevant lines: {{{
+        relevant_lines = self._get_relevant_lines_for_monitoring(out, off_phases,on_phases,debug)
+        #}}} 
+        # check to see if the index is zero or not: {{{
+        if current_idx == 0:
+            for i, key in enumerate(relevant_lines):
+                entry = relevant_lines[key]
+                value = entry['value']
+                name = entry['name']
+                entry_type = entry['type']
+                if entry_type == 'on':
+                    rwp = entry['rwp']
+                else:
+                    rwp = None
+                self._out_file_monitor[i] = {
+                        'values': [value],
+                        'name':name,
+                        'type': entry_type,
+                        'rwps':[rwp],
+                        'stopped':False,
+                }
+        #}}}
+        # For all other indices: {{{
+        else:
+            # Loop through the out file monitor: {{{
+            for i, key in enumerate(self._out_file_monitor):
+                entry = self._out_file_monitor[key] # this is the current substance entry for the history
+                current_entry = relevant_lines[key] # This is the current substance entry
+                line_idx = current_entry['linenumber'] # This gives us the linenumber for the scale factor.
+                str_num = current_entry['string_number'] # This is the current string for the scale factor.
+
+                values = entry['values'] # List of the scale factors.
+                name = entry['name'] # should contain the substance name with some other things like "sf_"
+                entry_type = entry['type'] # Either 'off' or 'on'
+                rwps = entry['rwps'] # Will be either a float for the Rwp or 'None'
+                stopped = entry['stopped'] # Either True or False
+
+                max_value = max(values) # This gets us the largest value present.
+                current_value = current_entry['value'] # This gives the current value
+                norm_val = current_value/max_value # This gives us the normalized value relative to the max.
+                # Handle Phase ON Cases: {{{ 
+                if entry_type == 'on':
+                    try:
+                        min_rwp = min(rwps) # This will give us the min Rwp value (remember that low Rwp is good, high Rwp is bad)
+                        current_rwp = current_entry['rwp'] # This gives us the current Rwp
+                        rwp_pct_diff = (current_rwp - min_rwp)/min_rwp # If this is positive, that could trigger the turning on of a phase. we are not dealing with a percentage
+                        if rwp_pct_diff >= threshold_for_on and not stopped:
+                            entry['stopped'] = True # We are adding the phase so we can stop monitoring
+                            # IF this is the case, we have yet to enable the phase. 
+                            self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=on_sf_value,debug=debug)
+                            #}}}
+                        elif rwp_pct_diff < threshold_for_on:
+                            # No need to add the phase
+                            self._out_file_monitor[key]['rwps'].append(current_rwp) # Add the newest Rwp
+                    except:
+                        # This case does not need to deal with Rwps. 
+                        pass
+                #}}}
+                # Handle the Phase OFF Case: {{{
+                elif entry_type == 'off':
+                    if norm_val > threshold_for_off:
+                        # This means we keep going. The scale factor hasnt fallen far enough
+                        entry['values'].append(current_value)
+                    elif norm_val <= threshold_for_off and not stopped:
+                        entry['stopped'] = True # We are removing the phase, so stop monitoring it. 
+                        # Now, DISABLE the phase: {{{
+                        self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=off_sf_value,debug=debug)
+                        #}}} 
+
+                #}}}
+
+            #}}} 
+        #}}} 
     # _monitor_scale_factor: {{{
     def _monitor_scale_factor(self,out:str = None, scale_factors:list = None, threshold:float = None, current_idx:int = None, debug:bool = False, sf_value:float = 1.0e-100):
         '''
@@ -1025,6 +1296,37 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     with open(out,'w') as f:
                         f.writelines(lines) # Just rewrite the lines to the file 
                         f.close()
+    #}}}
+    # _monitor_rwp: {{{
+    def _monitor_rwp(self,out:str = None, phases_to_add:list = None, threshold:float = None,current_idx:int = None ):
+        '''
+        The purpose of this function will be to monitor the Rwp values of a refinement 
+        to determine when to turn on the phase(s) you have selected. 
+        '''
+        relevant_lines = {}
+        # Get the relevant lines: {{{
+        with open(out,'r') as f:
+            lines = f.readlines()
+            for i,line in enumerate(lines):
+                for j,sf in enumerate(scale_factors): 
+                    scale_kwd = re.findall(r'^\s*scale',line) # This will have values ONLY IF the line starts with scale 
+                    if scale_kwd:
+                        line_prms = re.findall(r'\S+',line) # This will split the line into only words and values.
+                        prm_name = line_prms[1] # The second word should always be a parameter name for the scale factor.
+                        str_value = line_prms[2] # The third item is the value (may include an error too.) 
+                        if  sf.lower() in prm_name.lower():
+                            number =re.findall(r'(\d+?\.\d+e?\-?\+?\d+)',line) # This will find any value that could possibly show up.     
+                            if len(number) == 0:
+                                print(line)
+                                number = re.findall(r'\d?\.?\d+?',line)
+                            number = number[0]
+                            value = float(number)
+                            relevant_lines[j] = {'linenumber': i, 'line': line,'value': value, 'name': prm_name, 'string_number':str_value}# Record the line
+                    if j == len(scale_factors)-1: 
+                        break # If you reach the end, no point in reading more lines. 
+            f.close() 
+        #}}} 
+    
     #}}}
     # _calculate_phase_from_out: {{{
     def _calculate_phase_from_out(
@@ -1215,7 +1517,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             #}}}
             # Handle the OUT files: {{{ 
             
-            if parse_out_files:
+            if parse_out_files: 
                 csvs.set_description_str(f'Reading {self.sorted_out[i]}: ')
                 c_matrix = self._parse_c_matrix(out_file=self.sorted_out[i],correlation_threshold= correlation_threshold)
                 out_phase_dict = self._parse_out_phases(out_file=self.sorted_out[i]) # Read the output file.
@@ -1247,6 +1549,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             #}}}
             # Handle BKG: {{{ 
             bkg_dict = {}
+            bkg_name = None
+            
             if self.sorted_bkg_xy:
                 csvs.set_description_str(f'Reading {self.sorted_bkg_xy[i]}: ') # The background should be only 1D with one bkg for each pattern.
                 bkg_tth, bkg_yobs,bkg_ycalc, bkg_ydiff = self._parse_xy(self.sorted_bkg_xy[i]) # Get the data. only care about tth and ycalc.
@@ -1254,6 +1558,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     'tth': bkg_tth,
                     'ycalc': bkg_ycalc,
                 })
+                bkg_name = self.sorted_bkg_xy[i]
+            else:
+                self.sorted_bkg_xy = None
             #}}}
             # Handle the Phase XY files: {{{
             phase_xy_data_dict = {}
@@ -1293,7 +1600,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 'hkli':hkli_data_dict,
                 'phase_xy': phase_xy_data_dict,
                 'bkg': bkg_dict,
-                'bkg_name': self.sorted_bkg_xy[i],
+                'bkg_name': bkg_name,
  
             } # Create an entry for the csv data
             #}}}
@@ -1490,7 +1797,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     if 'phase_name' in keys:
                         phase_name = phase['phase_name'] # This is the phase name given in the UT file. Search this for a match to self._unique_substances.
                         phase_isolated = phase_name.split('_')[0] # This will only be the substance name
-                        if phase_isolated in self._unique_substances:
+                        # We will not worry if the substance is in the CSV keys presented. 
+                        if phase_isolated:
                             # If this is true, we can grab information from the output. 
                             if phase_isolated not in self.out_plot_dict:
                                 # This is the first entry.
@@ -1509,8 +1817,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                                     sites = value
                                     for label in sites:
                                         site = sites[label]
-                                        bval_label = site['b_val_prm']  # This is the label the user gave the B-value parameter
-                                        bval = site['bval'] # This is the refined parameter. 
+                                        try:
+                                            bval_label = site['b_val_prm']  # This is the label the user gave the B-value parameter
+                                            bval = site['bval'] # This is the refined parameter. 
+                                        except:
+                                            bval_label = f'{phase_name} None'
+                                            bval = 0
      
                                         if bval_label not in self.out_plot_dict[phase_isolated]:
                                             self.out_plot_dict[phase_isolated][bval_label] = [bval]
@@ -1556,6 +1868,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             height =800,
             width =1000,
             show_legend:bool = True,
+            legend_x:float = 0.99,
+            legend_y:float = 0.99,
+            legend_xanchor:str = 'right',
+            legend_yanchor:str = 'top',
             ):
         #Update the layout: {{{
         
@@ -1570,10 +1886,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 size = font_size,
             ),
             legend = dict(
-                yanchor = 'top',
-                y = 0.99,
-                xanchor = 'right',
-                x = 0.99,
+                yanchor = legend_yanchor,
+                y = legend_y,
+                xanchor = legend_xanchor,
+                x = legend_x,
             ),
             showlegend = show_legend,
             xaxis = dict(
@@ -1601,6 +1917,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             height = 800,
             width = 1000,
             show_legend:bool = True,
+            legend_x:float = 1.0,
+            legend_y:float = 1.0,
+            legend_xanchor:str = 'right',
+            legend_yanchor:str = 'top',
             font_size:int = 20,
             rwp_decimals:int = 2,
             temp_decimals:int = 2,
@@ -1610,6 +1930,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             plot_hkli:bool = True,
             single_pattern_offset:float = 0,
             hkli_offset:float = -60,
+            button_xanchor = 'right',
+            button_yanchor = 'top',
+            button_x = 1.4,
+            button_y = 1.,
         ):
         '''
         This will allow us to plot any of the loaded patterns 
@@ -1745,10 +2069,14 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             height=height,
             width = width,
             show_legend=show_legend,
+            legend_x = legend_x,
+            legend_y = legend_y,
+            legend_xanchor = legend_xanchor,
+            legend_yanchor= legend_yanchor,
         ) 
         #}}}
         # Update buttons: {{{
-        self._add_buttons(self.pattern_plot)
+        self._add_buttons(self.pattern_plot,xanchor=button_xanchor,yanchor=button_yanchor,button_x=button_x,button_y=button_y,)
         #}}}
         #}}}
         # Printouts: {{{
@@ -1792,7 +2120,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         #}}}
     #}}}
     # _add_buttons: {{{
-    def _add_buttons(self,plot:go.Figure = None):
+    def _add_buttons(self,plot:go.Figure = None, xanchor = 'right',yanchor = 'top',button_x = 1.25, button_y = 1,):
         '''
         The purpose of this function is to add buttons to a plotly plot
         with relative ease. 
@@ -1889,8 +2217,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     buttons= buttons,
                     #pad={"r": 10, "t": 10},
                     showactive=True,
-                    x=1.25,
-                    xanchor="right", 
+                    x=button_x,
+                    y = button_y,
+                    xanchor=xanchor, 
+                    yanchor = yanchor,
                 ),
             ]
         )
@@ -1931,7 +2261,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
     #}}}
     # _normalize: {{{
     def _normalize(self, data:list = None):
-        return [v/max(data) for v in data]
+        try:
+            norm = [v/max(data) for v in data]
+        except:
+            norm = [v/(1e-100) for v in data]
+
+        return norm
     #}}}
     # _get_random_color: {{{
     def _get_random_color(self,):
@@ -1986,6 +2321,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             yaxis_2_position = 0.15,
             additional_title_text:str = None,
             specific_substance:str = None,
+            legend_x:float = 0.99,
+            legend_y:float = 1.2,
+            legend_xanchor:str = 'right',
+            legend_yanchor:str = 'top',
             debug:bool = False,
             ):
         ''' 
@@ -2029,7 +2368,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         For each of these, we would need to know 
 
         '''
-
+        if specific_substance != None and type(specific_substance) == str:
+            specific_substance = [specific_substance]
         plot_type = plot_type.lower() # This ensures everything is lowercase.
         if not self._data_collected:
             print('You did not yet collect data. Do that now...')
@@ -2130,6 +2470,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             yaxis_title = 'Phase MAC'
             title = 'Phase MAC'
         #}}}
+        # cell_mass: {{{
+        if plot_type.lower() == 'cell_mass' or plot_type.lower() == 'cm' or plot_type.lower == 'mass':
+            keys = ['cell_mass']
+            yaxis_title = 'Cell Mass'
+            title = 'Cell Mass'
+        #}}}
         #}}}
         # Update the title text: {{{
         if additional_title_text:
@@ -2188,7 +2534,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 if not specific_substance:
                     usr_substance = substance.lower() # If a specific substance is not given, it is set as the current. 
                 else:
-                    usr_substance = specific_substance.lower()
+                    for sub in specific_substance:
+                        if sub.lower() == substance.lower():
+                            usr_substance = sub.lower()
+                            break
+                        else:
+                            usr_substance = None
+                
                 if substance != 'time' and substance != 'temperature' and substance != 'rwp' and substance.lower() == usr_substance:
                     entry = plot_data[substance] # This will be a dictionary entry with keys. 
                     entry_keys = list(entry.keys()) # These will be the keys for the entry. 
@@ -2289,10 +2641,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             ),
             template = 'simple_white',
             legend = dict(
-                yanchor = 'top',
-                xanchor = 'right',
-                y = 1.2,
-                x = 0.99,
+                yanchor = legend_yanchor,
+                xanchor = legend_xanchor,
+                y = legend_y,
+                x = legend_x,
             ),
 
         )
@@ -2343,6 +2695,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             height = 800,
             width = 1000,
             show_legend:bool = True,
+            legend_x:float = 0.99,
+            legend_y:float = 0.99,
+            legend_xanchor:str = 'right',
+            legend_yanchor:str = 'top',
             font_size:int = 20,
             rwp_decimals:int = 2,
             temp_decimals:int = 2, 
@@ -2383,8 +2739,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             self.x = [] # This is going to be 2 theta range
             self.y = [] # This is the time axis
             self.z = [] # This will be a list of lists for intensity.
-            hovertemplates = []  # This will hold a list of hovertemplates. 
-            
+             
         for index, i in enumerate(indices):
             # Get the data for current index: {{{
             tth, yobs, ycalc,ydiff, hovertemplate,title_text,xaxis_title,yaxis_title = self.plot_pattern(
@@ -2409,14 +2764,15 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 if max(ycalc) > self._max_i:
                     self._max_i = max(ycalc)
             #}}}
-            if waterfall:
+            if waterfall:  
+                time = np.around(self.rietveld_data[i]['corrected_time']/60,4) 
                 self.x = tth # This only needs to be 1 series.
-                self.y.append(self.rietveld_data[i]['corrected_time']/60) # This puts it into minutes
+                self.y.append(time) # This puts it into minutes
                 if not specific_substance:
                     self.z.append(yobs) # This adds the observed intensity.
                 else:
                     self.z.append(ycalc) # Adds calculated intensity
-                hovertemplates.append(hovertemplate)
+                hovertemplate = f"2{self._theta}{self._degree}" + "%{x}<br>Intensity: %{z}<br>" + "Time: %{y}<br>"
             else:
                 # Generate the figure: {{{
                 color1 = self._get_random_color()
@@ -2452,11 +2808,11 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
     
                 #}}}
         # Waterfall Plot Added: {{{ 
-        if waterfall:
+        if waterfall: 
             self.multi_pattern.add_heatmap(
                 x = self.x,
                 y = self.y,
-                z = self.z,
+                z = self.z, 
                 hovertemplate = hovertemplate,
             )
             yaxis_title = 'Time / min'
@@ -2503,6 +2859,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 height=height,
                 width=width,
                 show_legend=show_legend,
+                legend_x = legend_x,
+                legend_y=legend_y,
+                legend_xanchor=legend_xanchor,
+                legend_yanchor=legend_yanchor,
         )
         # Waterfall Update: {{{
         if waterfall:
