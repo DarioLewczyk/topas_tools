@@ -35,6 +35,7 @@ class GenericPlotter:
             yaxis_title:str = 'Y',
             template:str = 'simple_white',
             xrange:list = None ,
+            yrange:list = None, 
             height = 800,
             width = 1000, 
             show_legend:bool = True,
@@ -72,6 +73,9 @@ class GenericPlotter:
         # Update Layout: {{{
         if xrange == None:
             xrange = [min(x),max(x)]
+        if yrange != None:
+            self._fig.update_layout(yaxis = dict(range = yrange))
+            yrange = [min(y)*0.98,max(y)*1.02]
         self._fig.update_layout(
             height = height,
             width = width,
@@ -95,7 +99,7 @@ class GenericPlotter:
                 range = xrange,
             ),
             yaxis = dict(
-                title = yaxis_title,
+                title = yaxis_title, 
             ),
         )
         #}}}
@@ -108,6 +112,8 @@ class GenericPlotter:
             y,
             name,
             mode = 'markers',
+            xrange:list = None,
+            yrange:list = None,
             marker_size:int = 12,
             y2:bool = False,
             y2_title:str = 'Y2',
@@ -154,6 +160,10 @@ class GenericPlotter:
         )
         #}}}
         # Update Layout: {{{
+        if xrange != None:
+            self._fig.update_layout(xaxis = dict(range = xrange))
+        if yrange != None:
+            self._fig.update_layout(yaxis = dict(range = yrange))
         self._fig.update_layout(
             legend = dict(
                 yanchor = legend_yanchor,
@@ -198,5 +208,89 @@ class GenericPlotter:
         rand_color = list(np.random.choice(range(256),size=3))
         color = f'rgb({rand_color[0]},{rand_color[1]},{rand_color[2]})'
         return color 
+    #}}}
+    # plot_series: {{{
+    def plot_stuff(
+        self,
+        x_series, 
+        y_series, 
+        names, 
+        colors,
+        title = 'Plot', 
+        x_title = 'X-axis', 
+        y_title = 'Y-axis', 
+        mode = 'lines+markers',
+        marker_size = 5,
+        width = 1500,
+        height = 800,
+        legend_x = 1.5, 
+        xrange = None,
+        yrange = None,
+        ):
+        '''
+        This function allows us to plot lots of data in a series. 
+
+        For example, you input data as such: 
+        x_series = [ x1, x2 ] 
+        y_series = [ [y1a, y1b, y1c], [y2a, y2b, y2c]]
+        where the xs in the x series will apply to the cluster of ys given
+        '''
+        first_plot = True
+        show_figure = False 
+        # Loop: {{{
+        for i, series in enumerate(y_series):
+            x = x_series[i] # This gives the x values for the series
+            color = colors[i] 
+            if type(mode) == list: 
+                try:
+                    selected_mode = mode[i]
+                except:
+                    selected_mode = 'lines+markers' # Defaults if you gave the wrong number of items
+            else:
+                selected_mode = mode
+                
+                    
+            for j, y in enumerate(series):
+                # Only show the figure on the last iteration: {{{
+                if i+1 == len(y_series) and j + 1 == len(series): 
+                    show_figure = True
+                #}}}
+                # First Plot: {{{ 
+                if first_plot:
+                    self.plot_data(
+                        x= x,
+                        y = y,
+                        name = names[i][j],
+                        mode =selected_mode,
+                        title_text= title,
+                        yaxis_title= y_title,
+                        xaxis_title= x_title,
+                        color = color, 
+                        legend_x= legend_x,
+                        width=width,
+                        marker_size=marker_size,
+                        height = height,
+                        xrange = xrange,
+                        yrange = yrange,
+                        show_figure=show_figure,
+                    )
+                    first_plot = False
+                #}}}
+                # All other Plots: {{{
+                else:  
+                    self.add_data_to_plot(
+                        x = x,
+                        y = y,
+                        name = names[i][j],
+                        mode= selected_mode,
+                        marker_size=marker_size,
+                        color = color,
+                        show_figure=show_figure,
+                        legend_x= legend_x,
+                        xrange = xrange,
+                        yrange = yrange,
+                    )
+                #}}}
+        #}}}
     #}}}
 #}}}

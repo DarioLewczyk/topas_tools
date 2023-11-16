@@ -17,6 +17,8 @@ import copy
 import subprocess
 from shutil import copyfile
 from PIL import Image # This allows us to load tiff images.
+from generic_plotly_utils import GenericPlotter
+#import pandas as pd
 #}}}
 # Notes on Operation: {{{
 '''
@@ -188,6 +190,35 @@ class Utils:
         #}}}
         return os.getcwd() #Final directory is returned
         
+    #}}}
+    # get_min_max: {{{
+    def get_min_max (
+            self, 
+            vals:list = None, 
+            custom_labels:list = None,
+            pct:float = 0.5,
+            decimals:int = 5, 
+        ):
+        '''
+        This function serves to quickly get the lattice parameters 
+        for a single or series of values varying by a percentage ±
+        '''
+        fract = pct/100
+        try:
+            print('-'*10)
+            for i, v in enumerate(vals):
+                minv = np.around(v - v*fract, decimals)
+                maxv = np.around(v + v*fract, decimals)
+                if custom_labels == None:
+                    custom_labels = ['']*len(vals)
+                print(f'Min {custom_labels[i]}: {minv}\nMax {custom_labels[i]}: {maxv}')
+            print('-'*10)
+        except: 
+            minv = np.around(vals-vals*fract,decimals)
+            maxv = np.around(vals+vals*fract,decimals)
+            if not custom_label:
+                custom_label = ''
+            print(f'Min {custom_label}: {minv}\nMax {custom_label}: {maxv}')
     #}}}
 #}}}
 # DataCollector: {{{
@@ -584,7 +615,7 @@ class OUT_Parser:
                     if 'phase_name' in line:
                         split = re.findall(r'\w+',line)
                         key = split[0] # This is the label
-                        value = split[1] # This is the phase name
+                        value = '_'.join(split[1:]) # This is the phase name
                         out_phase_dict[phase_num].update({key:value})
                     #}}}
                     # Phase MAC: {{{
@@ -632,8 +663,12 @@ class OUT_Parser:
                                     rec = int(ints[0])
                                 elif floats:
                                     rec = float(floats[0])
-                            elif macro_var == 'sgc' or macro_var == 'slc':
-                                rec = words[0]
+                            elif macro_var == 'sgc' or macro_var == 'slc': 
+                                try:
+                                    rec = words[0]
+                                except:
+                                    rec = None
+
                             out_phase_dict[phase_num].update({macro_var:rec})
                         #}}}
                     #}}}
@@ -697,7 +732,9 @@ class OUT_Parser:
                             'bval', # The next thing should be the actual B value
                          
                         ]
-                        split = list(filter(lambda x: len(x) > 0, line.split(' '))) # Don't record any blank strings
+                        #split = list(filter(lambda x: len(x) > 0, line.split(' '))) # Don't record any blank strings
+                        #split = list(filter(lambda x: len(x)>1 , re.findall(r'\S+', line)))
+                        split = re.findall(r'\S+',line) # This should only give strings that are not whitespace
                         x_idx = None
                         y_idx = None
                         z_idx = None
@@ -705,16 +742,17 @@ class OUT_Parser:
                         occ = None
                         beq_idx = None
                         bval_recorded = False
-                        site = None
-                        for j, val in enumerate(split):
-                            ints,floats,words = self._get_ints_floats_words(val) # This gets these quantities for the current entry.
+                        site = None 
+                        #print(split)
+                        for j, val in enumerate(split): 
+                            #ints,floats,words = self._get_ints_floats_words(val) # This gets these quantities for the current entry.
                             if j == 1:
                                 site = val # This should be the site label
                                 out_phase_dict[phase_num]['sites'][site] = {}
                             if j > 1:
                                 # Find KWDS: {{{
-                                val = val.strip('\t') # Get rid of tabs
-                                val = val.strip(' ') # Get rid of spaces
+                                #val = val.strip('\t') # Get rid of tabs
+                                #val = val.strip(' ') # Get rid of spaces 
                                 if val == 'x':
                                     x_idx = j
                                 elif val == 'y':
@@ -739,20 +777,31 @@ class OUT_Parser:
                                     if j == z_idx+1:
                                         coord = re.findall(r'\d+\.\d+|\d+',val) # This gets the coordinate
                                         out_phase_dict[phase_num]['sites'][site].update({'z': float(coord[0])})
-                                if beq_idx:
-                                    if j == beq_idx +1:
-                                        b_val_keyword = re.findall(r'\w+_\w+',val) # This should find any keyword for bvals
-                                        if b_val_keyword:
-                                            out_phase_dict[phase_num]['sites'][site].update({'b_val_prm':b_val_keyword[0]}) # This will record the variable. 
-                                        else:
-                                            bval = re.findall(r'\d+\.\d+|\d+',val)
-                                            out_phase_dict[phase_num]['sites'][site].update({'bval': float(bval[0])})
+                                if beq_idx and not bval_recorded:
+                                    # Get the variable name: {{{
+                                    if j == beq_idx +1: 
+                                        try:
+                                            b_val_keyword = re.findall(r'\w+_\w+',val)[0] # This should find any keyword for bvals 
+                                            out_phase_dict[phase_num]['sites'][site].update({'b_val_prm':b_val_keyword}) # This will record the variable. 
+                                        except:
+                                            out_phase_dict[phase_num]['sites'][site].update({'b_val_prm':None}) # If the previous criteria are not met, record nothing.
+                                            try:
+                                                bval = float(re.findall(r'\d+\.\d+|\d+',val)[0])
+                                                out_phase_dict[phase_num]['sites'][site].update({'bval': bval})
+                                                bval_recorded = True
+                                            except:
+                                                out_phase_dict[phase_num]['sites'][site].update({'bval': None})
+
+                                    #}}}
+                                    # Get the variable value: {{{
+                                    elif j == beq_idx+2: 
+                                        try:
+                                            bval = float(re.findall(r'\d+\.\d+|\d+',val)[0]) 
+                                            out_phase_dict[phase_num]['sites'][site].update({'bval': bval})
                                             bval_recorded = True
-                                    elif j == beq_idx+2 and not bval_recorded:
-                                        bval = re.findall(r'\d+\.\d+|\d+',val)
-     
-                                        out_phase_dict[phase_num]['sites'][site].update({'bval': float(bval[0])})
-                                        bval_recorded = True
+                                        except:
+                                            out_phase_dict[phase_num]['sites'][site].update({'bval':None})
+                                    #}}}
                                 if occ_idx:
                                     if j == occ_idx+1:
                                         occ = val # This should be the atom name for the occupancy
@@ -805,8 +854,62 @@ class OUT_Parser:
         return out_phase_dict
     #}}}
 #}}}
+# Mole_Fraction_Tools: {{{
+class Mole_Fraction_Tools:
+    '''
+    This class is designed to make obtaining mole fractions easy
+    for any sample or set of samples you may be working with. 
+    It leverages a csv version of the periodic table and some 
+    NLP to the molar mass of formulas and provides tools that can be used inside
+    of the TOPAS_Refinements class.
+    '''
+    def __init__(self, formulas:list = None, ):
+        '''
+        formulas: A list of strings for each of the formulas you are dealing with. 
+        The formulas are case sensitive so make sure that your input is appropriately formatted
+        '''
+        self._formulas = formulas
+        # Define the periodic Table: {{{
+        self._ptable = {'AtomicNumber': {0: 1,1: 2,2: 3,3: 4,4: 5,5: 6,6: 7,7: 8,8: 9,9: 10,10: 11,11: 12,12: 13,13: 14,14: 15,15: 16,16: 17,17: 18,18: 19,19: 20,20: 21,21: 22,22: 23,23: 24,24: 25,25: 26,26: 27,27: 28,28: 29,29: 30,30: 31,31: 32,32: 33,33: 34,34: 35,35: 36,36: 37,37: 38,38: 39,39: 40,40: 41,41: 42,42: 43,43: 44,44: 45,45: 46,46: 47,47: 48,48: 49,49: 50,50: 51,51: 52,52: 53,53: 54,54: 55,55: 56,56: 57,57: 58,58: 59,59: 60,60: 61,61: 62,62: 63,63: 64,64: 65,65: 66,66: 67,67: 68,68: 69,69: 70,70: 71,71: 72,72: 73,73: 74,74: 75,75: 76,76: 77,77: 78,78: 79,79: 80,80: 81,81: 82,82: 83,83: 84,84: 85,85: 86,86: 87,87: 88,88: 89,89: 90,90: 91,91: 92,92: 93,93: 94,94: 95,95: 96,96: 97,97: 98,98: 99,99: 100,100: 101,101: 102,102: 103,103: 104,104: 105,105: 106,106: 107,107: 108,108: 109,109: 110,110: 111,111: 112,112: 113,113: 114,114: 115,115: 116,116: 117,117: 118},'Element': {0: 'Hydrogen',1: 'Helium',2: 'Lithium',3: 'Beryllium',4: 'Boron',5: 'Carbon',6: 'Nitrogen',7: 'Oxygen',8: 'Fluorine',9: 'Neon',10: 'Sodium',11: 'Magnesium',12: 'Aluminum',13: 'Silicon',14: 'Phosphorus',15: 'Sulfur',16: 'Chlorine',17: 'Argon',18: 'Potassium',19: 'Calcium',20: 'Scandium',21: 'Titanium',22: 'Vanadium',23: 'Chromium',24: 'Manganese',25: 'Iron',26: 'Cobalt',27: 'Nickel',28: 'Copper',29: 'Zinc',30: 'Gallium',31: 'Germanium',32: 'Arsenic',33: 'Selenium',34: 'Bromine',35: 'Krypton',36: 'Rubidium',37: 'Strontium',38: 'Yttrium',39: 'Zirconium',40: 'Niobium',41: 'Molybdenum',42: 'Technetium',43: 'Ruthenium',44: 'Rhodium',45: 'Palladium',46: 'Silver',47: 'Cadmium',48: 'Indium',49: 'Tin',50: 'Antimony',51: 'Tellurium',52: 'Iodine',53: 'Xenon',54: 'Cesium',55: 'Barium',56: 'Lanthanum',57: 'Cerium',58: 'Praseodymium',59: 'Neodymium',60: 'Promethium',61: 'Samarium',62: 'Europium',63: 'Gadolinium',64: 'Terbium',65: 'Dysprosium',66: 'Holmium',67: 'Erbium',68: 'Thulium',69: 'Ytterbium',70: 'Lutetium',71: 'Hafnium',72: 'Tantalum',73: 'Wolfram',74: 'Rhenium',75: 'Osmium',76: 'Iridium',77: 'Platinum',78: 'Gold',79: 'Mercury',80: 'Thallium',81: 'Lead',82: 'Bismuth',83: 'Polonium',84: 'Astatine',85: 'Radon',86: 'Francium',87: 'Radium',88: 'Actinium',89: 'Thorium',90: 'Protactinium',91: 'Uranium',92: 'Neptunium',93: 'Plutonium',94: 'Americium',95: 'Curium',96: 'Berkelium',97: 'Californium',98: 'Einsteinium',99: 'Fermium',100: 'Mendelevium',101: 'Nobelium',102: 'Lawrencium',103: 'Rutherfordium',104: 'Dubnium',105: 'Seaborgium',106: 'Bohrium',107: 'Hassium',108: 'Meitnerium',109: 'Darmstadtium ',110: 'Roentgenium ',111: 'Copernicium ',112: 'Nihonium',113: 'Flerovium',114: 'Moscovium',115: 'Livermorium',116: 'Tennessine',117: 'Oganesson'},'Symbol': {0: 'H',1: 'He',2: 'Li',3: 'Be',4: 'B',5: 'C',6: 'N',7: 'O',8: 'F',9: 'Ne',10: 'Na',11: 'Mg',12: 'Al',13: 'Si',14: 'P',15: 'S',16: 'Cl',17: 'Ar',18: 'K',19: 'Ca',20: 'Sc',21: 'Ti',22: 'V',23: 'Cr',24: 'Mn',25: 'Fe',26: 'Co',27: 'Ni',28: 'Cu',29: 'Zn',30: 'Ga',31: 'Ge',32: 'As',33: 'Se',34: 'Br',35: 'Kr',36: 'Rb',37: 'Sr',38: 'Y',39: 'Zr',40: 'Nb',41: 'Mo',42: 'Tc',43: 'Ru',44: 'Rh',45: 'Pd',46: 'Ag',47: 'Cd',48: 'In',49: 'Sn',50: 'Sb',51: 'Te',52: 'I',53: 'Xe',54: 'Cs',55: 'Ba',56: 'La',57: 'Ce',58: 'Pr',59: 'Nd',60: 'Pm',61: 'Sm',62: 'Eu',63: 'Gd',64: 'Tb',65: 'Dy',66: 'Ho',67: 'Er',68: 'Tm',69: 'Yb',70: 'Lu',71: 'Hf',72: 'Ta',73: 'W',74: 'Re',75: 'Os',76: 'Ir',77: 'Pt',78: 'Au',79: 'Hg',80: 'Tl',81: 'Pb',82: 'Bi',83: 'Po',84: 'At',85: 'Rn',86: 'Fr',87: 'Ra',88: 'Ac',89: 'Th',90: 'Pa',91: 'U',92: 'Np',93: 'Pu',94: 'Am',95: 'Cm',96: 'Bk',97: 'Cf',98: 'Es',99: 'Fm',100: 'Md',101: 'No',102: 'Lr',103: 'Rf',104: 'Db',105: 'Sg',106: 'Bh',107: 'Hs',108: 'Mt',109: 'Ds ',110: 'Rg ',111: 'Cn ',112: 'Nh',113: 'Fl',114: 'Mc',115: 'Lv',116: 'Ts',117: 'Og'},'AtomicMass': {0: 1.007,1: 4.002,2: 6.941,3: 9.012,4: 10.811,5: 12.011,6: 14.007,7: 15.999,8: 18.998,9: 20.18,10: 22.99,11: 24.305,12: 26.982,13: 28.086,14: 30.974,15: 32.065,16: 35.453,17: 39.948,18: 39.098,19: 40.078,20: 44.956,21: 47.867,22: 50.942,23: 51.996,24: 54.938,25: 55.845,26: 58.933,27: 58.693,28: 63.546,29: 65.38,30: 69.723,31: 72.64,32: 74.922,33: 78.96,34: 79.904,35: 83.798,36: 85.468,37: 87.62,38: 88.906,39: 91.224,40: 92.906,41: 95.96,42: 98.0,43: 101.07,44: 102.906,45: 106.42,46: 107.868,47: 112.411,48: 114.818,49: 118.71,50: 121.76,51: 127.6,52: 126.904,53: 131.293,54: 132.905,55: 137.327,56: 138.905,57: 140.116,58: 140.908,59: 144.242,60: 145.0,61: 150.36,62: 151.964,63: 157.25,64: 158.925,65: 162.5,66: 164.93,67: 167.259,68: 168.934,69: 173.054,70: 174.967,71: 178.49,72: 180.948,73: 183.84,74: 186.207,75: 190.23,76: 192.217,77: 195.084,78: 196.967,79: 200.59,80: 204.383,81: 207.2,82: 208.98,83: 210.0,84: 210.0,85: 222.0,86: 223.0,87: 226.0,88: 227.0,89: 232.038,90: 231.036,91: 238.029,92: 237.0,93: 244.0,94: 243.0,95: 247.0,96: 247.0,97: 251.0,98: 252.0,99: 257.0,100: 258.0,101: 259.0,102: 262.0,103: 261.0,104: 262.0,105: 266.0,106: 264.0,107: 267.0,108: 268.0,109: 271.0,110: 272.0,111: 285.0,112: 284.0,113: 289.0,114: 288.0,115: 292.0,116: 295.0,117: 294.0},'NumberofNeutrons': {0: 0,1: 2,2: 4,3: 5,4: 6,5: 6,6: 7,7: 8,8: 10,9: 10,10: 12,11: 12,12: 14,13: 14,14: 16,15: 16,16: 18,17: 22,18: 20,19: 20,20: 24,21: 26,22: 28,23: 28,24: 30,25: 30,26: 32,27: 31,28: 35,29: 35,30: 39,31: 41,32: 42,33: 45,34: 45,35: 48,36: 48,37: 50,38: 50,39: 51,40: 52,41: 54,42: 55,43: 57,44: 58,45: 60,46: 61,47: 64,48: 66,49: 69,50: 71,51: 76,52: 74,53: 77,54: 78,55: 81,56: 82,57: 82,58: 82,59: 84,60: 84,61: 88,62: 89,63: 93,64: 94,65: 97,66: 98,67: 99,68: 100,69: 103,70: 104,71: 106,72: 108,73: 110,74: 111,75: 114,76: 115,77: 117,78: 118,79: 121,80: 123,81: 125,82: 126,83: 126,84: 125,85: 136,86: 136,87: 138,88: 138,89: 142,90: 140,91: 146,92: 144,93: 150,94: 148,95: 151,96: 150,97: 153,98: 153,99: 157,100: 157,101: 157,102: 159,103: 157,104: 157,105: 160,106: 157,107: 159,108: 159,109: 161,110: 161,111: 173,112: 171,113: 175,114: 173,115: 176,116: 178,117: 176},'NumberofProtons': {0: 1,1: 2,2: 3,3: 4,4: 5,5: 6,6: 7,7: 8,8: 9,9: 10,10: 11,11: 12,12: 13,13: 14,14: 15,15: 16,16: 17,17: 18,18: 19,19: 20,20: 21,21: 22,22: 23,23: 24,24: 25,25: 26,26: 27,27: 28,28: 29,29: 30,30: 31,31: 32,32: 33,33: 34,34: 35,35: 36,36: 37,37: 38,38: 39,39: 40,40: 41,41: 42,42: 43,43: 44,44: 45,45: 46,46: 47,47: 48,48: 49,49: 50,50: 51,51: 52,52: 53,53: 54,54: 55,55: 56,56: 57,57: 58,58: 59,59: 60,60: 61,61: 62,62: 63,63: 64,64: 65,65: 66,66: 67,67: 68,68: 69,69: 70,70: 71,71: 72,72: 73,73: 74,74: 75,75: 76,76: 77,77: 78,78: 79,79: 80,80: 81,81: 82,82: 83,83: 84,84: 85,85: 86,86: 87,87: 88,88: 89,89: 90,90: 91,91: 92,92: 93,93: 94,94: 95,95: 96,96: 97,97: 98,98: 99,99: 100,100: 101,101: 102,102: 103,103: 104,104: 105,105: 106,106: 107,107: 108,108: 109,109: 110,110: 111,111: 112,112: 113,113: 114,114: 115,115: 116,116: 117,117: 118},'NumberofElectrons': {0: 1,1: 2,2: 3,3: 4,4: 5,5: 6,6: 7,7: 8,8: 9,9: 10,10: 11,11: 12,12: 13,13: 14,14: 15,15: 16,16: 17,17: 18,18: 19,19: 20,20: 21,21: 22,22: 23,23: 24,24: 25,25: 26,26: 27,27: 28,28: 29,29: 30,30: 31,31: 32,32: 33,33: 34,34: 35,35: 36,36: 37,37: 38,38: 39,39: 40,40: 41,41: 42,42: 43,43: 44,44: 45,45: 46,46: 47,47: 48,48: 49,49: 50,50: 51,51: 52,52: 53,53: 54,54: 55,55: 56,56: 57,57: 58,58: 59,59: 60,60: 61,61: 62,62: 63,63: 64,64: 65,65: 66,66: 67,67: 68,68: 69,69: 70,70: 71,71: 72,72: 73,73: 74,74: 75,75: 76,76: 77,77: 78,78: 79,79: 80,80: 81,81: 82,82: 83,83: 84,84: 85,85: 86,86: 87,87: 88,88: 89,89: 90,90: 91,91: 92,92: 93,93: 94,94: 95,95: 96,96: 97,97: 98,98: 99,99: 100,100: 101,101: 102,102: 103,103: 104,104: 105,105: 106,106: 107,107: 108,108: 109,109: 110,110: 111,111: 112,112: 113,113: 114,114: 115,115: 116,116: 117,117: 118},'Period': {0: 1,1: 1,2: 2,3: 2,4: 2,5: 2,6: 2,7: 2,8: 2,9: 2,10: 3,11: 3,12: 3,13: 3,14: 3,15: 3,16: 3,17: 3,18: 4,19: 4,20: 4,21: 4,22: 4,23: 4,24: 4,25: 4,26: 4,27: 4,28: 4,29: 4,30: 4,31: 4,32: 4,33: 4,34: 4,35: 4,36: 5,37: 5,38: 5,39: 5,40: 5,41: 5,42: 5,43: 5,44: 5,45: 5,46: 5,47: 5,48: 5,49: 5,50: 5,51: 5,52: 5,53: 5,54: 6,55: 6,56: 6,57: 6,58: 6,59: 6,60: 6,61: 6,62: 6,63: 6,64: 6,65: 6,66: 6,67: 6,68: 6,69: 6,70: 6,71: 6,72: 6,73: 6,74: 6,75: 6,76: 6,77: 6,78: 6,79: 6,80: 6,81: 6,82: 6,83: 6,84: 6,85: 6,86: 7,87: 7,88: 7,89: 7,90: 7,91: 7,92: 7,93: 7,94: 7,95: 7,96: 7,97: 7,98: 7,99: 7,100: 7,101: 7,102: 7,103: 7,104: 7,105: 7,106: 7,107: 7,108: 7,109: 7,110: 7,111: 7,112: 7,113: 7,114: 7,115: 7,116: 7,117: 7},'Group': {0: 1.0,1: 18.0,2: 1.0,3: 2.0,4: 13.0,5: 14.0,6: 15.0,7: 16.0,8: 17.0,9: 18.0,10: 1.0,11: 2.0,12: 13.0,13: 14.0,14: 15.0,15: 16.0,16: 17.0,17: 18.0,18: 1.0,19: 2.0,20: 3.0,21: 4.0,22: 5.0,23: 6.0,24: 7.0,25: 8.0,26: 9.0,27: 10.0,28: 11.0,29: 12.0,30: 13.0,31: 14.0,32: 15.0,33: 16.0,34: 17.0,35: 18.0,36: 1.0,37: 2.0,38: 3.0,39: 4.0,40: 5.0,41: 6.0,42: 7.0,43: 8.0,44: 9.0,45: 10.0,46: 11.0,47: 12.0,48: 13.0,49: 14.0,50: 15.0,51: 16.0,52: 17.0,53: 18.0,54: 1.0,55: 2.0,56: 3.0,57: "nan",58: "nan",59: "nan",60: "nan",61: "nan",62: "nan",63: "nan",64: "nan",65: "nan",66: "nan",67: "nan",68: "nan",69: "nan",70: "nan",71: 4.0,72: 5.0,73: 6.0,74: 7.0,75: 8.0,76: 9.0,77: 10.0,78: 11.0,79: 12.0,80: 13.0,81: 14.0,82: 15.0,83: 16.0,84: 17.0,85: 18.0,86: 1.0,87: 2.0,88: 3.0,89: "nan",90: "nan",91: "nan",92: "nan",93: "nan",94: "nan",95: "nan",96: "nan",97: "nan",98: "nan",99: "nan",100: "nan",101: "nan",102: "nan",103: 4.0,104: 5.0,105: 6.0,106: 7.0,107: 8.0,108: 9.0,109: 10.0,110: 11.0,111: 12.0,112: 13.0,113: 14.0,114: 15.0,115: 16.0,116: 17.0,117: 18.0},'Phase': {0: 'gas',1: 'gas',2: 'solid',3: 'solid',4: 'solid',5: 'solid',6: 'gas',7: 'gas',8: 'gas',9: 'gas',10: 'solid',11: 'solid',12: 'solid',13: 'solid',14: 'solid',15: 'solid',16: 'gas',17: 'gas',18: 'solid',19: 'solid',20: 'solid',21: 'solid',22: 'solid',23: 'solid',24: 'solid',25: 'solid',26: 'solid',27: 'solid',28: 'solid',29: 'solid',30: 'solid',31: 'solid',32: 'solid',33: 'solid',34: 'liq',35: 'gas',36: 'solid',37: 'solid',38: 'solid',39: 'solid',40: 'solid',41: 'solid',42: 'artificial',43: 'solid',44: 'solid',45: 'solid',46: 'solid',47: 'solid',48: 'solid',49: 'solid',50: 'solid',51: 'solid',52: 'solid',53: 'gas',54: 'solid',55: 'solid',56: 'solid',57: 'solid',58: 'solid',59: 'solid',60: 'artificial',61: 'solid',62: 'solid',63: 'solid',64: 'solid',65: 'solid',66: 'solid',67: 'solid',68: 'solid',69: 'solid',70: 'solid',71: 'solid',72: 'solid',73: 'solid',74: 'solid',75: 'solid',76: 'solid',77: 'solid',78: 'solid',79: 'liq',80: 'solid',81: 'solid',82: 'solid',83: 'solid',84: 'solid',85: 'gas',86: 'solid',87: 'solid',88: 'solid',89: 'solid',90: 'solid',91: 'solid',92: 'artificial',93: 'artificial',94: 'artificial',95: 'artificial',96: 'artificial',97: 'artificial',98: 'artificial',99: 'artificial',100: 'artificial',101: 'artificial',102: 'artificial',103: 'artificial',104: 'artificial',105: 'artificial',106: 'artificial',107: 'artificial',108: 'artificial',109: 'artificial',110: 'artificial',111: 'artificial',112: 'artificial',113: 'artificial',114: 'artificial',115: 'artificial',116: 'artificial',117: 'artificial'},'Radioactive': {0: "nan",1: "nan",2: "nan",3: "nan",4: "nan",5: "nan",6: "nan",7: "nan",8: "nan",9: "nan",10: "nan",11: "nan",12: "nan",13: "nan",14: "nan",15: "nan",16: "nan",17: "nan",18: "nan",19: "nan",20: "nan",21: "nan",22: "nan",23: "nan",24: "nan",25: "nan",26: "nan",27: "nan",28: "nan",29: "nan",30: "nan",31: "nan",32: "nan",33: "nan",34: "nan",35: "nan",36: "nan",37: "nan",38: "nan",39: "nan",40: "nan",41: "nan",42: 'yes',43: "nan",44: "nan",45: "nan",46: "nan",47: "nan",48: "nan",49: "nan",50: "nan",51: "nan",52: "nan",53: "nan",54: "nan",55: "nan",56: "nan",57: "nan",58: "nan",59: "nan",60: 'yes',61: "nan",62: "nan",63: "nan",64: "nan",65: "nan",66: "nan",67: "nan",68: "nan",69: "nan",70: "nan",71: "nan",72: "nan",73: "nan",74: "nan",75: "nan",76: "nan",77: "nan",78: "nan",79: "nan",80: "nan",81: "nan",82: "nan",83: 'yes',84: 'yes',85: 'yes',86: 'yes',87: 'yes',88: 'yes',89: 'yes',90: 'yes',91: 'yes',92: 'yes',93: 'yes',94: 'yes',95: 'yes',96: 'yes',97: 'yes',98: 'yes',99: 'yes',100: 'yes',101: 'yes',102: 'yes',103: 'yes',104: 'yes',105: 'yes',106: 'yes',107: 'yes',108: 'yes',109: 'yes',110: 'yes',111: 'yes',112: 'yes',113: 'yes',114: 'yes',115: 'yes',116: 'yes',117: 'yes'},'Natural': {0: 'yes',1: 'yes',2: 'yes',3: 'yes',4: 'yes',5: 'yes',6: 'yes',7: 'yes',8: 'yes',9: 'yes',10: 'yes',11: 'yes',12: 'yes',13: 'yes',14: 'yes',15: 'yes',16: 'yes',17: 'yes',18: 'yes',19: 'yes',20: 'yes',21: 'yes',22: 'yes',23: 'yes',24: 'yes',25: 'yes',26: 'yes',27: 'yes',28: 'yes',29: 'yes',30: 'yes',31: 'yes',32: 'yes',33: 'yes',34: 'yes',35: 'yes',36: 'yes',37: 'yes',38: 'yes',39: 'yes',40: 'yes',41: 'yes',42: "nan",43: 'yes',44: 'yes',45: 'yes',46: 'yes',47: 'yes',48: 'yes',49: 'yes',50: 'yes',51: 'yes',52: 'yes',53: 'yes',54: 'yes',55: 'yes',56: 'yes',57: 'yes',58: 'yes',59: 'yes',60: "nan",61: 'yes',62: 'yes',63: 'yes',64: 'yes',65: 'yes',66: 'yes',67: 'yes',68: 'yes',69: 'yes',70: 'yes',71: 'yes',72: 'yes',73: 'yes',74: 'yes',75: 'yes',76: 'yes',77: 'yes',78: 'yes',79: 'yes',80: 'yes',81: 'yes',82: 'yes',83: 'yes',84: 'yes',85: 'yes',86: 'yes',87: 'yes',88: 'yes',89: 'yes',90: 'yes',91: 'yes',92: "nan",93: "nan",94: "nan",95: "nan",96: "nan",97: "nan",98: "nan",99: "nan",100: "nan",101: "nan",102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'Metal': {0: "nan",1: "nan",2: 'yes',3: 'yes',4: "nan",5: "nan",6: "nan",7: "nan",8: "nan",9: "nan",10: 'yes',11: 'yes',12: 'yes',13: "nan",14: "nan",15: "nan",16: "nan",17: "nan",18: 'yes',19: 'yes',20: 'yes',21: 'yes',22: 'yes',23: 'yes',24: 'yes',25: 'yes',26: 'yes',27: 'yes',28: 'yes',29: 'yes',30: 'yes',31: "nan",32: "nan",33: "nan",34: "nan",35: "nan",36: 'yes',37: 'yes',38: 'yes',39: 'yes',40: 'yes',41: 'yes',42: 'yes',43: 'yes',44: 'yes',45: 'yes',46: 'yes',47: 'yes',48: 'yes',49: 'yes',50: "nan",51: "nan",52: "nan",53: "nan",54: 'yes',55: 'yes',56: 'yes',57: 'yes',58: 'yes',59: 'yes',60: 'yes',61: 'yes',62: 'yes',63: 'yes',64: 'yes',65: 'yes',66: 'yes',67: 'yes',68: 'yes',69: 'yes',70: 'yes',71: 'yes',72: 'yes',73: 'yes',74: 'yes',75: 'yes',76: 'yes',77: 'yes',78: 'yes',79: 'yes',80: 'yes',81: 'yes',82: 'yes',83: "nan",84: "nan",85: 'yes',86: 'yes',87: 'yes',88: 'yes',89: 'yes',90: 'yes',91: 'yes',92: 'yes',93: 'yes',94: 'yes',95: 'yes',96: 'yes',97: 'yes',98: 'yes',99: 'yes',100: 'yes',101: 'yes',102: 'yes',103: 'yes',104: 'yes',105: 'yes',106: 'yes',107: 'yes',108: 'yes',109: 'yes',110: 'yes',111: 'yes',112: 'yes',113: 'yes',114: 'yes',115: 'yes',116: "nan",117: "nan"},'Nonmetal': {0: 'yes',1: 'yes',2: "nan",3: "nan",4: "nan",5: 'yes',6: 'yes',7: 'yes',8: 'yes',9: 'yes',10: "nan",11: "nan",12: "nan",13: "nan",14: 'yes',15: 'yes',16: 'yes',17: 'yes',18: "nan",19: "nan",20: "nan",21: "nan",22: "nan",23: "nan",24: "nan",25: "nan",26: "nan",27: "nan",28: "nan",29: "nan",30: "nan",31: "nan",32: "nan",33: 'yes',34: 'yes',35: 'yes',36: "nan",37: "nan",38: "nan",39: "nan",40: "nan",41: "nan",42: "nan",43: "nan",44: "nan",45: "nan",46: "nan",47: "nan",48: "nan",49: "nan",50: "nan",51: "nan",52: 'yes',53: 'yes',54: "nan",55: "nan",56: "nan",57: "nan",58: "nan",59: "nan",60: "nan",61: "nan",62: "nan",63: "nan",64: "nan",65: "nan",66: "nan",67: "nan",68: "nan",69: "nan",70: "nan",71: "nan",72: "nan",73: "nan",74: "nan",75: "nan",76: "nan",77: "nan",78: "nan",79: "nan",80: "nan",81: "nan",82: "nan",83: "nan",84: 'yes',85: "nan",86: "nan",87: "nan",88: "nan",89: "nan",90: "nan",91: "nan",92: "nan",93: "nan",94: "nan",95: "nan",96: "nan",97: "nan",98: "nan",99: "nan",100: "nan",101: "nan",102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: 'yes',117: 'yes'},'Metalloid': {0: "nan",1: "nan",2: "nan",3: "nan",4: 'yes',5: "nan",6: "nan",7: "nan",8: "nan",9: "nan",10: "nan",11: "nan",12: "nan",13: 'yes',14: "nan",15: "nan",16: "nan",17: "nan",18: "nan",19: "nan",20: "nan",21: "nan",22: "nan",23: "nan",24: "nan",25: "nan",26: "nan",27: "nan",28: "nan",29: "nan",30: "nan",31: 'yes',32: 'yes',33: "nan",34: "nan",35: "nan",36: "nan",37: "nan",38: "nan",39: "nan",40: "nan",41: "nan",42: "nan",43: "nan",44: "nan",45: "nan",46: "nan",47: "nan",48: "nan",49: "nan",50: 'yes',51: 'yes',52: "nan",53: "nan",54: "nan",55: "nan",56: "nan",57: "nan",58: "nan",59: "nan",60: "nan",61: "nan",62: "nan",63: "nan",64: "nan",65: "nan",66: "nan",67: "nan",68: "nan",69: "nan",70: "nan",71: "nan",72: "nan",73: "nan",74: "nan",75: "nan",76: "nan",77: "nan",78: "nan",79: "nan",80: "nan",81: "nan",82: "nan",83: 'yes',84: "nan",85: "nan",86: "nan",87: "nan",88: "nan",89: "nan",90: "nan",91: "nan",92: "nan",93: "nan",94: "nan",95: "nan",96: "nan",97: "nan",98: "nan",99: "nan",100: "nan",101: "nan",102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'Type': {0: 'Nonmetal',1: 'Noble Gas',2: 'Alkali Metal',3: 'Alkaline Earth Metal',4: 'Metalloid',5: 'Nonmetal',6: 'Nonmetal',7: 'Nonmetal',8: 'Halogen',9: 'Noble Gas',10: 'Alkali Metal',11: 'Alkaline Earth Metal',12: 'Metal',13: 'Metalloid',14: 'Nonmetal',15: 'Nonmetal',16: 'Halogen',17: 'Noble Gas',18: 'Alkali Metal',19: 'Alkaline Earth Metal',20: 'Transition Metal',21: 'Transition Metal',22: 'Transition Metal',23: 'Transition Metal',24: 'Transition Metal',25: 'Transition Metal',26: 'Transition Metal',27: 'Transition Metal',28: 'Transition Metal',29: 'Transition Metal',30: 'Metal',31: 'Metalloid',32: 'Metalloid',33: 'Nonmetal',34: 'Halogen',35: 'Noble Gas',36: 'Alkali Metal',37: 'Alkaline Earth Metal',38: 'Transition Metal',39: 'Transition Metal',40: 'Transition Metal',41: 'Transition Metal',42: 'Transition Metal',43: 'Transition Metal',44: 'Transition Metal',45: 'Transition Metal',46: 'Transition Metal',47: 'Transition Metal',48: 'Metal',49: 'Metal',50: 'Metalloid',51: 'Metalloid',52: 'Halogen',53: 'Noble Gas',54: 'Alkali Metal',55: 'Alkaline Earth Metal',56: 'Lanthanide',57: 'Lanthanide',58: 'Lanthanide',59: 'Lanthanide',60: 'Lanthanide',61: 'Lanthanide',62: 'Lanthanide',63: 'Lanthanide',64: 'Lanthanide',65: 'Lanthanide',66: 'Lanthanide',67: 'Lanthanide',68: 'Lanthanide',69: 'Lanthanide',70: 'Lanthanide',71: 'Transition Metal',72: 'Transition Metal',73: 'Transition Metal',74: 'Transition Metal',75: 'Transition Metal',76: 'Transition Metal',77: 'Transition Metal',78: 'Transition Metal',79: 'Transition Metal',80: 'Metal',81: 'Metal',82: 'Metal',83: 'Metalloid',84: 'Noble Gas',85: 'Alkali Metal',86: 'Alkaline Earth Metal',87: 'Actinide',88: 'Actinide',89: 'Actinide',90: 'Actinide',91: 'Actinide',92: 'Actinide',93: 'Actinide',94: 'Actinide',95: 'Actinide',96: 'Actinide',97: 'Actinide',98: 'Actinide',99: 'Actinide',100: 'Actinide',101: 'Actinide',102: 'Actinide',103: 'Transactinide',104: 'Transactinide',105: 'Transactinide',106: 'Transactinide',107: 'Transactinide',108: 'Transactinide',109: 'Transactinide',110: 'Transactinide',111: 'Transactinide',112: "nan",113: 'Transactinide',114: "nan",115: 'Transactinide',116: "nan",117: 'Noble Gas'},'AtomicRadius': {0: 0.79,1: 0.49,2: 2.1,3: 1.4,4: 1.2,5: 0.91,6: 0.75,7: 0.65,8: 0.57,9: 0.51,10: 2.2,11: 1.7,12: 1.8,13: 1.5,14: 1.2,15: 1.1,16: 0.97,17: 0.88,18: 2.8,19: 2.2,20: 2.1,21: 2.0,22: 1.9,23: 1.9,24: 1.8,25: 1.7,26: 1.7,27: 1.6,28: 1.6,29: 1.5,30: 1.8,31: 1.5,32: 1.3,33: 1.2,34: 1.1,35: 1.0,36: 3.0,37: 2.5,38: 2.3,39: 2.2,40: 2.1,41: 2.0,42: 2.0,43: 1.9,44: 1.8,45: 1.8,46: 1.8,47: 1.7,48: 2.0,49: 1.7,50: 1.5,51: 1.4,52: 1.3,53: 1.2,54: 3.3,55: 2.8,56: 2.7,57: 2.7,58: 2.7,59: 2.6,60: 2.6,61: 2.6,62: 2.6,63: 2.5,64: 2.5,65: 2.5,66: 2.5,67: 2.5,68: 2.4,69: 2.4,70: 2.3,71: 2.2,72: 2.1,73: 2.0,74: 2.0,75: 1.9,76: 1.9,77: 1.8,78: 1.8,79: 1.8,80: 2.1,81: 1.8,82: 1.6,83: 1.5,84: 1.4,85: 1.3,86: "nan",87: "nan",88: "nan",89: "nan",90: "nan",91: "nan",92: "nan",93: "nan",94: "nan",95: "nan",96: "nan",97: "nan",98: "nan",99: "nan",100: "nan",101: "nan",102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'Electronegativity': {0: 2.2,1: "nan",2: 0.98,3: 1.57,4: 2.04,5: 2.55,6: 3.04,7: 3.44,8: 3.98,9: "nan",10: 0.93,11: 1.31,12: 1.61,13: 1.9,14: 2.19,15: 2.58,16: 3.16,17: "nan",18: 0.82,19: 1.0,20: 1.36,21: 1.54,22: 1.63,23: 1.66,24: 1.55,25: 1.83,26: 1.88,27: 1.91,28: 1.9,29: 1.65,30: 1.81,31: 2.01,32: 2.18,33: 2.55,34: 2.96,35: "nan",36: 0.82,37: 0.95,38: 1.22,39: 1.33,40: 1.6,41: 2.16,42: 1.9,43: 2.2,44: 2.28,45: 2.2,46: 1.93,47: 1.69,48: 1.78,49: 1.96,50: 2.05,51: 2.1,52: 2.66,53: "nan",54: 0.79,55: 0.89,56: 1.1,57: 1.12,58: 1.13,59: 1.14,60: 1.13,61: 1.17,62: 1.2,63: 1.2,64: 1.2,65: 1.22,66: 1.23,67: 1.24,68: 1.25,69: 1.1,70: 1.27,71: 1.3,72: 1.5,73: 2.36,74: 1.9,75: 2.2,76: 2.2,77: 2.28,78: 2.54,79: 2.0,80: 2.04,81: 2.33,82: 2.02,83: 2.0,84: 2.2,85: "nan",86: 0.7,87: 0.9,88: 1.1,89: 1.3,90: 1.5,91: 1.38,92: 1.36,93: 1.28,94: 1.3,95: 1.3,96: 1.3,97: 1.3,98: 1.3,99: 1.3,100: 1.3,101: 1.3,102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'FirstIonization': {0: 13.5984,1: 24.5874,2: 5.3917,3: 9.3227,4: 8.298,5: 11.2603,6: 14.5341,7: 13.6181,8: 17.4228,9: 21.5645,10: 5.1391,11: 7.6462,12: 5.9858,13: 8.1517,14: 10.4867,15: 10.36,16: 12.9676,17: 15.7596,18: 4.3407,19: 6.1132,20: 6.5615,21: 6.8281,22: 6.7462,23: 6.7665,24: 7.434,25: 7.9024,26: 7.881,27: 7.6398,28: 7.7264,29: 9.3942,30: 5.9993,31: 7.8994,32: 9.7886,33: 9.7524,34: 11.8138,35: 13.9996,36: 4.1771,37: 5.6949,38: 6.2173,39: 6.6339,40: 6.7589,41: 7.0924,42: 7.28,43: 7.3605,44: 7.4589,45: 8.3369,46: 7.5762,47: 8.9938,48: 5.7864,49: 7.3439,50: 8.6084,51: 9.0096,52: 10.4513,53: 12.1298,54: 3.8939,55: 5.2117,56: 5.5769,57: 5.5387,58: 5.473,59: 5.525,60: 5.582,61: 5.6437,62: 5.6704,63: 6.1501,64: 5.8638,65: 5.9389,66: 6.0215,67: 6.1077,68: 6.1843,69: 6.2542,70: 5.4259,71: 6.8251,72: 7.5496,73: 7.864,74: 7.8335,75: 8.4382,76: 8.967,77: 8.9587,78: 9.2255,79: 10.4375,80: 6.1082,81: 7.4167,82: 7.2856,83: 8.417,84: 9.3,85: 10.7485,86: 4.0727,87: 5.2784,88: 5.17,89: 6.3067,90: 5.89,91: 6.1941,92: 6.2657,93: 6.0262,94: 5.9738,95: 5.9915,96: 6.1979,97: 6.2817,98: 6.42,99: 6.5,100: 6.58,101: 6.65,102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'Density': {0: 8.99e-05,1: 0.000179,2: 0.534,3: 1.85,4: 2.34,5: 2.27,6: 0.00125,7: 0.00143,8: 0.0017,9: 0.0009,10: 0.971,11: 1.74,12: 2.7,13: 2.33,14: 1.82,15: 2.07,16: 0.00321,17: 0.00178,18: 0.862,19: 1.54,20: 2.99,21: 4.54,22: 6.11,23: 7.15,24: 7.44,25: 7.87,26: 8.86,27: 8.91,28: 8.96,29: 7.13,30: 5.91,31: 5.32,32: 5.78,33: 4.81,34: 3.12,35: 0.00373,36: 1.53,37: 2.64,38: 4.47,39: 6.51,40: 8.57,41: 10.2,42: 11.5,43: 12.4,44: 12.4,45: 12.0,46: 10.5,47: 8.69,48: 7.31,49: 7.29,50: 6.69,51: 6.23,52: 4.93,53: 0.00589,54: 1.87,55: 3.59,56: 6.15,57: 6.77,58: 6.77,59: 7.01,60: 7.26,61: 7.52,62: 5.24,63: 7.9,64: 8.23,65: 8.55,66: 8.8,67: 9.07,68: 9.32,69: 6.97,70: 9.84,71: 13.3,72: 16.7,73: 19.3,74: 21.0,75: 22.6,76: 22.6,77: 21.5,78: 19.3,79: 13.5,80: 11.9,81: 11.3,82: 9.81,83: 9.32,84: 7.0,85: 0.00973,86: 1.87,87: 5.5,88: 10.1,89: 11.7,90: 15.4,91: 19.0,92: 20.5,93: 19.8,94: 13.7,95: 13.5,96: 14.8,97: 15.1,98: 13.5,99: "nan",100: "nan",101: "nan",102: "nan",103: 18.1,104: 39.0,105: 35.0,106: 37.0,107: 41.0,108: 35.0,109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'MeltingPoint': {0: 14.175,1: "nan",2: 453.85,3: 1560.15,4: 2573.15,5: 3948.15,6: 63.29,7: 50.5,8: 53.63,9: 24.703,10: 371.15,11: 923.15,12: 933.4,13: 1683.15,14: 317.25,15: 388.51,16: 172.31,17: 83.96,18: 336.5,19: 1112.15,20: 1812.15,21: 1933.15,22: 2175.15,23: 2130.15,24: 1519.15,25: 1808.15,26: 1768.15,27: 1726.15,28: 1357.75,29: 692.88,30: 302.91,31: 1211.45,32: 1090.15,33: 494.15,34: 266.05,35: 115.93,36: 312.79,37: 1042.15,38: 1799.15,39: 2125.15,40: 2741.15,41: 2890.15,42: 2473.15,43: 2523.15,44: 2239.15,45: 1825.15,46: 1234.15,47: 594.33,48: 429.91,49: 505.21,50: 904.05,51: 722.8,52: 386.65,53: 161.45,54: 301.7,55: 1002.15,56: 1193.15,57: 1071.15,58: 1204.15,59: 1289.15,60: 1204.15,61: 1345.15,62: 1095.15,63: 1585.15,64: 1630.15,65: 1680.15,66: 1743.15,67: 1795.15,68: 1818.15,69: 1097.15,70: 1936.15,71: 2500.15,72: 3269.15,73: 3680.15,74: 3453.15,75: 3300.15,76: 2716.15,77: 2045.15,78: 1337.73,79: 234.43,80: 577.15,81: 600.75,82: 544.67,83: 527.15,84: 575.15,85: 202.15,86: 300.15,87: 973.15,88: 1323.15,89: 2028.15,90: 1873.15,91: 1405.15,92: 913.15,93: 913.15,94: 1267.15,95: 1340.15,96: 1259.15,97: 1925.15,98: 1133.15,99: "nan",100: "nan",101: "nan",102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'BoilingPoint': {0: 20.28,1: 4.22,2: 1615.0,3: 2742.0,4: 4200.0,5: 4300.0,6: 77.36,7: 90.2,8: 85.03,9: 27.07,10: 1156.0,11: 1363.0,12: 2792.0,13: 3538.0,14: 553.0,15: 717.8,16: 239.11,17: 87.3,18: 1032.0,19: 1757.0,20: 3109.0,21: 3560.0,22: 3680.0,23: 2944.0,24: 2334.0,25: 3134.0,26: 3200.0,27: 3186.0,28: 2835.0,29: 1180.0,30: 2477.0,31: 3106.0,32: 887.0,33: 958.0,34: 332.0,35: 119.93,36: 961.0,37: 1655.0,38: 3609.0,39: 4682.0,40: 5017.0,41: 4912.0,42: 5150.0,43: 4423.0,44: 3968.0,45: 3236.0,46: 2435.0,47: 1040.0,48: 2345.0,49: 2875.0,50: 1860.0,51: 1261.0,52: 457.4,53: 165.03,54: 944.0,55: 2170.0,56: 3737.0,57: 3716.0,58: 3793.0,59: 3347.0,60: 3273.0,61: 2067.0,62: 1802.0,63: 3546.0,64: 3503.0,65: 2840.0,66: 2993.0,67: 3503.0,68: 2223.0,69: 1469.0,70: 3675.0,71: 4876.0,72: 5731.0,73: 5828.0,74: 5869.0,75: 5285.0,76: 4701.0,77: 4098.0,78: 3129.0,79: 630.0,80: 1746.0,81: 2022.0,82: 1837.0,83: 1235.0,84: 610.0,85: 211.3,86: 950.0,87: 2010.0,88: 3471.0,89: 5061.0,90: 4300.0,91: 4404.0,92: 4273.0,93: 3501.0,94: 2880.0,95: 3383.0,96: 983.0,97: 1173.0,98: "nan",99: "nan",100: "nan",101: "nan",102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'NumberOfIsotopes': {0: 3.0,1: 5.0,2: 5.0,3: 6.0,4: 6.0,5: 7.0,6: 8.0,7: 8.0,8: 6.0,9: 8.0,10: 7.0,11: 8.0,12: 8.0,13: 8.0,14: 7.0,15: 10.0,16: 11.0,17: 8.0,18: 10.0,19: 14.0,20: 15.0,21: 9.0,22: 9.0,23: 9.0,24: 11.0,25: 10.0,26: 14.0,27: 11.0,28: 11.0,29: 15.0,30: 14.0,31: 17.0,32: 14.0,33: 20.0,34: 19.0,35: 23.0,36: 20.0,37: 18.0,38: 21.0,39: 20.0,40: 24.0,41: 20.0,42: 23.0,43: 16.0,44: 20.0,45: 21.0,46: 27.0,47: 22.0,48: 34.0,49: 28.0,50: 29.0,51: 29.0,52: 24.0,53: 31.0,54: 22.0,55: 25.0,56: 19.0,57: 19.0,58: 15.0,59: 16.0,60: 14.0,61: 17.0,62: 21.0,63: 17.0,64: 24.0,65: 21.0,66: 29.0,67: 16.0,68: 18.0,69: 16.0,70: 22.0,71: 17.0,72: 19.0,73: 22.0,74: 21.0,75: 19.0,76: 25.0,77: 32.0,78: 21.0,79: 26.0,80: 28.0,81: 29.0,82: 19.0,83: 34.0,84: 21.0,85: 20.0,86: 21.0,87: 15.0,88: 11.0,89: 12.0,90: 14.0,91: 15.0,92: 153.0,93: 163.0,94: 133.0,95: 133.0,96: 83.0,97: 123.0,98: 123.0,99: 103.0,100: 33.0,101: 73.0,102: 203.0,103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'Discoverer': {0: 'Cavendish',1: 'Janssen',2: 'Arfvedson',3: 'Vaulquelin',4: 'Gay-Lussac',5: 'Prehistoric',6: 'Rutherford',7: 'Priestley/Scheele',8: 'Moissan',9: 'Ramsay and Travers',10: 'Davy',11: 'Black',12: 'Wshler',13: 'Berzelius',14: 'BranBrand',15: 'Prehistoric',16: 'Scheele',17: 'Rayleigh and Ramsay',18: 'Davy',19: 'Davy',20: 'Nilson',21: 'Gregor',22: '   del Rio',23: 'Vauquelin',24: 'Gahn, Scheele',25: 'Prehistoric',26: 'Brandt',27: 'Cronstedt',28: 'Prehistoric',29: 'Prehistoric',30: 'de Boisbaudran',31: 'Winkler',32: 'Albertus Magnus',33: 'Berzelius',34: 'Balard',35: 'Ramsay and Travers',36: 'Bunsen and Kirchoff',37: 'Davy',38: 'Gadolin',39: 'Klaproth',40: 'Hatchett',41: 'Scheele',42: 'Perrier and Segr�',43: 'Klaus',44: 'Wollaston',45: 'Wollaston',46: 'Prehistoric',47: 'Stromeyer',48: 'Reich and Richter',49: 'Prehistoric',50: 'Early historic times',51: 'von Reichenstein',52: 'Courtois',53: 'Ramsay and Travers',54: 'Bunsen and Kirchoff',55: 'Davy',56: 'Mosander',57: 'Berzelius',58: 'von Welsbach',59: 'von Welsbach',60: 'Marinsky et al.',61: 'Boisbaudran',62: 'Demarcay',63: 'de Marignac',64: 'Mosander',65: 'de Boisbaudran',66: 'Delafontaine and Soret',67: 'Mosander',68: 'Cleve',69: 'Marignac',70: 'Urbain/ von Welsbach',71: 'Coster and von Hevesy',72: 'Ekeberg',73: "J. and F. d'Elhuyar",74: 'Noddack, Berg, and Tacke',75: 'Ten"nan"t',76: 'Ten"nan"t',77: 'Ulloa/Wood',78: 'Prehistoric',79: 'Prehistoric',80: 'Crookes',81: 'Prehistoric',82: 'Geoffroy the Younger',83: 'Curie',84: 'Corson et al.',85: 'Dorn',86: 'Perey',87: 'Pierre and Marie Curie',88: 'Debierne/Giesel',89: 'Berzelius',90: 'Hahn and Meitner',91: 'Peligot',92: 'McMillan and Abelson',93: 'Seaborg et al.',94: 'Seaborg et al.',95: 'Seaborg et al.',96: 'Seaborg et al.',97: 'Seaborg et al.',98: 'Ghiorso et al.',99: 'Ghiorso et al.',100: 'Ghiorso et al.',101: 'Ghiorso et al.',102: 'Ghiorso et al.',103: 'Ghiorso et al.',104: 'Ghiorso et al.',105: 'Ghiorso et al.',106: 'Armbruster and M�nzenberg',107: 'Armbruster and M�nzenberg',108: 'GSI, Darmstadt, West Germany',109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'Year': {0: 1766.0,1: 1868.0,2: 1817.0,3: 1798.0,4: 1808.0,5: "nan",6: 1772.0,7: 1774.0,8: 1886.0,9: 1898.0,10: 1807.0,11: 1755.0,12: 1827.0,13: 1824.0,14: 1669.0,15: "nan",16: 1774.0,17: 1894.0,18: 1807.0,19: 1808.0,20: 1878.0,21: 1791.0,22: 1801.0,23: 1797.0,24: 1774.0,25: "nan",26: 1735.0,27: 1751.0,28: "nan",29: "nan",30: 1875.0,31: 1886.0,32: 1250.0,33: 1817.0,34: 1826.0,35: 1898.0,36: 1861.0,37: 1808.0,38: 1794.0,39: 1789.0,40: 1801.0,41: 1778.0,42: 1937.0,43: 1844.0,44: 1803.0,45: 1803.0,46: "nan",47: 1817.0,48: 1863.0,49: "nan",50: "nan",51: 1782.0,52: 1811.0,53: 1898.0,54: 1860.0,55: 1808.0,56: 1839.0,57: 1803.0,58: 1885.0,59: 1885.0,60: 1945.0,61: 1879.0,62: 1901.0,63: 1880.0,64: 1843.0,65: 1886.0,66: 1878.0,67: 1843.0,68: 1879.0,69: 1878.0,70: 1907.0,71: 1923.0,72: 1801.0,73: 1783.0,74: 1925.0,75: 1803.0,76: 1804.0,77: 1735.0,78: "nan",79: "nan",80: 1861.0,81: "nan",82: 1753.0,83: 1898.0,84: 1940.0,85: 1900.0,86: 1939.0,87: 1898.0,88: 1899.0,89: 1828.0,90: 1917.0,91: 1841.0,92: 1940.0,93: 1940.0,94: 1944.0,95: 1944.0,96: 1949.0,97: 1950.0,98: 1952.0,99: 1953.0,100: 1955.0,101: 1958.0,102: 1961.0,103: 1969.0,104: 1970.0,105: 1974.0,106: 1981.0,107: 1983.0,108: 1982.0,109: 1994.0,110: 1994.0,111: 1996.0,112: 2004.0,113: 1999.0,114: 2010.0,115: 2000.0,116: 2010.0,117: 2006.0},'SpecificHeat': {0: 14.304,1: 5.193,2: 3.582,3: 1.825,4: 1.026,5: 0.709,6: 1.04,7: 0.918,8: 0.824,9: 1.03,10: 1.228,11: 1.023,12: 0.897,13: 0.705,14: 0.769,15: 0.71,16: 0.479,17: 0.52,18: 0.757,19: 0.647,20: 0.568,21: 0.523,22: 0.489,23: 0.449,24: 0.479,25: 0.449,26: 0.421,27: 0.444,28: 0.385,29: 0.388,30: 0.371,31: 0.32,32: 0.329,33: 0.321,34: 0.474,35: 0.248,36: 0.363,37: 0.301,38: 0.298,39: 0.278,40: 0.265,41: 0.251,42: "nan",43: 0.238,44: 0.243,45: 0.244,46: 0.235,47: 0.232,48: 0.233,49: 0.228,50: 0.207,51: 0.202,52: 0.214,53: 0.158,54: 0.242,55: 0.204,56: 0.195,57: 0.192,58: 0.193,59: 0.19,60: "nan",61: 0.197,62: 0.182,63: 0.236,64: 0.182,65: 0.17,66: 0.165,67: 0.168,68: 0.16,69: 0.155,70: 0.154,71: 0.144,72: 0.14,73: 0.132,74: 0.137,75: 0.13,76: 0.131,77: 0.133,78: 0.129,79: 0.14,80: 0.129,81: 0.129,82: 0.122,83: "nan",84: "nan",85: 0.094,86: "nan",87: "nan",88: 0.12,89: 0.113,90: "nan",91: 0.116,92: "nan",93: "nan",94: "nan",95: "nan",96: "nan",97: "nan",98: "nan",99: "nan",100: "nan",101: "nan",102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: "nan",113: "nan",114: "nan",115: "nan",116: "nan",117: "nan"},'NumberofShells': {0: 1,1: 1,2: 2,3: 2,4: 2,5: 2,6: 2,7: 2,8: 2,9: 2,10: 3,11: 3,12: 3,13: 3,14: 3,15: 3,16: 3,17: 3,18: 4,19: 4,20: 4,21: 4,22: 4,23: 4,24: 4,25: 4,26: 4,27: 4,28: 4,29: 4,30: 4,31: 4,32: 4,33: 4,34: 4,35: 4,36: 5,37: 5,38: 5,39: 5,40: 5,41: 5,42: 5,43: 5,44: 5,45: 5,46: 5,47: 5,48: 5,49: 5,50: 5,51: 5,52: 5,53: 5,54: 6,55: 6,56: 6,57: 6,58: 6,59: 6,60: 6,61: 6,62: 6,63: 6,64: 6,65: 6,66: 6,67: 6,68: 6,69: 6,70: 6,71: 6,72: 6,73: 6,74: 6,75: 6,76: 6,77: 6,78: 6,79: 6,80: 6,81: 6,82: 6,83: 6,84: 6,85: 6,86: 7,87: 7,88: 7,89: 7,90: 7,91: 7,92: 7,93: 7,94: 7,95: 7,96: 7,97: 7,98: 7,99: 7,100: 7,101: 7,102: 7,103: 7,104: 7,105: 7,106: 7,107: 7,108: 7,109: 7,110: 7,111: 7,112: 7,113: 7,114: 7,115: 7,116: 7,117: 7},'NumberofValence': {0: 1.0,1: "nan",2: 1.0,3: 2.0,4: 3.0,5: 4.0,6: 5.0,7: 6.0,8: 7.0,9: 8.0,10: 1.0,11: 2.0,12: 3.0,13: 4.0,14: 5.0,15: 6.0,16: 7.0,17: 8.0,18: 1.0,19: 2.0,20: "nan",21: "nan",22: "nan",23: "nan",24: "nan",25: "nan",26: "nan",27: "nan",28: "nan",29: "nan",30: 3.0,31: 4.0,32: 5.0,33: 6.0,34: 7.0,35: 8.0,36: 1.0,37: 2.0,38: "nan",39: "nan",40: "nan",41: "nan",42: "nan",43: "nan",44: "nan",45: "nan",46: "nan",47: "nan",48: 3.0,49: 4.0,50: 5.0,51: 6.0,52: 7.0,53: 8.0,54: 1.0,55: 2.0,56: "nan",57: "nan",58: "nan",59: "nan",60: "nan",61: "nan",62: "nan",63: "nan",64: "nan",65: "nan",66: "nan",67: "nan",68: "nan",69: "nan",70: "nan",71: "nan",72: "nan",73: "nan",74: "nan",75: "nan",76: "nan",77: "nan",78: "nan",79: "nan",80: 3.0,81: 4.0,82: 5.0,83: 6.0,84: 7.0,85: 8.0,86: 1.0,87: 2.0,88: "nan",89: "nan",90: "nan",91: "nan",92: "nan",93: "nan",94: "nan",95: "nan",96: "nan",97: "nan",98: "nan",99: "nan",100: "nan",101: "nan",102: "nan",103: "nan",104: "nan",105: "nan",106: "nan",107: "nan",108: "nan",109: "nan",110: "nan",111: "nan",112: 3.0,113: 4.0,114: 5.0,115: 6.0,116: 7.0,117: 8.0}}
+        #}}}        
+    # get_formula_weights: {{{
+    def get_formula_weights(self):
+        '''
+        This function will take the formulas provided at initialization
+        and decompose them to give you the mass of the substance
+        '''
+        fws = {}
+        # Get Formula Weights: {{{
+        for formula in self._formulas: 
+            masses = []
+            components = re.findall(r'[A-Z]{1}[a-z]?\d+|[A-Z][a-z]?',formula)
+            for element in components:
+                # find the coefficient: {{{
+                try:
+                    multiplier = int(re.findall(r'\d+',element)[0])
+                    element = re.findall(r'[A-Z]{1}[a-z]?',element)[0]
+                except:
+                    multiplier = 1
+                #}}}
+                # Get the mass of the element: {{{
+                all_elements = list(self._ptable['Symbol'].values())
+                try:
+                    el_num = all_elements.index(element)
+                    fw = self._ptable['AtomicMass'][el_num]
+                    mass = fw * multiplier
+                    masses.append(mass)
+                except:
+                    raise ValueError(f'Element: {element} Not Found!')
+                #}}}
+            fw = sum(masses)
+            fws[formula] = fw
+
+        #}}}
+        return fws
+    #}}}
+#}}}
 # TOPAS_Refinements: {{{
-class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
+class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
     # __init__: {{{
     def __init__(self,
             topas_version:int = 6,
@@ -826,6 +929,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         Utils.__init__(self)
         UsefulUnicode.__init__(self)
         OUT_Parser.__init__(self)
+        GenericPlotter.__init__(self)
         self._data_collected = False # This tracks if the "get_data" function was run
         self.color_index = 0
         #}}}
@@ -851,23 +955,30 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             reverse_order:bool = False,
             get_individual_phases:bool = False,
             subtract_bkg:bool = True,
-            phases_to_disable:list = None,
-            threshold_for_off:float = 0.01,
             phases_to_enable:list = None,
+            phases_to_disable:list = None,
             threshold_for_on:float = 0.0195, # this was obtained by looking at an Rwp curve 
+            threshold_for_off:float = 0.01, 
             off_sf_value:float = 1.0e-100,
             on_sf_value:float = 1.0e-5,
-            debug:bool = False,
+            debug:bool = False,  
         ):
         '''
         Code to run automated Rietveld Refinements based on Adam/Gerry's Code
 
         subtract_bkg: This will remove background terms from the individual phase contributions to ycalc
-        scale_factors_to_monitor: you can give either a list or a string of the phase scale factor to monitor.
-        threshold_for_scale_factor: This is the value the normalize scale factor can be below which, the program will set the scale factor to 0.
+
+        phases_to_enable: This is a list of phases you would like to have added as the refinement progresses. 
+        phases_to_disable: you can give either a list or a string of the phase scale factor to monitor.
+
+        threshold_for_off: This is the value the normalize scale factor can be below which, the program will set the scale factor to 0.
+        threshold_for_on: this is a percentage above your initial Rwp. When it passes this, the new phase turns on.
+
+        polymorph_tags is a dictionary that allows us to specify a tag to accompany a formula name. 
+            ex: 'Ta2O5' is the key and the value could be a list: ['HT', 'LT']
         
-        phases_to_add: This is a list of phases you would like to have added as the refinement progresses. 
-        threshold_to_add_phase: this is a percentage above your initial Rwp. When it passes this, the new phase turns on.
+        NOTE: for each of the thresholds, you can also give a list of thresholds (indices must match those of the phases you give)
+        
         '''
         # if you input a string for either "phases_to_disable" or "phases_to_enable": {{{
         if type(phases_to_disable) == list or phases_to_disable== None:
@@ -880,6 +991,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             phases_to_enable= [phases_to_enable] # Make it match the type expected.
         self._out_file_monitor = {} # This is the monitoring dictionary.   
         #}}}
+
         self.reverse_order = reverse_order # This will keep track of if you chose to reverse the order in case that info is needed elsewhere.
         # Navigate the Filesystem to the appropriate directories: {{{
         if not data_dir:
@@ -949,13 +1061,23 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 template[txt_out_linenum] = f'out_prm_vals_on_convergence "{output}.txt"\n' # I am making this a text file since I manually output csv files. This would overwrite those.
             if my_csv_line: 
                 template[my_csv_line] = f'out "{output}.csv"\n'
+
+            
             if phase_hkli_out:
                 for phase_i, line_idx in enumerate(phase_hkli_out):
                     # We need to use Re to get the phase ID
                     lne = phase_hkli_line[phase_i]
                     fn_str = lne.split('(') [-1] # This takes whatever is written in the text field
-                    found = re.findall(r'(\w+\d?)*',fn_str)[0]
-                    formula = found.split('_')[0]
+                    found = re.findall(r'(\w+\d?)*',fn_str)[0] # This will give all of the text you put for the filename. 
+                    split_hkli_fn = found.split('_')
+                    formula = []
+                    for word in split_hkli_fn:
+                        if word != 'result':
+                            formula.append(word)
+                        else:
+                            break
+                    #formula = found.split('_')[0]
+                    formula = '_'.join(formula) 
                     template[line_idx] = f'\tCreate_hklm_d_Th2_Ip_file({formula}_{output}.hkli)\n'
 
             # Use the Dummy.inp file: {{{
@@ -973,8 +1095,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             Both will be handled with the same function.
             '''
             out = 'Dummy.out' # This is the name of the file we are looking for.
-            if phases_to_disable != None or phases_to_enable != None: 
-                
+            if phases_to_disable != None or phases_to_enable != None:  
                 self._modify_out_for_monitoring(
                         out=out, 
                         on_phases=phases_to_enable,
@@ -985,7 +1106,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                         off_sf_value=off_sf_value,
                         on_sf_value=on_sf_value,
                         debug=debug
-                        )
+                    )
 
                 
             #}}}
@@ -1017,7 +1138,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
 
     #}}}
     # _get_relevant_lines_for_monitoring: {{{ 
-    def _get_relevant_lines_for_monitoring(self,out:str = None,  off_phases:list = None, on_phases:list = None, debug:bool = False):
+    def _get_relevant_lines_for_monitoring(self,out:str = None,  off_phases:list = None, on_phases:list = None, threshold_for_off:float = None, threshold_for_on:float = None, debug:bool = False):
         '''
         Since we are adding more kinds of monitoring than simply scale factor to remove a phase, 
         it seems fitting that we should create some kind of framework to make the task of accomplishing this easier.
@@ -1042,6 +1163,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     str_value = line_prms[2] # The third item is the value (may include an error oo.)
                     # Handle cases where you want to turn a phase off: {{{
                     for j, off in enumerate(off_phases):
+                        # assign its threshold: {{{
+                        try:
+                            threshold = threshold_for_off[j] # If the user gave a list of thresholds for each phase...
+                        except:
+                            threshold = threshold_for_off
+                        #}}}
                         #define the index for the dict: {{{ 
                         if j == 0 and len(relevant_lines) == 0:
                             # This is the first entry
@@ -1063,31 +1190,40 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                                     'value': value, 
                                     'name': prm_name, 
                                     'string_number':str_value,
-                                    'type': 'off'
-                            }# Record the line
+                                    'type': 'off',
+                                    'threshold': threshold,
+                            }# Record the line 
+                            
                             if j == len(off_phases):
                                 break # If you reach the end, no point in reading more lines.
                     #}}}
                     # Handle the cases where you want to turn on a phase: {{{
-    
-                    for j, on in enumerate(on_phases):
-                        if j == 0 and len(relevant_lines) == 0:
-                            k = j
-                        else:
-                            k = len(relevant_lines)
-                        if on.lower() in prm_name.lower():
-                            value = self._parse_scale_factor_line(line,debug)
-                            relevant_lines[k] = {
-                                'linenumber': i, 
-                                'line': line, 
-                                'value': value, 
-                                'name':prm_name, 
-                                'string_number': str_value,
-                                'type': 'on',
-                                'rwp':rwp,
-                            } # record the line
-                            if j == len(off_phases)-1:
-                                break # IF you reach the end, stop reading
+                    if on_phases != None:
+                        for j, on in enumerate(on_phases):
+                            # Assign its threshold: {{{
+                            try:
+                                threshold = threshold_for_on[j]  # IF the user gave a list of thresholds
+                            except:
+                                threshold = threshold_for_on
+                            #}}}
+                            if j == 0 and len(relevant_lines) == 0:
+                                k = j
+                            else:
+                                k = len(relevant_lines)
+                            if on.lower() in prm_name.lower():
+                                value = self._parse_scale_factor_line(line,debug)
+                                relevant_lines[k] = {
+                                    'linenumber': i, 
+                                    'line': line, 
+                                    'value': value, 
+                                    'name':prm_name, 
+                                    'string_number': str_value,
+                                    'type': 'on',
+                                    'threshold':threshold,
+                                    'rwp':rwp,
+                                } # record the line 
+                                if j == len(off_phases)-1:
+                                    break # IF you reach the end, stop reading
     
                     #}}}
             #}}}
@@ -1108,6 +1244,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         relevant_line = lines[line_idx] # Recall the line we stored 
                         
         relevant_line = relevant_line.replace(str_num, str(replacement_value)) # Replace the value with zero must be like this to not mess up other things.
+        if 'min 0' not in relevant_line:
+            relevant_line = f'{relevant_line} min 0' #this makes sure that the phase actually is disabled. 
         #relevant_line = relevant_line.replace(name, f'!{name}') # Replace the variable name with the variable name plus ! which will fix the value to zero 
         lines[line_idx] = relevant_line
         #line.replace(name,f'!{name}') # This locks the phase to 0
@@ -1144,9 +1282,11 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         current_idx: this is the current index of patterns you have refined.        
 
         out: this is the output file's filename.
+
+        This needs to be able to also take into account, things written after the tag for the formula. e.g. Ta2O5_HT
         '''
         # get the relevant lines: {{{
-        relevant_lines = self._get_relevant_lines_for_monitoring(out, off_phases,on_phases,debug)
+        relevant_lines = self._get_relevant_lines_for_monitoring(out, off_phases,on_phases,threshold_for_off,threshold_for_on,debug)
         #}}} 
         # check to see if the index is zero or not: {{{
         if current_idx == 0:
@@ -1175,6 +1315,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 current_entry = relevant_lines[key] # This is the current substance entry
                 line_idx = current_entry['linenumber'] # This gives us the linenumber for the scale factor.
                 str_num = current_entry['string_number'] # This is the current string for the scale factor.
+                threshold = current_entry['threshold'] # This is the appropriate threshold for the given phase
 
                 values = entry['values'] # List of the scale factors.
                 name = entry['name'] # should contain the substance name with some other things like "sf_"
@@ -1190,13 +1331,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     try:
                         min_rwp = min(rwps) # This will give us the min Rwp value (remember that low Rwp is good, high Rwp is bad)
                         current_rwp = current_entry['rwp'] # This gives us the current Rwp
-                        rwp_pct_diff = (current_rwp - min_rwp)/min_rwp # If this is positive, that could trigger the turning on of a phase. we are not dealing with a percentage
-                        if rwp_pct_diff >= threshold_for_on and not stopped:
+                        rwp_pct_diff = (current_rwp - min_rwp)/min_rwp # If this is positive, that could trigger the turning on of a phase. we are not dealing with a percentage 
+                        if rwp_pct_diff >= threshold and not stopped:
                             entry['stopped'] = True # We are adding the phase so we can stop monitoring
                             # IF this is the case, we have yet to enable the phase. 
-                            self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=on_sf_value,debug=debug)
-                            #}}}
-                        elif rwp_pct_diff < threshold_for_on:
+                            self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=on_sf_value,debug=debug) 
+                            print(f'ENABLED {name}')
+                        elif rwp_pct_diff < threshold:
                             # No need to add the phase
                             self._out_file_monitor[key]['rwps'].append(current_rwp) # Add the newest Rwp
                     except:
@@ -1205,19 +1346,21 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 #}}}
                 # Handle the Phase OFF Case: {{{
                 elif entry_type == 'off':
-                    if norm_val > threshold_for_off:
+                    if norm_val > threshold:
                         # This means we keep going. The scale factor hasnt fallen far enough
                         entry['values'].append(current_value)
-                    elif norm_val <= threshold_for_off and not stopped:
+                    elif norm_val <= threshold and not stopped:
                         entry['stopped'] = True # We are removing the phase, so stop monitoring it. 
                         # Now, DISABLE the phase: {{{
                         self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=off_sf_value,debug=debug)
+                        print(f'DISABLED {name}')
                         #}}} 
 
                 #}}}
 
             #}}} 
         #}}} 
+    #}}}
     # _monitor_scale_factor: {{{
     def _monitor_scale_factor(self,out:str = None, scale_factors:list = None, threshold:float = None, current_idx:int = None, debug:bool = False, sf_value:float = 1.0e-100):
         '''
@@ -1460,6 +1603,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             sort_hkli:bool = False,
             correlation_threshold:int = 50,
             flag_search:str = 'CHECK',
+            #polymorph_tags:dict = None, 
         ):
         '''
         This will gather and sort all of the output files from your refinements for you. 
@@ -1468,7 +1612,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             This tells the program what each individual entry of the labels mean. 
         sort_hkli:
             This will sort each hkli file by tth but doing so results in a significantly slower processing time.
-        '''
+        polymorph_tags: 
+            This could be a dictionary which contains the substance flag e.g. Ta2O5 and a list of specific versions to look for e.g. HT)
+        ''' 
         self.rietveld_data = {}
         self.sorted_csvs = sorted(glob.glob(f'{csv_prefix}_*.csv')) #gathers csvs with the given prefix
         self.sorted_xy = sorted(glob.glob(f'{xy_prefix}_*.xy'))
@@ -1485,8 +1631,15 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             self._phase_xy = {} # Create a dictionary for the sorted phase xy files
             substances = [] 
             # Get unique substances: {{{
-            for f in self.sorted_hkli:
-                substance = f.split('_')[0] # Since this substance should be exactly the same as for the xy files, we will also match them here too.
+            for f in self.sorted_hkli: 
+                substance = f.split('_') # It is possible that the substance label has more than just the substance in it. 
+                split_sub = []
+                for w in substance:
+                    if w != 'result':
+                        split_sub.append(w)
+                    else:
+                        break
+                substance = '_'.join(split_sub) # Rejoin the substance tag
                 if substance not in substances: 
                     substances.append(substance)
             #}}}
@@ -1505,6 +1658,27 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             for i, fn in enumerate(self.sorted_csvs):
                 print(f'{i}: {fn}\t{self.sorted_xy[i]}')
         #}}}
+        # We need to first check if each of the file lists are of the same length: {{{
+        try:
+            csvs = len(self.sorted_csvs)
+            xys = len(self.sorted_xy)
+            outs = len(self.sorted_out) 
+            if self.sorted_phase_xy:
+                phase_xys = len(self.sorted_phase_xy)
+            else:
+                phase_xys = len(csvs)
+            if self.sorted_bkg_xy:
+                bkg_xys = len(self.sorted_bkg_xy)
+            else:
+                bkg_xys = len(csvs)
+            print(f'csvs: {csvs}\nxys: {xys}\nouts: {outs}\nphase_xys: {phase_xys}\nbkg_xys: {bkg_xys}')
+            
+           
+        except:
+            pass
+        
+        
+        #}}}
         # Categorize the Refined Data: {{{ 
         csvs = tqdm(self.sorted_csvs)
         # import and process CSV, XY, OUT, HKLI:     
@@ -1512,16 +1686,24 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             csvs.set_description_str(f'Reading {csv}: ')
             csv_contents = [float(line) for line in open(csv)] # This gives us the values in the csv. 
             # Handle the XY Data: {{{
-            csvs.set_description_str(f'Reading {self.sorted_xy[i]}: ')
-            ttheta, yobs,ycalc,ydiff = self._parse_xy(self.sorted_xy[i])
+            try:
+                csvs.set_description_str(f'Reading {self.sorted_xy[i]}: ')
+                ttheta, yobs,ycalc,ydiff = self._parse_xy(self.sorted_xy[i])
+            except:
+                ttheta, yobs,ycalc,ydiff = (0,0,0,0)
             #}}}
             # Handle the OUT files: {{{ 
             
             if parse_out_files: 
-                csvs.set_description_str(f'Reading {self.sorted_out[i]}: ')
-                c_matrix = self._parse_c_matrix(out_file=self.sorted_out[i],correlation_threshold= correlation_threshold)
-                out_phase_dict = self._parse_out_phases(out_file=self.sorted_out[i]) # Read the output file.
-                corr_dict = self._get_correlations(c_matrix,flag_search)
+                try:
+                    csvs.set_description_str(f'Reading {self.sorted_out[i]}: ')
+                    c_matrix = self._parse_c_matrix(out_file=self.sorted_out[i],correlation_threshold= correlation_threshold) 
+                    out_phase_dict = self._parse_out_phases(out_file=self.sorted_out[i]) # Read the output file.
+                    corr_dict = self._get_correlations(c_matrix,flag_search)
+                except:
+                    c_matrix = None
+                    out_phase_dict = None
+                    corr_dict = None
             else:
                 c_matrix = None
                 out_phase_dict = None
@@ -1534,7 +1716,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     '''
                     This section is used to get a dictionary for each substance. 
                     '''
-                    hkli_entry = self._hkli[s] # This gets the dictionary entry for each substance.
+                    hkli_entry = self._hkli[s] # This gets the dictionary entry for each substance. 
                     hkli_substance = hkli_entry['substance'] # String of the substance
                     hkli_file = hkli_entry['files'][i] # This is the hkli file we need for our current iter.
                     csvs.set_description_str(f'Reading {hkli_file}: ')
@@ -1552,13 +1734,16 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             bkg_name = None
             
             if self.sorted_bkg_xy:
-                csvs.set_description_str(f'Reading {self.sorted_bkg_xy[i]}: ') # The background should be only 1D with one bkg for each pattern.
-                bkg_tth, bkg_yobs,bkg_ycalc, bkg_ydiff = self._parse_xy(self.sorted_bkg_xy[i]) # Get the data. only care about tth and ycalc.
-                bkg_dict.update({
-                    'tth': bkg_tth,
-                    'ycalc': bkg_ycalc,
-                })
-                bkg_name = self.sorted_bkg_xy[i]
+                try:
+                    csvs.set_description_str(f'Reading {self.sorted_bkg_xy[i]}: ') # The background should be only 1D with one bkg for each pattern.
+                    bkg_tth, bkg_yobs,bkg_ycalc, bkg_ydiff = self._parse_xy(self.sorted_bkg_xy[i]) # Get the data. only care about tth and ycalc.
+                    bkg_dict.update({
+                        'tth': bkg_tth,
+                        'ycalc': bkg_ycalc,
+                    })
+                    bkg_name = self.sorted_bkg_xy[i]
+                except:
+                    self.sorted_bkg_xy = None
             else:
                 self.sorted_bkg_xy = None
             #}}}
@@ -1567,55 +1752,74 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             if self.sorted_phase_xy:
                 for si, s in enumerate(self._phase_xy):
                     # This will get a dictionary for each substance.
-                    phase_xy_entry = self._phase_xy[s]
-                    phase_xy_substance = phase_xy_entry['substance']
-                    phase_xy_file = phase_xy_entry['files'][i] # This is the phase xy file we need for the current iteration.
-                    csvs.set_description_str(f'Reading {phase_xy_file}: ')
-                    tth_p, yobs_p, ycalc_p, ydiff_p = self._parse_xy(phase_xy_file) # This returns: tth, yobs, ycalc, ydiff We are only interested in ycalc and tth
-                    phase_xy_data_dict.update({
-                        si: {
-                            'substance': phase_xy_substance,
-                            'tth': tth_p,
-                            'ycalc': ycalc_p,
-                            'file': phase_xy_file,
-                        }
-                    })
+                    try:
+                        phase_xy_entry = self._phase_xy[s]
+                        phase_xy_substance = phase_xy_entry['substance']
+                        phase_xy_file = phase_xy_entry['files'][i] # This is the phase xy file we need for the current iteration.
+                        csvs.set_description_str(f'Reading {phase_xy_file}: ')
+                        tth_p, yobs_p, ycalc_p, ydiff_p = self._parse_xy(phase_xy_file) # This returns: tth, yobs, ycalc, ydiff We are only interested in ycalc and tth
+                        phase_xy_data_dict.update({
+                            si: {
+                                'substance': phase_xy_substance,
+                                'tth': tth_p,
+                                'ycalc': ycalc_p,
+                                'file': phase_xy_file,
+                            }
+                        })
+                    except:
+                        phase_xy_data_dict.update({
+                            'substance':'N/A',
+                            'tth': None,
+                            'ycalc':None,
+                            'file':None,
+                        })
             #}}}
             # UPDATE Rietveld Data: {{{
-            self.rietveld_data[i] = {
-                'csv': {},
-                'csv_name': csv,
-                'csv_contents': csv_contents,
-                'xy':{
-                    '2theta':ttheta,
-                    'yobs':yobs,
-                    'ycalc':ycalc,
-                    'ydiff':ydiff,
-                },
-                'xy_name':self.sorted_xy[i],
-                'out_name': self.sorted_out[i],
-                'c_matrix': c_matrix,
-                'out_dict': out_phase_dict,
-                'c_matrix_filtered': corr_dict,
-                'hkli':hkli_data_dict,
-                'phase_xy': phase_xy_data_dict,
-                'bkg': bkg_dict,
-                'bkg_name': bkg_name,
- 
-            } # Create an entry for the csv data
+            try:
+                self.rietveld_data[i] = {
+                    'csv': {},
+                    'csv_name': csv,
+                    'csv_contents': csv_contents,
+                    'csv_labels': csv_labels,
+                    'xy':{
+                        '2theta':ttheta,
+                        'yobs':yobs,
+                        'ycalc':ycalc,
+                        'ydiff':ydiff,
+                    },
+                    'xy_name':self.sorted_xy[i],
+                    'out_name': self.sorted_out[i],
+                    'c_matrix': c_matrix,
+                    'out_dict': out_phase_dict,
+                    'c_matrix_filtered': corr_dict,
+                    'hkli':hkli_data_dict,
+                    'phase_xy': phase_xy_data_dict,
+                    'bkg': bkg_dict,
+                    'bkg_name': bkg_name,
+     
+                } # Create an entry for the csv data
+            except:
+                # IF the try statement doesnt work, we should neglect the entry entirely.
+                pass
             #}}}
             # If you have provided CSV labels: {{{
             if csv_labels:
                 for j, line in enumerate(csv_contents):
-                    if j <= len(csv_labels)-1: 
-                        self.rietveld_data[i]['csv'][csv_labels[j]] = line # This records a dictionary entry with the name of the float
-                    else:
-                        self.rietveld_data[i][f'csv_data_{j}'] = line # If too few labels given
+                    try:
+                        if j <= len(csv_labels)-1: 
+                            self.rietveld_data[i]['csv'][csv_labels[j]] = line # This records a dictionary entry with the name of the float
+                        else:
+                            self.rietveld_data[i][f'csv_data_{j}'] = line # If too few labels given
+                    except:
+                        pass
             #}}}
             # If No Provided CSV labels: {{{
             else:
-                for j, line in enumerate(csv_contents):\
-                    self.rietveld_data[i]['csv'][f'csv_data_{j}'] = np.around(line,4) # Add a generic label
+                for j, line in enumerate(csv_contents):
+                    try:
+                        self.rietveld_data[i]['csv'][f'csv_data_{j}'] = np.around(line,4) # Add a generic label
+                    except:
+                        pass
             #}}}
         #}}} 
         # Match to XY Files: {{{
@@ -1796,39 +2000,39 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     keys = list(phase.keys()) # This will be the list of each of the keys.
                     if 'phase_name' in keys:
                         phase_name = phase['phase_name'] # This is the phase name given in the UT file. Search this for a match to self._unique_substances.
-                        phase_isolated = phase_name.split('_')[0] # This will only be the substance name
+                        #phase_isolated = phase_name.split('_')[0] # This will only be the substance name
                         # We will not worry if the substance is in the CSV keys presented. 
-                        if phase_isolated:
-                            # If this is true, we can grab information from the output. 
-                            if phase_isolated not in self.out_plot_dict:
-                                # This is the first entry.
-                                self.out_plot_dict[phase_isolated] = {}
-                            for key in keys:
-                                value = phase[key] # This gives the entry
-                                # Update the dict with float and int values: {{{
-                                if type(value) == float or type(value) == int:
-                                    if key not in self.out_plot_dict[phase_isolated]:
-                                        self.out_plot_dict[phase_isolated][key] = [value]
+                        #if phase_isolated:
+                        # If this is true, we can grab information from the output. 
+                        if phase_name not in self.out_plot_dict:
+                            # This is the first entry.
+                            self.out_plot_dict[phase_name] = {}
+                        for key in keys:
+                            value = phase[key] # This gives the entry
+                            # Update the dict with float and int values: {{{
+                            if type(value) == float or type(value) == int:
+                                if key not in self.out_plot_dict[phase_name]:
+                                    self.out_plot_dict[phase_name][key] = [value]
+                                else:
+                                    self.out_plot_dict[phase_name][key].append(value)
+                            #}}}
+                            # Update the dict with values from the sites dictionary: {{{
+                            elif type(value) == dict:
+                                sites = value
+                                for label in sites:
+                                    site = sites[label]
+                                    try:
+                                        bval_label = site['b_val_prm']  # This is the label the user gave the B-value parameter
+                                        bval = site['bval'] # This is the refined parameter. 
+                                    except:
+                                        bval_label = f'{phase_name} None'
+                                        bval = 0
+ 
+                                    if bval_label not in self.out_plot_dict[phase_name]:
+                                        self.out_plot_dict[phase_name][bval_label] = [bval]
                                     else:
-                                        self.out_plot_dict[phase_isolated][key].append(value)
-                                #}}}
-                                # Update the dict with values from the sites dictionary: {{{
-                                elif type(value) == dict:
-                                    sites = value
-                                    for label in sites:
-                                        site = sites[label]
-                                        try:
-                                            bval_label = site['b_val_prm']  # This is the label the user gave the B-value parameter
-                                            bval = site['bval'] # This is the refined parameter. 
-                                        except:
-                                            bval_label = f'{phase_name} None'
-                                            bval = 0
-     
-                                        if bval_label not in self.out_plot_dict[phase_isolated]:
-                                            self.out_plot_dict[phase_isolated][bval_label] = [bval]
-                                        else:
-                                            self.out_plot_dict[phase_isolated][bval_label].append(bval)      
-                                    #}}}
+                                        self.out_plot_dict[phase_name][bval_label].append(bval)      
+                            #}}}
         #}}}
     #}}}
     # _get_time{{{
@@ -1872,6 +2076,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             legend_y:float = 0.99,
             legend_xanchor:str = 'right',
             legend_yanchor:str = 'top',
+            showgrid:bool = False,
+            dtick:float = 1,
             ):
         #Update the layout: {{{
         
@@ -1894,6 +2100,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             showlegend = show_legend,
             xaxis = dict(
                 range = tth_range,
+                showgrid = showgrid,
+                dtick = dtick,
             ),
         )
         #}}}
@@ -1934,6 +2142,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             button_yanchor = 'top',
             button_x = 1.4,
             button_y = 1.,
+            showgrid = False,
+            dtick = 1,
         ):
         '''
         This will allow us to plot any of the loaded patterns 
@@ -2073,6 +2283,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             legend_y = legend_y,
             legend_xanchor = legend_xanchor,
             legend_yanchor= legend_yanchor,
+            showgrid = showgrid,
+            dtick = dtick,
         ) 
         #}}}
         # Update buttons: {{{
@@ -2340,6 +2552,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             9.) "Size G" or "csg" or "sizeg"
             10.) "Strain L" or "strl" or 'strainl'
             11.) "Strain G" or "strg" or 'straing'
+            12.) "eta"
+            13.) "stephens"
 
 
         if you want to plot data from "out" files, set the "use_calc_temp" to True
@@ -2476,6 +2690,34 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             yaxis_title = 'Cell Mass'
             title = 'Cell Mass'
         #}}}
+        # eta: {{{
+        if plot_type.lower() == 'eta':
+            keys = ['eta']
+            yaxis_title = 'Eta'
+            title = 'Eta Values'
+        #}}}
+        # stephens: {{{
+        if plot_type.lower() == 'stephens':
+            keys = [
+                's400',
+                's040',
+                's004',
+                's220',
+                's202',
+                's022',
+                's310',
+                's103',
+                's031',
+                's130',
+                's301',
+                's013',
+                's211',
+                's121',
+                's112',
+            ]
+            yaxis_title = 'Stephens Parameter'
+            title = 'Stephens Parameters'
+        #}}}
         #}}}
         # Update the title text: {{{
         if additional_title_text:
@@ -2544,8 +2786,21 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 if substance != 'time' and substance != 'temperature' and substance != 'rwp' and substance.lower() == usr_substance:
                     entry = plot_data[substance] # This will be a dictionary entry with keys. 
                     entry_keys = list(entry.keys()) # These will be the keys for the entry. 
+                    if debug:
+                        print(f'ENTRY KEYS: {entry_keys}')
                     for plot_key in entry_keys:
-                        if plot_key.lower() in keys or plot_key.strip(f'{substance}_') in keys: # Need to check if the keys we are searching for are present.
+                        try:
+                            # This will be done to see if there are any matches to a value that may have a number.
+                            
+                            numerical_check = re.findall(r'(\w+\d*)*.',plot_key)[0] # This will match to anything that represents a formula.
+                            numerical_check = numerical_check.strip(f'{substance}_')
+                            if 'b_value' in numerical_check:
+                                numerical_check = 'b_value'
+                        except:
+                            numerical_check = ''
+                        if plot_key.lower() in keys or plot_key.strip(f'{substance}_') in keys or numerical_check in keys: # Need to check if the keys we are searching for are present.
+                            if debug:
+                                print(f'PASSED TEST: \n\tplot key: {plot_key}\n\tnumerical check: {numerical_check}\n')
                             # Handle most cases: {{{ 
                             if plot_key != 'al' or plot_key != 'be' or plot_key != 'ga' or plot_key != 'alpha' or plot_key != 'beta' or plot_key != 'gamma':
                                 if specific_substance:
@@ -2708,6 +2963,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             zmax_args:tuple = (10, 5), # The first is the minimum I for the max buttons and the second is the number of buttons
             button_layer_1_height = 1.17,
             button_layer_2_height = 1.1,
+            showgrid:bool = False,
+            dtick:float = 1,
+            plot_total_intensity_v_time = False,
             ):
         '''
         '
@@ -2725,24 +2983,24 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         using "specific_substance" you can plot the phase contribution of a single substance over time
         '''
         self._max_i = 0
-
-
-
         if type(indices) == tuple:
             lo,hi,num = indices
             indices= np.around(np.linspace(lo,hi,num),0) #Creates a range
-            
-
         self.multi_pattern = go.Figure()
         if waterfall:
             # This necessitates a more complex list structure. 
             self.x = [] # This is going to be 2 theta range
             self.y = [] # This is the time axis
             self.z = [] # This will be a list of lists for intensity.
+        if plot_total_intensity_v_time:
+            self.x = [] # This will be the time range
+            self.y = [] # This will be the observed intensity
+            self.ycalc= [] # This will be the calculated intensity
+            self.temp = [] # This holds the temp
              
         for index, i in enumerate(indices):
-            # Get the data for current index: {{{
-            tth, yobs, ycalc,ydiff, hovertemplate,title_text,xaxis_title,yaxis_title = self.plot_pattern(
+            # Get the data for current index: {{{ 
+            tth, yobs, ycalc, ydiff, hovertemplate, title_text, xaxis_title, yaxis_title = self.plot_pattern(
                 index= i, 
                 template= template,
                 time_units= time_units, 
@@ -2764,6 +3022,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 if max(ycalc) > self._max_i:
                     self._max_i = max(ycalc)
             #}}}
+            # If You Want a Waterfall: {{{
             if waterfall:  
                 time = np.around(self.rietveld_data[i]['corrected_time']/60,4) 
                 self.x = tth # This only needs to be 1 series.
@@ -2773,8 +3032,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 else:
                     self.z.append(ycalc) # Adds calculated intensity
                 hovertemplate = f"2{self._theta}{self._degree}" + "%{x}<br>Intensity: %{z}<br>" + "Time: %{y}<br>"
-            else:
-                # Generate the figure: {{{
+            #}}}
+            # Not a waterfall: {{{
+            elif not waterfall and not plot_total_intensity_v_time: 
                 color1 = self._get_random_color()
                 color2 = self._get_random_color()
                 color3 = self._get_random_color()
@@ -2782,8 +3042,15 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                     colors = ['blue','red','grey']
                 else:
                     colors = [color1, color2, color3]
-                ydict = {'yobs':yobs,'ycalc':ycalc,'ydiff':ydiff}
-                # Add the plots: {{{
+                if not specific_substance:
+                    ydict = {'yobs':yobs}
+                else:
+                    ydict = {'ycalc':ycalc}
+                if show_ycalc:
+                    ydict.update({'ycalc':ycalc})
+                if show_ydiff:
+                    ydict.update({'ydiff':ydiff}) 
+                # Add the plots: {{{ 
                 for j, key in enumerate(ydict):
                     if not specific_substance:
                         self.multi_pattern.add_scatter(
@@ -2805,8 +3072,84 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                             ),
                             name = f'Pattern #{i}: {specific_substance}'
                         )
-    
                 #}}}
+ 
+            #}}}
+            # Plot the total intensity vs. Time: {{{
+            elif plot_total_intensity_v_time:  
+                colors = ['blue','green']
+                ydict = {'yobs':sum(np.array(yobs)),'ycalc':sum(np.array(ycalc))} # sum the total intensity
+                time = np.around(self.rietveld_data[i]['corrected_time']/60,4)  # Get the time that the pattern was taken at.
+                try:
+                    temp = np.around(self.rietveld_data[i]['corrected_temperature'],2)  #  Get the corrected_temperature
+                except:
+                    temp = np.around(self.rietveld_data[i]['temperature']-273.15,2) # Get the noncorrected temp
+                total_i_ht = "t = %{x} min<br>Total Intensity: %{y}"
+                # Collect the data: {{{
+                for j, key in enumerate(ydict):
+                    self.x.append(time) 
+                    self.y.append(ydict['yobs'])
+                    self.ycalc.append(ydict['ycalc'])
+                    self.temp.append(temp) 
+                #}}}
+            #}}}
+        # Plot the total intensity if you selected it: {{{
+        if plot_total_intensity_v_time:
+            hovertemplate = "%{x} min<br>Total Intensity: %{y}<br>" 
+            self.multi_pattern.add_scatter(
+                x = self.x,
+                y = self.y,
+                hovertemplate = hovertemplate,
+                marker = dict(
+                    color = 'blue',
+                    size = 5
+                ),
+                mode = 'lines+markers',
+                name = 'Observed Total I',
+                yaxis = 'y1'
+            )
+            if specific_substance:
+                name = f'Calculated Total I ({specific_substance})'
+            else:
+                name = 'Calculated Total I'
+            self.multi_pattern.add_scatter(
+                x = self.x,
+                y = self.ycalc,
+                hovertemplate=hovertemplate,
+                marker = dict(
+                    color = 'green',
+                ),
+                name = name,
+                mode = 'lines+markers',
+                marker_size = 5,
+                yaxis = 'y1'
+
+            )
+            self.multi_pattern.add_scatter(
+                    x = self.x,
+                    y = self.temp,
+                    marker = dict(
+                        color = 'red',
+                    ),
+                    name = 'Temperature',
+                    yaxis = 'y2'
+            )
+        # Update Layout: {{{
+        self.multi_pattern.update_layout( 
+            yaxis2 = dict(
+                title = f'Temperature/{self._deg_c}',
+                
+                overlaying = 'y',
+                side = 'right', 
+            ),
+            font = dict(
+                size = 20,
+            ),
+        )
+        xaxis_title = 'Time / min'
+        yaxis_title = 'Total Intensity'
+        #}}}
+        #}}}
         # Waterfall Plot Added: {{{ 
         if waterfall: 
             self.multi_pattern.add_heatmap(
@@ -2863,6 +3206,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
                 legend_y=legend_y,
                 legend_xanchor=legend_xanchor,
                 legend_yanchor=legend_yanchor,
+                showgrid = showgrid,
+                dtick = dtick,
         )
         # Waterfall Update: {{{
         if waterfall:
@@ -2895,7 +3240,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
             )
         #}}} 
         #}}} 
-        #}}}
+
         self.multi_pattern.show()
     #}}}
     # get_pattern_from_time: {{{
@@ -3164,6 +3509,167 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser):
         ydiff = xy_data[:,3]
         return (tth, yobs, ycalc, ydiff)
 
+    #}}}
+    # _get_mol_fraction_data: {{{
+    def _get_mol_fraction_data(self,formulas:list = None, fu_element:list = None, element_name:str = None):
+        '''
+        This function creates a dictionary for all of the mole fraction 
+        data needed to generate plots.
+
+        The formulas you input should correspond to the keys of the 
+        csv plot data dictionary. 
+
+        fu_element: This is a list of the formula units needed for each ion e.g. Ta2O5 for Ta you put: 2
+        element_name: for Ta2O5 and Ta3N5 system, you would input "Ta"
+        '''
+        self.mol_fraction_data = {'Element': element_name}
+        # Get Important Varibales: {{{
+
+        mft = Mole_Fraction_Tools(formulas)
+        fws = mft.get_formula_weights() # This will give us a dictionary of masses
+
+        total_wp = [] # Need to normalize relative to the scale factors included.
+        # Update Dict with Vals for Each Formula: {{{
+        for i,formula in enumerate(formulas):
+            try:
+                fw = fws[formula] # current formula weight 
+                sf = np.array(self.csv_plot_data[formula]['scale_factor'])
+                wp = np.array(self.csv_plot_data[formula]['weight_percent'])
+                zm = np.array(self.csv_plot_data[formula]['mass'])
+                v = np.array(self.csv_plot_data[formula]['volume']) 
+                self.mol_fraction_data[formula] = {
+                        'mass': fw,
+                        'scale_factor': sf,
+                        'weight_percent':wp, 
+                        'zm':zm,
+                        'v':v,
+                }
+                total_wp.append(wp)
+            except:
+                raise 
+        norm_factor_wp = sum(total_wp) # This gives the normalization factor.
+        #}}}
+        # Do normalizations and calculations for formulas: {{{
+        total_mol_fraction = [] 
+        for i, formula in enumerate(formulas): 
+            entry = self.mol_fraction_data[formula]
+            try:
+                wp = entry['weight_percent'] 
+                fw = entry['mass'] # Mass of the formula
+                norm_wp = wp/norm_factor_wp
+                mf = norm_wp*fu_element[i]/fw
+                entry.update({
+                    'norm_wp':norm_wp,
+                    'unnormalized_mf_wp': mf,
+                }) 
+                total_mol_fraction.append(mf)
+            except:
+                pass
+        mol_fraction_norm_constant = sum(total_mol_fraction)
+        for formula in formulas:
+            entry = self.mol_fraction_data[formula]
+            try:
+                mf = entry['unnormalized_mf_wp']
+                norm_mf = mf/mol_fraction_norm_constant
+                self.mol_fraction_data[formula].update({'norm_mf_from_wp': norm_mf})
+            except:
+                pass
+
+        #}}}
+        #}}}
+    #}}}
+    # plot_mole_fraction: {{{
+    def plot_mole_fraction(self,
+            plot_type:'wp',
+            formulas:list = None,
+            fu_element:list = None,
+            element_name:str = None,
+            xaxis_title:str = 'time / min',
+            width = 1200,
+            height = 800,
+            template:str = 'simple_white',
+            xrange:list = None,
+            yrange:list = None,
+            show_legend:bool = True,
+            font_size:int = 20,
+            marker_size:int = 5,
+            mode:str = 'markers+lines',
+            color:str = None,
+            legend_xanchor:str = 'right',
+            legend_yanchor:str = 'top',
+            legend_x:float = 1.55,
+            legend_y:float = 0.99,
+
+        ):
+        '''
+        This function will plot mole fractions for a given substance. 
+        based on what you provide.
+        ''' 
+        self._get_mol_fraction_data(formulas,fu_element,element_name)
+        if plot_type == 'wp':
+            plot_title = f'Weight Percent - Derived Mole Fraction {element_name}'
+            key = 'norm_mf_from_wp'
+        elif plot_type == 'sf':
+            plot_title = f'Scale Factor - Derived Mole Fraction {element_name}'
+            key = 'mf_from_sf'
+        yaxis_title = f'mole fraction ({element_name})'
+        # Get important plot prms: {{{
+        time = np.array(self.csv_plot_data['time'])
+        temp = np.array(self.csv_plot_data['temperature'])
+        #}}}
+        # Make Plots: {{{
+        for i, formula  in enumerate(formulas):
+            entry = self.mol_fraction_data[formula]
+            mf = entry[key]
+            if i == 0:
+                self.plot_data(
+                    x = time,
+                    y =mf,
+                    name = f'{formula} Mole Fraction',
+                    mode = mode,
+                    title_text=plot_title,
+                    xaxis_title=xaxis_title,
+                    yaxis_title=yaxis_title,
+                    template=template,
+                    xrange=xrange,
+                    yrange=yrange,
+                    height=height,
+                    width=width,
+                    show_legend=show_legend,
+                    font_size=font_size,
+                    marker_size=marker_size, 
+                    color=color,
+                )
+            else:
+                self.add_data_to_plot(
+                    x = time,
+                    y = mf,
+                    name = f'{formula} Mole Fraction',
+                    mode = mode,
+                    xrange = xrange,
+                    yrange = yrange,
+                    marker_size=marker_size,
+                    color = color,
+                
+                )
+        #}}}
+        # Finish off with the temperature curve: {{{
+        self.add_data_to_plot(
+            x = time,
+            y = temp,
+            name = f'Temperature',
+            mode = mode,
+            marker_size=marker_size,
+            show_figure=True,
+            y3 = True,
+            y3_title = f'Temperature / {self._deg_c}',
+            color = 'red',
+            legend_xanchor=legend_xanchor,
+            legend_yanchor=legend_yanchor,
+            legend_x = legend_x,
+            legend_y = legend_y,
+        )
+        #}}} 
     #}}}
 #}}}
 
