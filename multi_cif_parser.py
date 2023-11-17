@@ -16,6 +16,8 @@ import copy
 #}}}
 # filename_kwargs: {{{
 pcd_kwargs = {
+    '_space_group_IT_number':r'\d+', # SG Number
+    '_space_group_name_H-M_alt':r'\S+', # Hermann Maugin Symbol
     '_database_code_PCD':r'\d+', # database code is a number
     '_journal_year':r'\d+', # journal year is a number
     '_diffrn_radiation_type':r'\w+\-?\w+\,?\s*\w+\s*\w+', # Filter works to get X-rays, Cu Ka
@@ -39,6 +41,8 @@ class PCDCIFParser:
                 ':',#colon
                 '.',#period
                 '?',# question mark
+                '/', #forward slash
+                '\\',#back slash
         ]
         self._end_cif_flag = 'End of data set' # This should be the end of cif flag
         self.find_initial_files()
@@ -134,10 +138,17 @@ class PCDCIFParser:
                                 if len(filtered_value) != 2:
                                     filtered_value = list(filter(None,re.findall(r'\S+',line)))
                                 value =filtered_value[-1]   
+                            elif key == '_space_group_name_H-M_alt': 
+                                filtered_value = list(filter(None,re.findall(regex,line)))
+                                filtered_value.pop(0) #remove the key
+                                value = ''.join(filtered_value) # Combine the name 
                             else:
                                 # Other entries are easy
                                 value = re.findall(regex,line) # This gives the value for 
-                                value = str(value[0])
+                                try:
+                                    value = str(value[0])
+                                except:
+                                    value = 'NA'
                             if value:
                                 values.append(self.remove_unacceptable_characters(value))
                     #}}}
