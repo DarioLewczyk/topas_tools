@@ -2136,6 +2136,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             run_in_loop:bool = False,
             specific_substance:str= None,
             plot_hkli:bool = True,
+            filter_hkli:bool = True,
             single_pattern_offset:float = 0,
             hkli_offset:float = -60,
             button_xanchor = 'right',
@@ -2194,16 +2195,48 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 # Get Data for HKLI Plot: {{{
                 substance = hkli[i]['substance']
                 hkli_data = hkli[i]['hkli']
-                hkl = hkli_data['hkl'] # 3-tuple of h,k,l
-                hkl_tth = hkli_data['tth']
+                hkl = copy.deepcopy(hkli_data['hkl']) # 3-tuple of h,k,l
+                hkl_tth = copy.deepcopy(hkli_data['tth'])
+                hkl_i = copy.deepcopy(hkli_data['i']) # This is a list of all intensities
+                hkl_d = copy.deepcopy(hkli_data['d'])
                 ones = np.ones(len(hkl_tth)) 
 
                 hkl_intensity = [hkli_offset*(i+1)]*ones # Make a list of intensities arbitrarily starting from 10.
-                hkl_d = hkli_data['d']
+                
                 hkl_hovertemplate = []
-                hkl_ht = '{}<br>hkl: {}<br>d-spacing: {} {}<br>' 
+                hkl_ht = '{}<br>hkl: {}<br>d-spacing: {} {}<br>Intensity: {}<br>' # Format: Substance, hkl, d-spacing, intensity
+                hkli_indices_to_remove = [] # If you want to filter, these indices will be removed
                 for idx, mi in enumerate(hkl):
-                    hkl_hovertemplate.append(hkl_ht.format(substance,mi,hkl_d[idx],self._angstrom)+f'2{self._theta}{self._degree}'+"%{x}")
+                    hkli_intensity = hkl_i[idx] # This is the intensity of the current hkl
+                    intermediate_hkli_ht = hkl_ht.format(substance,mi,hkl_d[idx],self._angstrom, np.around(hkl_i[idx],6))+f'2{self._theta}{self._degree}'+"%{x}"
+                    if filter_hkli:
+                        if hkli_intensity > 0:
+                            hkl_hovertemplate.append(intermediate_hkli_ht) # Add the hovertemplate 
+                        else:
+                            hkli_indices_to_remove.append(idx)
+
+                    else:
+                        hkl_hovertemplate.append(intermediate_hkli_ht) # Add the hovertemplate
+
+                #}}}
+                # Remove filtered hkli indices: {{{
+                if hkli_indices_to_remove:
+                    hkl_intensity = list(hkl_intensity)
+                    hkl = list(hkl)
+                    hkl_tth = list(hkl_tth)
+                    hkl_d = list(hkl_d)
+                    hkli_indices_to_remove.reverse() 
+                    for idx in hkli_indices_to_remove:
+                   
+                        hkl_intensity.pop(idx)
+                        hkl.pop(idx)
+                        hkl_tth.pop(idx)
+                        hkl_d.pop(idx)
+                  
+                    hkl_intensity = np.array(hkl_intensity)
+                    hkl = np.array(hkl)
+                    hkl_tth = np.array(hkl_tth)
+                    hkl_d = list(hkl_d)
                 #}}}
                 hkl_color = self._get_random_color()
                 # Get Data for Phase Plots: {{{
@@ -3134,6 +3167,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                     name = 'Temperature',
                     yaxis = 'y2'
             )
+            xaxis_title = 'Time / min'
+            yaxis_title = 'Total Intensity'
         # Update Layout: {{{
         self.multi_pattern.update_layout( 
             yaxis2 = dict(
@@ -3146,8 +3181,6 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 size = 20,
             ),
         )
-        xaxis_title = 'Time / min'
-        yaxis_title = 'Total Intensity'
         #}}}
         #}}}
         # Waterfall Plot Added: {{{ 
