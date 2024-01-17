@@ -455,7 +455,47 @@ class DataCollector:
 
         #}}}
     #}}}
+    # check_order_against_time: {{{
+    def check_order_against_time(self,tmp_rng:list = None,data_dict_keys:list = None,  metadata_data:dict = None, mode:int= 0 ):
+        '''
+        This function is designed to reorder the files you are analyzing 
+        if you discover that the order is wrong after analysis.
 
+        This will return the re-ordered range (if necessary). 
+
+        Mode:
+            0: This is normal mode, returns a range of indices from the original dataset you pull from (for refinements)
+            1: This is the alt mode, returns a range of indices from the refined dataset (after refinement, for analysis)
+        '''
+        fixed_range = []
+        negative_times = [] # indices of the patterns we need to reorient. 
+        # Now, we need to check if the order is correct regarding the metadata: {{{  
+        for idx, number in enumerate(tmp_rng): 
+            file_time = data_dict_keys[int(number)-1]
+            
+            md_keys = list(metadata_data.keys())
+            md_entry = metadata_data[file_time] # Get the metadata for the current time
+            start_time = metadata_data[md_keys[0]]['epoch_time'] # This gives us the starting time
+            current_epoch_time = md_entry['epoch_time'] # This gives the current epoch time
+            time = (current_epoch_time - start_time)/60 # This is in minutes 
+            if time <0:
+                negative_times.append(idx)
+ 
+        if negative_times:  
+            for idx in negative_times: 
+                if mode == 0:
+                    fixed_range.append(tmp_rng[idx])
+                else:
+                    fixed_range.append(idx)
+            for idx,  number in enumerate(tmp_rng):
+                if idx not in negative_times:
+                    if mode == 0:
+                        fixed_range.append(number) 
+                    else:
+                        fixed_range.append(idx)
+        #}}}
+        return fixed_range
+    #}}} 
 #}}}
 # MetadataParser: {{{
 class MetadataParser:
@@ -510,6 +550,7 @@ class MetadataParser:
                 'epoch_time': time,
                 'temperature': temp,
                 'pattern_index': i,
+                'filename': filename,
             }
             
             #}}}
@@ -957,11 +998,14 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             subtract_bkg:bool = True,
             phases_to_enable:list = None,
             phases_to_disable:list = None,
-            threshold_for_on:float = 0.0195, # this was obtained by looking at an Rwp curve 
+            threshold_for_on:float = 0.0195, # this can be an Rwp percent deviation or a time.
             threshold_for_off:float = 0.01, 
+            on_method:str = 'rwp',
+            time_error:float = 1.1,
             off_sf_value:float = 1.0e-100,
             on_sf_value:float = 1.0e-5,
             debug:bool = False,  
+            check_order:bool = False,
         ):
         '''
         Code to run automated Rietveld Refinements based on Adam/Gerry's Code
@@ -978,8 +1022,11 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             ex: 'Ta2O5' is the key and the value could be a list: ['HT', 'LT']
         
         NOTE: for each of the thresholds, you can also give a list of thresholds (indices must match those of the phases you give)
+
+        "on_method": This can be either rwp or time. If you use the rwp, you may or may not trigger the phase on at an acceptable time. 
         
         '''
+    
         # if you input a string for either "phases_to_disable" or "phases_to_enable": {{{
         if type(phases_to_disable) == list or phases_to_disable== None:
             pass
@@ -994,6 +1041,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
 
         self.reverse_order = reverse_order # This will keep track of if you chose to reverse the order in case that info is needed elsewhere.
         # Navigate the Filesystem to the appropriate directories: {{{
+        metadata_dir = None # This is none by default but if you want to turn on a phase based on time, you need it. 
         if not data_dir:
             print('Navigate to the "Data Directory"')
             data_dir = self.navigate_filesystem()
@@ -1002,12 +1050,32 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 print('Your "data_dir" is invalid. Navigate to the data dir now.')
                 data_dir = self.navigate_filesystem()
         if not template_dir:
-            print('Navigate to the "Template_Dir"')
+            print('Navigate to the "Template Directory"')
             template_dir = self.navigate_filesystem()
         else:
             if not os.path.isdir(template_dir):
                 print('Your "template_dir" is invalid. Navigate to the template directory now.')
                 template_dir = self.navigate_filesystem()
+        # Handle the metadata if you want to monitor times: {{{
+        if on_method == 'time' or check_order: 
+            # Find the metadata directory: {{{
+            metadata_dir = os.path.join(data_dir, 'meta') # This is what the metadata directory should be. 
+            if os.path.isdir(metadata_dir):
+                pass
+            else:
+                print('Navigate to the metadata directory.')
+                metadata_dir = self.navigate_filesystem()
+            #}}}
+            # get all of the metadata data: {{{
+            os.chdir(metadata_dir) # Go into the metadata
+            self._md = MetadataParser() # initialize the parser 
+            self._md.get_metadata() # obtain all of the metadata we need
+            self.metadata_data = self._md.metadata_data # Store the metadata.
+            #}}}
+            os.chdir(self.current_dir) # return to the starting directory.
+        else:
+            self.metadata_data = None
+        #}}}
         #}}}
         os.chdir(template_dir) # Go to the directory with the input file
         template_file = '{}.inp'.format(os.path.basename(template_dir))
@@ -1044,6 +1112,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         if self.reverse_order:
             tmp_rng = tmp_rng[::-1] # This reverses the order of the array by converting it to a list slice 
         #}}}
+        # If user needs to use metadata to order the refinements...: {{{
+        if check_order: 
+            tmp_rng = data.check_order_against_time(tmp_rng=tmp_rng,data_dict_keys=data_dict_keys, metadata_data=self.metadata_data)
+        #}}}
         # Begin the Refinements: {{{
         '''
         This part uses a range made by the selection of the user. 
@@ -1051,7 +1123,20 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         '''
         rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine. 
         for index,number in enumerate(rng):
-            pattern = f'{data_dir}\\{data.file_dict[data_dict_keys[number-1]]}' # Use the custom range we defined. Must subtract 1 to put it in accordance with the index. 
+            file_time = data_dict_keys[number-1]
+            xy_filename = data.file_dict[file_time]
+            # Get the time (if needed): {{{
+            try:
+                md_keys = list(self.metadata_data.keys())
+                md_entry = self.metadata_data[file_time] # Get the metadata for the current time
+                start_time = self.metadata_data[md_keys[0]]['epoch_time'] # This gives us the starting time
+                current_epoch_time = md_entry['epoch_time'] # This gives the current epoch time
+                time = (current_epoch_time - start_time)/60 # This is in minutes 
+            except:
+                time = None
+            #print(f'File Time: {file_time}\nXY_Filename: {xy_filename}\nTime = {time} minutes')
+            #}}} 
+            pattern = f'{data_dir}\\{xy_filename}' # Use the custom range we defined. Must subtract 1 to put it in accordance with the index. 
             output = f'result_{data_dict_keys[number-1]}_{str(number).zfill(6)}' # zfill makes sure that we have enough space to record all of the numbers of the index, also use "number" to keep the timestamp. 
             if pattern_linenum:
                 template[pattern_linenum] = f'xdd "{pattern}"\n' # write the current pattern
@@ -1083,7 +1168,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             # Use the Dummy.inp file: {{{
             with open('Dummy.inp','w') as dummy:
                 for line in template:
-                    dummy.write(line)
+                    dummy.write(line) 
             self.refine_pattern('Dummy.inp') # Run the actual refinement
             # Monitor Refinement Parameters: {{{
             '''
@@ -1105,7 +1190,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                         current_idx=index,
                         off_sf_value=off_sf_value,
                         on_sf_value=on_sf_value,
-                        debug=debug
+                        on_method = on_method, # This is to tell if we are working with times or not
+                        current_time = time, # This is either a time or None
+                        debug=debug,
+                        time_error=time_error, # This is the +/- the time can be off to trigger the turning on of a phase.
                     )
 
                 
@@ -1266,7 +1354,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             current_idx:int = None,
             off_sf_value:float = 1.0e-100,
             on_sf_value:float = 1.0e-6,
-            debug:bool = False
+            on_method:str = None,
+            current_time:float = None,
+            debug:bool = False,
+            time_error:float = 1.1,
         ):
         '''
         This function handles the actual runtime modifications of output files 
@@ -1284,6 +1375,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         out: this is the output file's filename.
 
         This needs to be able to also take into account, things written after the tag for the formula. e.g. Ta2O5_HT
+
+        on_method can be either time or rwp. If it is time, you need to give a time. 
+
+        time_error is the amount of +/- that the time can be off to trigger the phase on or off
         '''
         # get the relevant lines: {{{
         relevant_lines = self._get_relevant_lines_for_monitoring(out, off_phases,on_phases,threshold_for_off,threshold_for_on,debug)
@@ -1295,7 +1390,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 value = entry['value']
                 name = entry['name']
                 entry_type = entry['type']
-                if entry_type == 'on':
+                if entry_type == 'on': 
                     rwp = entry['rwp']
                 else:
                     rwp = None
@@ -1327,7 +1422,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 current_value = current_entry['value'] # This gives the current value
                 norm_val = current_value/max_value # This gives us the normalized value relative to the max.
                 # Handle Phase ON Cases: {{{ 
-                if entry_type == 'on':
+                if entry_type == 'on' and on_method == 'rwp':
                     try:
                         min_rwp = min(rwps) # This will give us the min Rwp value (remember that low Rwp is good, high Rwp is bad)
                         current_rwp = current_entry['rwp'] # This gives us the current Rwp
@@ -1342,6 +1437,15 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                             self._out_file_monitor[key]['rwps'].append(current_rwp) # Add the newest Rwp
                     except:
                         # This case does not need to deal with Rwps. 
+                        pass
+                elif entry_type == 'on' and on_method == 'time':
+                    try:
+                        if np.abs(current_time - threshold_for_on) <= time_error and not stopped: 
+                            # This ensures that whether you are running forward or reverse direction, you can trigger at an appropriate time. 
+                            entry['stopped'] = True # We are adding the phase and can stop monitoring. 
+                            self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=on_sf_value,debug=debug) 
+                            print(f'ENABLED {name}')
+                    except:
                         pass
                 #}}}
                 # Handle the Phase OFF Case: {{{
@@ -1604,6 +1708,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             correlation_threshold:int = 50,
             flag_search:str = 'CHECK',
             #polymorph_tags:dict = None, 
+            check_order:bool = False,
         ):
         '''
         This will gather and sort all of the output files from your refinements for you. 
@@ -1614,17 +1719,26 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             This will sort each hkli file by tth but doing so results in a significantly slower processing time.
         polymorph_tags: 
             This could be a dictionary which contains the substance flag e.g. Ta2O5 and a list of specific versions to look for e.g. HT)
+        check_order: 
+            This is if you need to check the order of your data order against metadata.
         ''' 
         self.rietveld_data = {}
-        self.sorted_csvs = sorted(glob.glob(f'{csv_prefix}_*.csv')) #gathers csvs with the given prefix
-        self.sorted_xy = sorted(glob.glob(f'{xy_prefix}_*.xy'))
-        self.sorted_out = sorted(glob.glob(f'{out_prefix}_*.out')) 
+        self.corrected_range = None # This is a default value. Only gets a value if you absolutely need to check_order
+        self.check_order = check_order # Save this as an attribute
+
+        # Get the sorted CSV, XY, OUT, Bkg XY: {{{
+        self.sorted_csvs = sorted(glob.glob(f'{csv_prefix}_*.csv'), key = lambda x: x.split('_')[-1]) #gathers csvs with the given prefix
+        self.sorted_xy = sorted(glob.glob(f'{xy_prefix}_*.xy'),key =lambda x: x.split('_')[-1])
+        self.sorted_out = sorted(glob.glob(f'{out_prefix}_*.out'),key =lambda x: x.split('_')[-1]) 
         self.sorted_phase_xy = None # This will stay none unless you also parse hkli. 
-        self.sorted_bkg_xy = sorted(glob.glob('bkg*.xy')) # These are the background curves if they are there.
+        self.sorted_bkg_xy = sorted(glob.glob('bkg*.xy'), key = lambda x: x.split('_')[-1]) # These are the background curves if they are there.
+        #}}} 
+        # Get HKLI Files: {{{
         if parse_hkli:
             self.sorted_hkli = sorted(glob.glob(f'*_{hkli_prefix}_*.hkli')) # These files should be in the format: Substance_result_Info.hkli
         else:
             self.sorted_hkli = None
+        #}}}
         # Pre-Process to get HKLI AND Phase XY if Present: {{{
         if self.sorted_hkli:
             self._hkli = {} # Create a dictionary for the sorted files. 
@@ -1643,15 +1757,91 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 if substance not in substances: 
                     substances.append(substance)
             #}}}
-            # Create the necessary variables: {{{
+            # Create self._phase_xy and self._hkli: {{{
             for substance in substances:
-                relevant_files = sorted(glob.glob(f'{substance}_{hkli_prefix}_*.hkli')) # This gives only files pertaining to your substance. 
-                self.sorted_phase_xy = sorted(glob.glob(f'{substance}_*.xy')) # This gives only the xy files pertaining to your substance.
+                hkli_files = glob.glob(f'{substance}_{hkli_prefix}_*.hkli')
+                phase_xy_files = glob.glob(f'{substance}_*.xy')
+                sorted_hkli = sorted(hkli_files, key = lambda x: x.split('_')[-1]) # This gives only files pertaining to your substance. 
+                self.sorted_phase_xy = sorted(phase_xy_files, key = lambda x: x.split('_')[-1]) # This gives only the xy files pertaining to your substance.
                 self._phase_xy[substances.index(substance)] = {'substance': substance, 'files': self.sorted_phase_xy}
-                self._hkli[substances.index(substance)] = {'substance': substance,'files': relevant_files} 
+                self._hkli[substances.index(substance)] = {'substance': substance,'files': sorted_hkli} 
             #}}}
         #}}}
 
+        # GET ORIGINAL Data and METADATA: {{{
+        if get_orig_patt_and_meta:
+            print('Navigate to the data directory.')
+            self.data_dir = self.navigate_filesystem()
+            self.meta_dir = os.path.join(self.data_dir,'meta') # This gives us the metadata folder
+            # Get all of the original data and times: {{{
+            self._dc = DataCollector()
+            self._dc.scrape_files() # Gathers all of the original data
+            self.file_dict = self._dc.file_dict # Gives us the dictionary of all of the original filenames and times
+            self.file_dict_keys = list(self.file_dict.keys()) # Gives us the times. 
+            #}}}
+            # Work with the metadata: {{{
+            os.chdir(self.meta_dir) # Go into the metadata
+            self._md = MetadataParser()
+            self._md.get_metadata()
+            self.metadata_data = self._md.metadata_data
+            #}}}
+            os.chdir(self.current_dir) # Return to the original directory.
+            # If you need to check the order of patterns against metadata: {{{
+            if self.check_order:
+                num_scans_refined = len(self.sorted_csvs) # This is the most robust counter of the total patterns.
+                tmp_rng = np.linspace(1,len(self.file_dict_keys), num_scans_refined) # Get the original indices of each pattern.
+                dc = DataCollector() # Need to init this class to check the order.
+                self.corrected_range = dc.check_order_against_time(tmp_rng=tmp_rng, data_dict_keys=self.file_dict_keys,metadata_data=self.metadata_data, mode=1) #Get a new order
+                # Correct the file lists: {{{
+                # Define temporary lists for data: {{{
+                tmp_csv = []
+                tmp_xy = []
+                tmp_out = [] 
+                tmp_bkg_xy = [] 
+                #}}}
+                for rng_idx in self.corrected_range:
+                    tmp_csv.append(self.sorted_csvs[rng_idx]) # Adds the correct csv in the correct order
+                    tmp_xy.append(self.sorted_xy[rng_idx])
+                    tmp_out.append(self.sorted_out[rng_idx])
+                    try:
+                        tmp_bkg_xy.append(self.sorted_bkg_xy[rng_idx])
+                    except:
+                        print('Failed to correct bkg curves!')
+                self.sorted_csvs = tmp_csv
+                self.sorted_xy = tmp_xy
+                self.sorted_out = tmp_out
+                self.sorted_bkg_xy = tmp_bkg_xy
+                #}}}
+                # Now, Handle the phase XYs{{{
+                try:
+                    for xy_key, xy_val in self._phase_xy.items():
+                        tmp_xy_file_list= [] # Updated list
+                        tmp_hkli_file_list = [] # Updated list
+
+                        original_xy_file_list = xy_val['files']
+                        original_hkli_file_list = self._hkli[xy_key]['files']
+
+                        for i in self.corrected_range:
+                            tmp_xy_file_list.append(original_xy_file_list[i]) # Add in the position corrected file.
+                            tmp_hkli_file_list.append(original_hkli_file_list[i]) # Add the position corrected file
+
+                        self._phase_xy[xy_key]['files'] = tmp_xy_file_list
+                        self._hkli[xy_key]['files'] = tmp_hkli_file_list
+                except:
+                    print('Failed to re-order substance-specific XY and HKLI files.')
+                    raise
+                            
+                #}}} 
+                # Now, Update Rietveld Data: {{{
+                #tmp_rietveld_data = {} # Make a temp to become the actual Rietveld data dict.
+                #for i, entry in self.rietveld_data.items():
+                #    new_idx = self.corrected_range.index(i) # Find the index of the entry so that things get ordered properly. 
+                #    tmp_rietveld_data[new_idx] = entry
+                #    tmp_rietveld_data[new_idx]['original_idx'] = i
+                #self.rietveld_data = tmp_rietveld_data # Set the actual rietveld data as the tmp
+                #}}} 
+            #}}}
+        #}}}
         # Print Statements: {{{
         if print_files:
             print('I   CSV\tXY')
@@ -1679,7 +1869,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         
         
         #}}}
-        # Categorize the Refined Data: {{{ 
+        # Categorize the Refined Data: {{{
         csvs = tqdm(self.sorted_csvs)
         # import and process CSV, XY, OUT, HKLI:     
         for i, csv in enumerate(csvs):
@@ -1822,29 +2012,17 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                         pass
             #}}}
         #}}} 
-        # Match to XY Files: {{{
+        # Update Rietveld Data With Original Pattern Info and Metadata: {{{
         if get_orig_patt_and_meta:
-            print('Navigate to the data directory.')
-            self.data_dir = self.navigate_filesystem()
-            self.meta_dir = os.path.join(self.data_dir,'meta') # This gives us the metadata folder
-            # Get all of the original data and times: {{{
-            self._dc = DataCollector()
-            self._dc.scrape_files() # Gathers all of the original data
-            self.file_dict = self._dc.file_dict # Gives us the dictionary of all of the original filenames and times
-            self.file_dict_keys = list(self.file_dict.keys()) # Gives us the times. 
-            #}}}
-            # Work with the metadata: {{{
-            os.chdir(self.meta_dir) # Go into the metadata
-            self._md = MetadataParser()
-            self._md.get_metadata()
-            self.metadata_data = self._md.metadata_data
-            #}}}
-            os.chdir(self.current_dir) # Return to the original directory.
             # Now, we want to update the "rietveld_data" dict: {{{
             for i in self.rietveld_data:
                 entry = self.rietveld_data[i] # Gives us the data entry.
                 file_time = int(re.findall(r'\d+',entry['csv_name'])[0]) # This gives the time of the file. 
-                md = self.metadata_data[file_time]
+                try:
+                    md = self.metadata_data[file_time]
+                except:
+                    print(f'Failed to find time: {file_time} in metadata.\nYour file times are:')
+                    sys.exit()
                 fd = self.file_dict[file_time]
                 self.rietveld_data[i].update({
                     'original_name':fd,
@@ -1856,15 +2034,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                     'max_t':self.max_tcalc, # Max temp (error bar)
                     'pattern_index':md['pattern_index'],
                 })
-            for i in self.rietveld_data:
-                entry = self.rietveld_data[i] # Get the current entry 
-                self._get_time(i,time_units='s') # get the time in seconds
+            for i ,entry in self.rietveld_data.items():     
+                self._get_time(i,time_units='s', check_order=self.check_order) # get the time in seconds
                 self.rietveld_data[i].update({
                     'corrected_time': self._current_time
                 })
-            #}}}
-            
-            
+            #}}} 
         #}}} 
         self._data_collected = True #Now, the data have been collected and plot pattern will be informed
     #}}}
@@ -2036,14 +2211,26 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         #}}}
     #}}}
     # _get_time{{{
-    def _get_time(self,index, time_units:str):
+    def _get_time(self,index, time_units:str, check_order:bool = False):
         '''
         This function will obtain for you, the time relative to the start of the run. 
         This uses the epoch time from metadata. SO MAKE SURE IT IS PRESENT. 
         Also, this uses the absolute beginning pattern's epoch time
         '''
         metadata_keys = list(self.metadata_data.keys()) #these are the "readable times" 0th index is the first pattern of the series. 
-        t0 = self.metadata_data[metadata_keys[0]]['epoch_time'] # This gives us the epoch time for the first pattern. 
+        t0_idx = 0 # This is the default but can change if the order is messed up. 
+        t0 = None
+        if check_order:
+            for i, (key, entry) in enumerate(self.metadata_data.items()):
+                epoch = entry['epoch_time']
+                if i == 0:
+                    t0 = epoch
+                else:
+                    t = epoch - t0 # Elapsed time
+                    if t < 0:
+                        t0_idx = i # This is the index of the metadata keys which is the first time point. 
+                        break    
+        t0 = self.metadata_data[metadata_keys[t0_idx]]['epoch_time'] # This gives us the epoch time for the first pattern. 
         t1 = self.rietveld_data[index]['epoch_time'] # This is the time of the current pattern. 
         # Determine the appropriate divisor: {{{
         if time_units == 's':
@@ -2054,6 +2241,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             divisor = 60**2
         #}}}
         # Get the time: {{{
+        self.t0 = t0
         self._current_time = (t1-t0)/divisor
         #}}}
 
@@ -2135,6 +2323,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             printouts:bool = True,
             run_in_loop:bool = False,
             specific_substance:str= None,
+            plot_calc_patterns:bool = True,
             plot_hkli:bool = True,
             filter_hkli:bool = True,
             single_pattern_offset:float = 0,
@@ -2150,6 +2339,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         This will allow us to plot any of the loaded patterns 
 
         plot_hkli will allow hkl to be plotted for each phase IF the data are present
+
+        since you run "get_data()" first, self.check_order will be in place. This will ensure the proper time is recorded.
         '''
         if not self._data_collected:
             print('You did not yet collect data. Do that now...')
@@ -2161,7 +2352,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         self._create_string_from_csv_data(index) # This gives a variable called "self._csv_string" for us to print out. 
         #}}} 
         # Get the time the pattern was taken: {{{
-        self._get_time(index,time_units) # This gives us "self._current_time" which is the time in the units we wanted. 
+        self._get_time(index,time_units,check_order=self.check_order) # This gives us "self._current_time" which is the time in the units we wanted. 
         #}}}
         # Get the plot values and labels: {{{
         tth = self.rietveld_data[index]['xy']['2theta'] # this is the array of 2 theta values
@@ -2240,7 +2431,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 #}}}
                 hkl_color = self._get_random_color()
                 # Get Data for Phase Plots: {{{
-                if self.sorted_phase_xy:
+                if self.sorted_phase_xy and plot_calc_patterns:
                     phase_data = data['phase_xy']
                     phase_substance = phase_data[i]['substance']
                     phase_tth= phase_data[i]['tth']
@@ -2321,7 +2512,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         ) 
         #}}}
         # Update buttons: {{{
-        self._add_buttons(self.pattern_plot,xanchor=button_xanchor,yanchor=button_yanchor,button_x=button_x,button_y=button_y,)
+        self._add_buttons(self.pattern_plot,xanchor=button_xanchor,yanchor=button_yanchor,button_x=button_x,button_y=button_y,plot_calc_patterns=plot_calc_patterns)
         #}}}
         #}}}
         # Printouts: {{{
@@ -2365,7 +2556,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         #}}}
     #}}}
     # _add_buttons: {{{
-    def _add_buttons(self,plot:go.Figure = None, xanchor = 'right',yanchor = 'top',button_x = 1.25, button_y = 1,):
+    def _add_buttons(self,plot:go.Figure = None, xanchor = 'right',yanchor = 'top',button_x = 1.25, button_y = 1,plot_calc_patterns:bool = True):
         '''
         The purpose of this function is to add buttons to a plotly plot
         with relative ease. 
@@ -2410,21 +2601,22 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 diff.append(i) 
         #}}}
         # Update Phase Buttons: {{{
-        for i,hkl in enumerate(hkls):
-            #print(f'HKL: {hkls}\nPhases: {phases}')
-            current_phase= copy.deepcopy(phases_off)
-            current_phase[hkl] = True # Sets the current hkl to visible
-            current_phase[phases[i]] = True # This sets the current phase to visible
-            current_phase[diff[0]] = False # This turns off the ydiff curve.
-            buttons.append(
-                dict(
-                    label = f'Show {phase_names[i]}',
-                    method = 'update',
-                    args = [{
-                        'visible':current_phase,
-                    }]
+        if plot_calc_patterns:
+            for i,hkl in enumerate(hkls):
+                #print(f'HKL: {hkls}\nPhases: {phases}')
+                current_phase= copy.deepcopy(phases_off)
+                current_phase[hkl] = True # Sets the current hkl to visible 
+                current_phase[phases[i]] = True # This sets the current phase to visible
+                current_phase[diff[0]] = False # This turns off the ydiff curve.
+                buttons.append(
+                    dict(
+                        label = f'Show {phase_names[i]}',
+                        method = 'update',
+                        args = [{
+                            'visible':current_phase,
+                        }]
+                    )
                 )
-            )
         #}}}
         # Update the Background Button: {{{
         if bkgs:
@@ -2479,8 +2671,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         fig = go.Figure()
         # Get the data to plot: {{{
         readable_times = list(self.metadata_data.keys())
-        xs = [np.around((self.metadata_data[rt]['epoch_time'] - self.metadata_data[readable_times[0]]['epoch_time']) / 60, 4) for rt in self.metadata_data] # Creates a list of the real times
-        ys = np.linspace(1, len(readable_times), len(readable_times)) # Create a line with the total number of patterns. 
+        if self.check_order:
+            ys = np.linspace(1, len(self.corrected_range), len(self.corrected_range))
+            xs = [np.around(entry['corrected_time']/60, 4) for idx, entry in self.rietveld_data.items()] 
+
+        else:
+            xs = [np.around((self.metadata_data[rt]['epoch_time'] - self.metadata_data[readable_times[0]]['epoch_time']) / 60, 4) for rt in self.metadata_data] # Creates a list of the real times
+            ys = np.linspace(1, len(readable_times), len(readable_times)) # Create a line with the total number of patterns. 
         #}}}
         # Plot the data: {{{
         fig.add_scatter(
@@ -2772,7 +2969,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 self.csv_plot_data['temperature'].append(t) # Record the temperature
             if 'time' not in self.csv_plot_data:
                 self.csv_plot_data['time'] = []
-            self._get_time(entry,time_units) # This gives us the time in the units we wanted (self._current_time)
+            self._get_time(entry,time_units, check_order = self.check_order) # This gives us the time in the units we wanted (self._current_time)
             self.csv_plot_data['time'].append(self._current_time) # Add the time
         # IF YOU WANT TO USE THE OUTPUT, Also DEFINE plot_data : {{{
         if use_out_data:
