@@ -18,6 +18,7 @@ import subprocess
 from shutil import copyfile
 from PIL import Image # This allows us to load tiff images.
 from generic_plotly_utils import GenericPlotter
+import pandas as pd
 #import pandas as pd
 #}}}
 # Notes on Operation: {{{
@@ -471,9 +472,8 @@ class DataCollector:
         negative_times = [] # indices of the patterns we need to reorient. 
         # Now, we need to check if the order is correct regarding the metadata: {{{  
         for idx, number in enumerate(tmp_rng): 
-            file_time = data_dict_keys[int(number)-1]
-            
-            md_keys = list(metadata_data.keys())
+            file_time = data_dict_keys[int(number)-1] 
+            md_keys = list(metadata_data.keys()) 
             md_entry = metadata_data[file_time] # Get the metadata for the current time
             start_time = metadata_data[md_keys[0]]['epoch_time'] # This gives us the starting time
             current_epoch_time = md_entry['epoch_time'] # This gives the current epoch time
@@ -493,6 +493,9 @@ class DataCollector:
                         fixed_range.append(number) 
                     else:
                         fixed_range.append(idx)
+        else:
+            fixed_range = tmp_rng
+
         #}}}
         return fixed_range
     #}}} 
@@ -1120,7 +1123,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         '''
         This part uses a range made by the selection of the user. 
         Since we don't need to pair the data with the metadata, we should be able to simply reverse the order of the range. 
-        '''
+        ''' 
         rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine. 
         for index,number in enumerate(rng):
             file_time = data_dict_keys[number-1]
@@ -1709,6 +1712,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             flag_search:str = 'CHECK',
             #polymorph_tags:dict = None, 
             check_order:bool = False,
+            time_offset:float = 0.0, 
         ):
         '''
         This will gather and sort all of the output files from your refinements for you. 
@@ -1721,10 +1725,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             This could be a dictionary which contains the substance flag e.g. Ta2O5 and a list of specific versions to look for e.g. HT)
         check_order: 
             This is if you need to check the order of your data order against metadata.
+        time_offset: 
+            If you are doing cooldown series, you can offset the time.
         ''' 
         self.rietveld_data = {}
         self.corrected_range = None # This is a default value. Only gets a value if you absolutely need to check_order
         self.check_order = check_order # Save this as an attribute
+        self.time_offset = time_offset
 
         # Get the sorted CSV, XY, OUT, Bkg XY: {{{
         self.sorted_csvs = sorted(glob.glob(f'{csv_prefix}_*.csv'), key = lambda x: x.split('_')[-1]) #gathers csvs with the given prefix
@@ -2037,36 +2044,63 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             for i ,entry in self.rietveld_data.items():     
                 self._get_time(i,time_units='s', check_order=self.check_order) # get the time in seconds
                 self.rietveld_data[i].update({
-                    'corrected_time': self._current_time
+                    'corrected_time': self._current_time 
                 })
             #}}} 
         #}}} 
         self._data_collected = True #Now, the data have been collected and plot pattern will be informed
     #}}}
+    # _t_cal_model: {{{
+    def _t_cal_model(self,t, a, b, c):
+        '''
+        This is a model made to fit experimental thermocouple data 
+        to calibrated experimental thermocouple data using a fit with refined Si lattice parameters. 
+
+        t: this is the temperature
+        a, b, c: These are lattice parameters refined
+        02/02/2024
+        '''
+        return a + t/b + t**2/c
+    #}}}
     # correct_t: {{{
     def correct_t(
-        self,
-        t:float = None,
+            self,
+            t:float = None,
         ):
         '''
-        This function was made on 07/21/2023
+        This function was made on 02/02/2024
         It uses the "a_corr" corrected lattice parameter values
         from the Okado (1974) paper
-        A function was made to fit those data very well (R^2 ~0.99993)
+        A function was made to fit those data very well (R^2 ~0.9998)
         That function fit the Si data collected in the beam
         The T from that correction and the thermocouple were plotted and a new function generated
         The final function's parameters and functional form are presented in this function. 
         '''
-        p1 = 0.69234863 # Slope
-        p2 = -15.5280975 # Intercept
-    
-        p1_err = 0.00516 # Slope Error
-        p2_err = 4.14 # Intercept Error
+        a = 8.82662177
+        b = 1.70318312
+        c = 12164.0983
      
-        self.tcalc = p1*t + p2 # This will be used
-        self.min_tcalc = (p1-p1_err)*t + (p2 - p2_err) # This is the low reference
-        self.max_tcalc = (p1 + p1_err)*t + (p2 + p2_err) # This is the high reference
-
+        a_err = 3.45387154
+        b_err = 0.03785038
+        c_err = 1539.47610
+     
+        try:
+            self.tcalc =  self._t_cal_model(t, a,b, c,)
+            self.min_tcalc = self._t_cal_model(t,
+                a - a_err,
+                b - b_err,
+                c - c_err,
+            )
+            self.max_tcalc = self._t_cal_model(t,
+                a + a_err,
+                b + b_err,
+                c + c_err,
+            )
+        except:
+            print(f'Invalid temp value: {t}... Setting to 0.0')
+            self.tcalc = 0
+            self.min_tcalc = 0
+            self.max_tcalc = 0 
         return self.tcalc
      
     #}}}
@@ -2242,7 +2276,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         #}}}
         # Get the time: {{{
         self.t0 = t0
-        self._current_time = (t1-t0)/divisor
+        self._current_time = (t1-t0 + self.time_offset)/divisor  # This will correct the output temperature
         #}}}
 
 
@@ -2266,6 +2300,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             legend_yanchor:str = 'top',
             showgrid:bool = False,
             dtick:float = 1,
+            ticks:str = 'inside'
             ):
         #Update the layout: {{{
         
@@ -2290,7 +2325,11 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 range = tth_range,
                 showgrid = showgrid,
                 dtick = dtick,
+                ticks = ticks,
             ),
+            yaxis = dict(
+                ticks = ticks,
+            )
         )
         #}}}
         # If yrange: {{{
@@ -2334,6 +2373,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             button_y = 1.,
             showgrid = False,
             dtick = 1,
+            ticks = 'inside',
         ):
         '''
         This will allow us to plot any of the loaded patterns 
@@ -2509,6 +2549,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             legend_yanchor= legend_yanchor,
             showgrid = showgrid,
             dtick = dtick,
+            ticks = ticks,
         ) 
         #}}}
         # Update buttons: {{{
@@ -2554,6 +2595,73 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 hovertemplate = f'{title_text}<br>Pattern Index: {index}<br>Substance: {specific_substance}<br>'+hovertemplate 
             return(tth,yobs, ycalc, ydiff, hovertemplate, title_text, xaxis_title, yaxis_title)
         #}}}
+    #}}}
+    # get_pattern_dict: {{{
+    def get_pattern_dict(self,index:int = None, hkli_threshold = 1e-5, return_dataframes:bool = True, offset_val = -100, offset_multiplier = 1):
+        '''
+        This function will return a dictionary with all of the relevant information to 
+        recreate any of the single pattern plots output by this code. 
+        '''
+        entry = self.rietveld_data[index]
+        self.pattern_dict = {} # This will be a dictionary containing all the info we want for a pattern.  
+        xy = entry['xy']
+        phase_xy = entry['phase_xy']
+        rietveld_hkli = entry['hkli']
+        bkg = entry['bkg'] 
+        # Update the xy observed data {{{
+        self.pattern_dict.update(xy)
+        #}}}  
+        # Update the phase_xy data: {{{
+        for idx, phase_dict in phase_xy.items():
+            substance = phase_dict['substance'] # This should accompany each entry recorded. 
+            ycalc = phase_dict['ycalc'] # This is the calculated intensity across the tth range for the phase. 
+            self.pattern_dict[f'{substance}_ycalc'] = ycalc
+        #}}}
+        # Update the background data: {{{
+        self.pattern_dict['bkg_calc'] = bkg['ycalc']
+        #}}}
+        base_pattern_info = copy.deepcopy(self.pattern_dict)
+        # Update the hkli data: {{{
+        hkli_dicts = []
+        multiplier = offset_multiplier
+        for idx, hkli_dict in rietveld_hkli.items():
+            substance = hkli_dict['substance']
+            hkli = hkli_dict['hkli'] # This contains: hkl, m, d, tth, i
+            hkl = hkli['hkl']
+            d = hkli['d']
+            tth = hkli['tth']
+            offset = [offset_val*multiplier]*len(tth)
+            multiplier += 1
+            i = hkli['i']
+            reported_hkl = []
+            reported_d = []
+            reported_tth = []
+            reported_offset = []
+            reported_i = []
+            for idx,val in enumerate(i):
+                if val > hkli_threshold:
+                    reported_hkl.append(hkl[idx])
+                    reported_d.append(d[idx])
+                    reported_tth.append(tth[idx])
+                    reported_offset.append(offset[idx])
+                    reported_i.append(val)
+            reported_dict = {
+                f'{substance}_tth': reported_tth,
+                f'{substance}_offset': reported_offset,
+                f'{substance}_hkl': reported_hkl,
+                f'{substance}_d': reported_d,
+                f'{substance}_i': reported_i,
+            }
+            self.pattern_dict.update(reported_dict) 
+            hkli_dicts.append(pd.DataFrame(reported_dict)) # Add dataframes to the output 
+        #}}}
+        reported_output = []
+        reported_output.append(pd.DataFrame(base_pattern_info))
+        reported_output.extend(hkli_dicts)
+        output = tuple(reported_output) # This makes the output into a tuple of variable length depending upon the phases
+        if return_dataframes:
+            print(f'returning {len(output)} dataframes...')
+            return output 
     #}}}
     # _add_buttons: {{{
     def _add_buttons(self,plot:go.Figure = None, xanchor = 'right',yanchor = 'top',button_x = 1.25, button_y = 1,plot_calc_patterns:bool = True):
@@ -2768,6 +2876,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             legend_xanchor:str = 'right',
             legend_yanchor:str = 'top',
             debug:bool = False,
+            ticks:str = 'inside',
             ):
         ''' 
         plot_type: This can be any of the below. 
@@ -3116,10 +3225,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             xaxis = dict(
                 title = xaxis_title,
                 domain = [yaxis_2_position, 1], # the active area for x axis
-                range = time_range
+                range = time_range,
+                ticks = ticks,
             ), 
             yaxis = dict(
                 title = yaxis_title,
+                ticks = ticks,
             ),
             font = dict(
                 size = font_size,
@@ -3145,6 +3256,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                     overlaying = 'y',
                     side = 'left',
                     position = yaxis_2_position,
+                    ticks = ticks,
                 ),
             )
         #}}}
@@ -3155,7 +3267,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                     title = yaxis3_title,
                     anchor = 'x',
                     overlaying = 'y',
-                    side = 'right'
+                    side = 'right',
+                    ticks = ticks,
 
                 ),
             )
@@ -3195,6 +3308,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             button_layer_2_height = 1.1,
             showgrid:bool = False,
             dtick:float = 1,
+            ticks:str = 'inside',
             plot_total_intensity_v_time = False,
             ):
         '''
@@ -3438,6 +3552,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                 legend_yanchor=legend_yanchor,
                 showgrid = showgrid,
                 dtick = dtick,
+                ticks = ticks,
         )
         # Waterfall Update: {{{
         if waterfall:

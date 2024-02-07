@@ -46,7 +46,8 @@ class GenericPlotter:
             legend_xanchor:str = 'right',
             legend_yanchor:str = 'top',
             legend_x:float = 0.99,
-            legend_y:float = 0.99,
+            legend_y:float = 0.99, 
+            ticks:str = 'inside',
             ):
         '''
         This allows you to plot a dataset
@@ -96,10 +97,12 @@ class GenericPlotter:
             xaxis = dict(
                 title = xaxis_title, 
                 domain = [0.15,1], 
-                range = xrange,
+                range = xrange, 
+                ticks = ticks,
             ),
             yaxis = dict(
-                title = yaxis_title, 
+                title = yaxis_title,  
+                ticks = ticks,
             ),
         )
         #}}}
@@ -125,7 +128,8 @@ class GenericPlotter:
             legend_xanchor:str = 'right',
             legend_yanchor:str = 'top',
             legend_x:float = 0.99,
-            legend_y:float = 0.99,
+            legend_y:float = 0.99,  
+            ticks:str = 'inside',
             ):
         '''
         Allows you to add data to the existing plot 
@@ -161,9 +165,19 @@ class GenericPlotter:
         #}}}
         # Update Layout: {{{
         if xrange != None:
-            self._fig.update_layout(xaxis = dict(range = xrange))
+            self._fig.update_layout(
+                    xaxis = dict(
+                        range = xrange, 
+                        ticks = ticks,
+                    )
+            )
         if yrange != None:
-            self._fig.update_layout(yaxis = dict(range = yrange))
+            self._fig.update_layout(
+                    yaxis = dict(
+                        range = yrange, 
+                        ticks = ticks,
+                        )
+                    )
         self._fig.update_layout(
             legend = dict(
                 yanchor = legend_yanchor,
@@ -180,7 +194,8 @@ class GenericPlotter:
                         anchor = 'free',
                         overlaying = 'y',
                         side = 'left',
-                        position = y2_position,
+                        position = y2_position, 
+                        ticks = ticks,
                     ),
             )
         #}}} 
@@ -191,7 +206,8 @@ class GenericPlotter:
                         title = y3_title,
                         anchor = 'x',
                         overlaying = 'y',
-                        side = 'right',
+                        side = 'right', 
+                        ticks = ticks,
                     )
             )
         #}}}
