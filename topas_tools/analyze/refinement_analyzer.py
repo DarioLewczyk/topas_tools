@@ -8,7 +8,6 @@ import re
 import glob
 import numpy as np
 from tqdm import tqdm
-from topas_tools.gvs import rietveld_data
 from topas_tools.utils.topas_utils import Utils, DataCollector
 from topas_tools.utils.metadata_parser import MetadataParser
 from topas_tools.utils.out_file_parser import OUT_Parser
@@ -25,17 +24,43 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
     This class leverages other classes in modules like the 
     plotting module to deliver high quality figures 
     and actionable data fast.
+
+    Within this class, we should create properties
+    which will be attributed to this class and can be set throughout
+    the program
     '''
     # __init__: {{{
     def __init__(self,):
+        self._rietveld_data = {} # This holds all of the rietveld refinement data for plots and analysis
+        self._metadata_data = {} # This holds all the metadata data for the data
+
         self.current_dir = os.getcwd() # Save the directory where the function is called. 
-        DataCollector.__init__(self) # Initialize DataCollector with default values. 
+        DataCollector.__init__(self,metadata_data=self.metadata_data) # Initialize DataCollector with default values. 
         OUT_Parser.__init__(self)
         ResultParser.__init__(self)
         TCal.__init__(self) 
-        RefinementPlotter.__init__(self)
-        
+        RefinementPlotter.__init__(self, rietveld_data=self.rietveld_data) 
     #}}}
+    # rietveld_data: {{{
+    @property
+    def rietveld_data(self):
+        return self._rietveld_data
+    @rietveld_data.setter
+    def rietveld_data(self, new_rietveld_data):
+        if not isinstance(new_rietveld_data, dict):
+            raise ValueError('rietveld_data must be a dictionary!')
+            self._rietveld_data = new_rietveld_data 
+    #}}} 
+    # metadata_data: {{{
+    @property
+    def metadata_data(self):
+        return self._metadata_data
+    @metadata_data.setter
+    def metadata_data(self, new_metadata_data):
+        if not isinstance(new_metadata_data, dict):
+            raise ValueError('metadata_data must be a dictionary!')
+        self._metadata_data = new_metadata_data
+    #}}} 
     # _categorize_refined_data: {{{
     def categorize_refined_data(
             self,
@@ -219,8 +244,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         out_prefix = file_prefix
         hkli_prefix = file_prefix
         #}}}
-        # Create attributes: {{{
-        self.rietveld_data = rietveld_data
+        # Create attributes: {{{ 
         self.corrected_range = None # only updated if you check order
         self.check_order = check_order # Save this as an attribute
         self.time_offset = time_offset
@@ -277,16 +301,16 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             #}}}
             # Work with the metadata: {{{
             os.chdir(self.meta_dir) # Go into the metadata
-            self._md = MetadataParser()
+            self._md = MetadataParser(metadata_data=self.metadata_data)
             self._md.get_metadata()
-            self.metadata_data = self._md.metadata_data
+            #self.metadata_data = self._md.metadata_data
             #}}}
             os.chdir(self.current_dir) # Return to the original directory.
             # If you need to check the order of patterns against metadata: {{{
             if self.check_order:
                 num_scans_refined = len(self.sorted_csvs) # This is the most robust counter of the total patterns.
                 tmp_rng = np.linspace(1,len(self.file_dict_keys), num_scans_refined) # Get the original indices of each pattern.
-                dc = DataCollector() # Need to init this class to check the order.
+                #dc = DataCollector(metadata_data=self.metadata_data) # Need to init this class to check the order.
                 self.corrected_range = dc.check_order_against_time(tmp_rng=tmp_rng, data_dict_keys=self.file_dict_keys,metadata_data=self.metadata_data, mode=1) #Get a new order
                 # Correct the file lists: {{{
                 # Define temporary lists for data: {{{
@@ -362,9 +386,9 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         #}}} 
         # Update Rietveld Data With Original Pattern Info and Metadata: {{{
         if get_orig_patt_and_meta:
-            # Now, we want to update the "rietveld_data" dict: {{{
+            # Now, we want to update the "rietveld_data" dict: {{{ 
             for i in self.rietveld_data:
-                entry = self.rietveld_data[i] # Gives us the data entry.
+                entry = self.rietveld_data[i] # Gives us the data entry. 
                 file_time = int(re.findall(r'\d+',entry['csv_name'])[0]) # This gives the time of the file. 
                 try:
                     md = self.metadata_data[file_time]

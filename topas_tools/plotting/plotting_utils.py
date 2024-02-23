@@ -15,7 +15,6 @@ import copy
 import plotly.graph_objects as go
 import numpy as np
 
-from topas_tools.gvs import rietveld_data
 from topas_tools.utils.topas_utils import UsefulUnicode
 #}}}
 # GenericPlotter: {{{
@@ -317,7 +316,7 @@ class PlottingUtils(GenericPlotter):
     making nice plots with "RefinementPlotter"
     '''
     # __init__: {{{
-    def __init__(self,):
+    def __init__(self,rietveld_data:dict = {}):
         self.rietveld_data = rietveld_data
         self.color_index = 0 # Initialize the color as the default
         super().__init__()

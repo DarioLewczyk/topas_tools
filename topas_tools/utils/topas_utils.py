@@ -9,7 +9,6 @@ import glob
 import numpy as np
 import texttable
 from PIL import Image
-from topas_tools.gvs import metadata_data # import this glob variable
 #}}}
 # Utils: {{{
 class Utils: 
@@ -217,6 +216,7 @@ class DataCollector:
             time_units:str = 'min',
             file_time_units:str = 'sec',
             skiprows = 1, 
+            metadata_data:dict = {},
         ):
         '''
         1. fileextension: The extension (without a .)
@@ -232,8 +232,8 @@ class DataCollector:
         self.len_of_time = len_of_time 
         self.time_units = time_units 
         self.file_time_units = file_time_units 
-        self.skiprows = skiprows 
-        self.metadata_data = metadata_data # Set the self parameter to the global variable (it will stay updated)
+        self.skiprows = skiprows  
+        self.metadata_data = metadata_data # Transfer the metadata or start fresh 
         #}}}
         # Determine if working with images: {{{
         if self._fileextension == 'tif' or self._fileextension == 'tiff':

@@ -5,7 +5,6 @@
 # Imports: {{{
 import re
 import numpy as np
-from topas_tools.gvs import out_file_monitor
 #}}}
 # FileModifier: {{{
 class FileModifier():
@@ -17,7 +16,17 @@ class FileModifier():
     '''
     # __init__: {{{
     def __init__(self,):
-        pass
+        self._out_file_monitor = {}
+    #}}}
+    # out_file_monitor: {{{
+    @property
+    def out_file_monitor(self):
+        return self._out_file_monitor
+    @out_file_monitor.setter
+    def out_file_monitor(self,new_out_file_monitor):
+        if not isinstance(new_out_file_monitor, dict):
+            raise ValueError('out_file_monitor needs to be a dictionary!')
+        self._out_file_monitor = new_out_file_monitor
     #}}}
     # _modify_out_for_monitoring: {{{
     def _modify_out_for_monitoring(self,
@@ -69,7 +78,7 @@ class FileModifier():
                     rwp = entry['rwp']
                 else:
                     rwp = None
-                out_file_monitor[i] = {
+                self.out_file_monitor[i] = {
                         'values': [value],
                         'name':name,
                         'type': entry_type,
@@ -80,8 +89,8 @@ class FileModifier():
         # For all other indices: {{{
         else:
             # Loop through the out file monitor: {{{
-            for i, key in enumerate(out_file_monitor):
-                entry = out_file_monitor[key] # this is the current substance entry for the history
+            for i, key in enumerate(self.out_file_monitor):
+                entry = self.out_file_monitor[key] # this is the current substance entry for the history
                 current_entry = relevant_lines[key] # This is the current substance entry
                 line_idx = current_entry['linenumber'] # This gives us the linenumber for the scale factor.
                 str_num = current_entry['string_number'] # This is the current string for the scale factor.
@@ -109,7 +118,7 @@ class FileModifier():
                             print(f'ENABLED {name}')
                         elif rwp_pct_diff < threshold:
                             # No need to add the phase
-                            out_file_monitor[key]['rwps'].append(current_rwp) # Add the newest Rwp
+                            self.out_file_monitor[key]['rwps'].append(current_rwp) # Add the newest Rwp
                     except:
                         # This case does not need to deal with Rwps. 
                         pass

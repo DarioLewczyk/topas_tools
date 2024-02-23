@@ -7,7 +7,6 @@ import re
 import numpy as np
 from tqdm import tqdm
 from topas_tools.utils.topas_utils import DataCollector
-from topas_tools.gvs import metadata_data # This dictionary is global
 #}}}
 # MetadataParser: {{{
 class MetadataParser:
@@ -24,11 +23,17 @@ class MetadataParser:
         time_key:str = 'time:',
         temp_key:str = 'element_temp',
         fileextension:str = 'yaml',
+        metadata_data:dict = None,
         ):
-        md = DataCollector(fileextension=fileextension)
+        if metadata_data == None:
+            self.metadata_data = {}
+        else:
+            self.metadata_data = metadata_data
+        md = DataCollector(fileextension=fileextension, metadata_data = self.metadata_data)
         md.scrape_files() # This gives us the yaml files in order in data_dict
         self.metadata = md.file_dict # This is the dictionary with all of the files.
         self.get_metadata(time_key=time_key, temp_key=temp_key)
+        
         #os.chdir(self._data_dir) # Returns us to the original directory.
     #}}}
     # get_metadata: {{{
@@ -36,8 +41,7 @@ class MetadataParser:
         self,
         time_key:str = 'time:',
         temp_key:str = 'element_temp',
-        ):
-        self.metadata_data = metadata_data
+        ): 
         metadata = tqdm(self.metadata,desc="Working on Metadata")
         for i, key in enumerate(metadata):
             #metadata.set_description_str(f'Working on Metadata {key}:')

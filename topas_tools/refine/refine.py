@@ -15,7 +15,7 @@ from topas_tools.utils.topas_utils import Utils, UsefulUnicode, DataCollector
 from topas_tools.utils.metadata_parser import MetadataParser
 from topas_tools.utils.out_file_parser import OUT_Parser
 from topas_tools.utils.file_modifier import FileModifier
-from topas_tools.gvs import out_file_monitor 
+
 #}}}
 # TOPAS_Refinements: {{{
 class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):

@@ -6,7 +6,7 @@
 import copy
 import numpy as np
 import plotly.graph_objects as go
-from topas_tools.gvs import rietveld_data
+
 from topas_tools.plotting.plotting_utils import PlottingUtils
 from topas_tools.utils.topas_utils import UsefulUnicode
 #}}}
@@ -19,9 +19,9 @@ class RefinementPlotter(PlottingUtils):
     accomplished.
     '''
     # __init__: {{{
-    def __init__(self,):
+    def __init__(self,rietveld_data:dict ={}):
         self.rietveld_data = rietveld_data 
-        super().__init__()
+        super().__init__(rietveld_data=self.rietveld_data)
     #}}} 
     # plot_pattern: {{{
     def plot_pattern(self,
