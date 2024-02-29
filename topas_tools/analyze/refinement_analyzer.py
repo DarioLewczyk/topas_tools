@@ -6,7 +6,9 @@
 import os, sys
 import re
 import glob
+import copy
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from topas_tools.utils.topas_utils import Utils, DataCollector
 from topas_tools.utils.metadata_parser import MetadataParser
@@ -507,5 +509,78 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         #}}}
         print(final_printout)
 
+    #}}}
+    # get_pattern_dict: {{{
+    def get_pattern_dict(self,
+            index:int = None, 
+            hkli_threshold = 1e-5, 
+            return_dataframes:bool = True, 
+            offset_val = -100, 
+            offset_multiplier = 1
+        ):
+        '''
+        This function will return a dictionary with all of the relevant information to 
+        recreate any of the single pattern plots output by this code. 
+        '''
+        entry = self.rietveld_data[index]
+        self.pattern_dict = {} # This will be a dictionary containing all the info we want for a pattern.  
+        xy = entry['xy']
+        phase_xy = entry['phase_xy']
+        rietveld_hkli = entry['hkli']
+        bkg = entry['bkg'] 
+        # Update the xy observed data {{{
+        self.pattern_dict.update(xy)
+        #}}}  
+        # Update the phase_xy data: {{{
+        for idx, phase_dict in phase_xy.items():
+            substance = phase_dict['substance'] # This should accompany each entry recorded. 
+            ycalc = phase_dict['ycalc'] # This is the calculated intensity across the tth range for the phase. 
+            self.pattern_dict[f'{substance}_ycalc'] = ycalc
+        #}}}
+        # Update the background data: {{{
+        self.pattern_dict['bkg_calc'] = bkg['ycalc']
+        #}}}
+        base_pattern_info = copy.deepcopy(self.pattern_dict)
+        # Update the hkli data: {{{
+        hkli_dicts = []
+        multiplier = offset_multiplier
+        for idx, hkli_dict in rietveld_hkli.items():
+            substance = hkli_dict['substance']
+            hkli = hkli_dict['hkli'] # This contains: hkl, m, d, tth, i
+            hkl = hkli['hkl']
+            d = hkli['d']
+            tth = hkli['tth']
+            offset = [offset_val*multiplier]*len(tth)
+            multiplier += 1
+            i = hkli['i']
+            reported_hkl = []
+            reported_d = []
+            reported_tth = []
+            reported_offset = []
+            reported_i = []
+            for idx,val in enumerate(i):
+                if val > hkli_threshold:
+                    reported_hkl.append(hkl[idx])
+                    reported_d.append(d[idx])
+                    reported_tth.append(tth[idx])
+                    reported_offset.append(offset[idx])
+                    reported_i.append(val)
+            reported_dict = {
+                f'{substance}_tth': reported_tth,
+                f'{substance}_offset': reported_offset,
+                f'{substance}_hkl': reported_hkl,
+                f'{substance}_d': reported_d,
+                f'{substance}_i': reported_i,
+            }
+            self.pattern_dict.update(reported_dict) 
+            hkli_dicts.append(pd.DataFrame(reported_dict)) # Add dataframes to the output 
+        #}}}
+        reported_output = []
+        reported_output.append(pd.DataFrame(base_pattern_info))
+        reported_output.extend(hkli_dicts)
+        output = tuple(reported_output) # This makes the output into a tuple of variable length depending upon the phases
+        if return_dataframes:
+            print(f'returning {len(output)} dataframes...')
+            return output 
     #}}}
 #}}}

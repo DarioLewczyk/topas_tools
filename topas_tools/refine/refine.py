@@ -75,6 +75,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             threshold_for_on:float = 0.0195, # this can be an Rwp percent deviation or a time.
             threshold_for_off:float = 0.01, 
             on_method:str = 'rwp', 
+            off_method:str = 'sf',
             time_error:float = 1.1, 
             on_sf_value:float = 1.0e-5, 
             check_order:bool = False,
@@ -91,11 +92,14 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             7. phases_to_enable: Phase(s) to monitor to enable
             8. phases_to_disable: Phase(s) to monitor to disable
             9. threshold_for_on: Threshold(s) to trigger on
-            10. threshold_for_off: Threshold(s) to trigger off
+            10. threshold_for_off: Threshold(s) to trigger off (percent of scale factor)
             11. on_method: either "time" or "rwp"
-            12. time_error: if "on_method" is time, how much ±?    
-            13. on_sf_value: SF Value(s) for when a phase is enabled.     
-            14. check_order: If time recording gets messed up, this will ensure order is set properly
+            12. off_method: either 'time' or 'sf'
+            13. time_error: if "on_method" is time, how much ±?    
+            14. on_sf_value: SF Value(s) for when a phase is enabled.     
+            15. check_order: If time recording gets messed up, this will ensure order is set properly
+        NOTE: both on and off methods can be lists because some phases you may want to treat
+        in different ways.
 
         '''
         debug = False # Set this to True if you want to see debugging information. 
@@ -128,7 +132,18 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                 print(f'"{template_dir}" is invalid. Navigate to the ".inp" file  directory.')
                 template_dir = self.navigate_filesystem()
         # Handle the metadata if you want to monitor times: {{{
-        if on_method == 'time' or check_order: 
+        # Check if you need times: {{{
+        need_time = False
+        if check_order == True:
+            need_time = True
+        elif type(on_method) == list or type(off_method) == list:
+            if 'time' in on_method or 'time' in off_method:
+                need_time = True
+        elif type(on_method) == str or type(off_method) == str:
+            if on_method == 'time' or off_method == 'time':
+                need_time = True
+        #}}}
+        if need_time:
             # Find the metadata directory: {{{
             metadata_dir = os.path.join(data_dir, 'meta') # metadata should be in your data path + meta
             try:
@@ -268,6 +283,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                         off_sf_value=off_sf_value,
                         on_sf_value=on_sf_value,
                         on_method = on_method, # This is to tell if we are working with times or not
+                        off_method = off_method, # This tells whether to look for times of scale factors
                         current_time = time, # This is either a time or None
                         debug=debug,
                         time_error=time_error, # This is the +/- the time can be off to trigger the turning on of a phase.
@@ -323,6 +339,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                     header_lines.append(line)
                 #}}}
                 # Statements to map phases: {{{
+                # Create_hklm_d_Th2_Ip_file line: {{{
                 if 'Create_hklm_d_Th2_Ip_file' in line:
                     inp_dict['phases'][phase_num].update({
                         'end':i-1, # This keeps the hkli file from being overwritten
@@ -331,7 +348,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                     keep_reading=False
                     phase_lines.clear() # Reset the list
                     phase_num+=1 # Move to the next phase
-                if 'str' in line:
+                #}}}
+                # str line: {{{
+                splitline = line.strip('\t\n') # if we get rid of these modifiers, we can check if str starts the line
+                if splitline.startswith('str'):
                     if not keep_reading:
                         pass # We don't need to do anything. It is the first phase. 
                     inp_dict['phases'][phase_num] = {
@@ -339,24 +359,35 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                     }
                     keep_reading = True # Tells the program to keep reading lines.
                     header_done=True
+                #}}}
+                # phase_name line: {{{
+                if 'phase_name' in line:  
+                    symbol = re.findall(r'(\w+\d?)+',line)[-1]
+                    test = re.findall(r"(\w+\d?)+",line) 
+                    try:
+                        inp_dict['phases'][phase_num].update({
+                            'symbol':symbol,
+                        })  
+                    except:
+                        pass
+                #}}}
+                # Keep reading: {{{
                 if keep_reading:
                     phase_lines.append(line) # This adds the line to the list which will be added to a dict. 
-                if 'phase_name' in line: 
-                    symbol = re.findall(r'(\w+\d?)+',line)[-1]
-                    inp_dict['phases'][phase_num].update({
-                        'symbol':symbol,
-                    })
+                #}}}
                 #}}}
                 # Handle Output: {{{
                 if 'Out_X_Yobs_Ycalc_Ydiff' in line: 
                     inp_dict['out'] = {'start':i,'line':line} # This tells the program which line the xy output is on.
-                #}}}
-            inp_dict['header'] = header_lines
+                #}}} 
+                # INP DICT WORKS HERE...
+            inp_dict['header'] = header_lines 
+        #print(f'inp_dict after: {inp_dict["phases"]}') # FAILED
         #}}}
         # Loop through the structures: {{{ 
-        for phase in inp_dict['phases']: 
+        for phase in inp_dict['phases']:  
             inp_file = []
-            entry = inp_dict['phases'][phase]
+            entry = inp_dict['phases'][phase] 
             substance = entry['symbol'] 
             phase_lines = entry['phase_lines']
             header = inp_dict['header'] 

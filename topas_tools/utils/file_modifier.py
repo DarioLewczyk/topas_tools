@@ -38,7 +38,8 @@ class FileModifier():
             current_idx:int = None,
             off_sf_value:float = 1.0e-100,
             on_sf_value:float = 1.0e-6,
-            on_method:str = None,
+            on_method:str = 'rwp',
+            off_method:str = 'sf',
             current_time:float = None,
             debug:bool = False,
             time_error:float = 1.1,
@@ -62,10 +63,21 @@ class FileModifier():
 
         on_method can be either time or rwp. If it is time, you need to give a time. 
 
+        off_method: can be either "time" or "sf"
+
         time_error is the amount of +/- that the time can be off to trigger the phase on or off
         '''
         # get the relevant lines: {{{
-        relevant_lines = self._get_relevant_lines_for_monitoring(out, off_phases,on_phases,threshold_for_off,threshold_for_on,debug)
+        relevant_lines = self._get_relevant_lines_for_monitoring(
+                out, 
+                off_phases,
+                on_phases,
+                threshold_for_off,
+                threshold_for_on,
+                on_method,
+                off_method,
+                debug
+                )
         #}}} 
         # check to see if the index is zero or not: {{{
         if current_idx == 0:
@@ -95,18 +107,22 @@ class FileModifier():
                 line_idx = current_entry['linenumber'] # This gives us the linenumber for the scale factor.
                 str_num = current_entry['string_number'] # This is the current string for the scale factor.
                 threshold = current_entry['threshold'] # This is the appropriate threshold for the given phase
+                method = current_entry['method'] # This gives the method for including or excluding a phase
+
 
                 values = entry['values'] # List of the scale factors.
                 name = entry['name'] # should contain the substance name with some other things like "sf_"
                 entry_type = entry['type'] # Either 'off' or 'on'
                 rwps = entry['rwps'] # Will be either a float for the Rwp or 'None'
-                stopped = entry['stopped'] # Either True or False
+                stopped = entry['stopped'] # Either True or False  
+                if debug:
+                    print(f'name: {name}:\n\tentry_type: {entry_type}\n\tstopped: {stopped}\n\tthreshold: {threshold}\n\tmethod: {method}')
 
                 max_value = max(values) # This gets us the largest value present.
                 current_value = current_entry['value'] # This gives the current value
                 norm_val = current_value/max_value # This gives us the normalized value relative to the max.
                 # Handle Phase ON Cases: {{{ 
-                if entry_type == 'on' and on_method == 'rwp':
+                if entry_type == 'on' and method == 'rwp':
                     try:
                         min_rwp = min(rwps) # This will give us the min Rwp value (remember that low Rwp is good, high Rwp is bad)
                         current_rwp = current_entry['rwp'] # This gives us the current Rwp
@@ -122,9 +138,11 @@ class FileModifier():
                     except:
                         # This case does not need to deal with Rwps. 
                         pass
-                elif entry_type == 'on' and on_method == 'time':
+                elif entry_type == 'on' and method == 'time':
                     try:
-                        if np.abs(current_time - threshold_for_on) <= time_error and not stopped: 
+                        if debug:
+                            print(f'\tcurrent time: {current_time}\n\tthreshold: {threshold}\n\ttime_error: {time_error}')
+                        if np.abs(current_time - threshold) <= time_error and not stopped: 
                             # This ensures that whether you are running forward or reverse direction, you can trigger at an appropriate time. 
                             entry['stopped'] = True # We are adding the phase and can stop monitoring. 
                             self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=on_sf_value,debug=debug) 
@@ -133,7 +151,8 @@ class FileModifier():
                         pass
                 #}}}
                 # Handle the Phase OFF Case: {{{
-                elif entry_type == 'off':
+                # Handle the SF Trigger Cases: {{{
+                if entry_type == 'off' and method == 'sf':
                     if norm_val > threshold:
                         # This means we keep going. The scale factor hasnt fallen far enough
                         entry['values'].append(current_value)
@@ -143,6 +162,20 @@ class FileModifier():
                         self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=off_sf_value,debug=debug)
                         print(f'DISABLED {name}')
                         #}}} 
+                #}}}
+                # Handle the TIME trigger cases: {{{
+                elif entry_type == 'off' and method == 'time':
+                    try:
+                        if debug:
+                            print(f'\tcurrent time: {current_time}\n\tthreshold: {threshold}\n\ttime_error: {time_error}')
+                        if np.abs(current_time - threshold) <= time_error and not stopped: 
+                            # This ensures that whether you are running forward or reverse direction, you can trigger at an appropriate time. 
+                            entry['stopped'] = True # We are adding the phase and can stop monitoring. 
+                            self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=off_sf_value,debug=debug) 
+                            print(f'DISABLED {name}')
+                    except:
+                        pass
+                #}}}
 
                 #}}}
 
@@ -193,13 +226,23 @@ class FileModifier():
 
     #}}}
     # _get_relevant_lines_for_monitoring: {{{ 
-    def _get_relevant_lines_for_monitoring(self,out:str = None,  off_phases:list = None, on_phases:list = None, threshold_for_off:float = None, threshold_for_on:float = None, debug:bool = False):
+    def _get_relevant_lines_for_monitoring(
+            self,
+            out:str = None,  
+            off_phases:list = None, 
+            on_phases:list = None, 
+            threshold_for_off:float = None, 
+            threshold_for_on:float = None, 
+            on_method = 'rwp',
+            off_method = 'sf',
+            debug:bool = False
+            ):
         '''
         Since we are adding more kinds of monitoring than simply scale factor to remove a phase, 
         it seems fitting that we should create some kind of framework to make the task of accomplishing this easier.
 
-        turning off phases is accomplished by looking at the scale factors. 
-        turning on phases is accomplished by looking at the Rwp as a guide then changing scale factor.
+        turning off phases can be accomplished by looking at times or scale factors
+        turning on phases can be accomplished by looking at times or rwp
         '''
         relevant_lines = {}
         rwp = None # This will store the Rwp for those phases we want to turn on. 
@@ -219,10 +262,16 @@ class FileModifier():
                     # Handle cases where you want to turn a phase off: {{{
                     for j, off in enumerate(off_phases):
                         # assign its threshold: {{{
-                        try:
+                        if type(threshold_for_off) == list:
                             threshold = threshold_for_off[j] # If the user gave a list of thresholds for each phase...
-                        except:
+                        else:
                             threshold = threshold_for_off
+                        #}}}
+                        # assign the off methods: {{{
+                        if type(off_method) == list:
+                            method= off_method[j] # IF the user gave a list of off methods
+                        else:
+                            method= off_method
                         #}}}
                         #define the index for the dict: {{{ 
                         if j == 0 and len(relevant_lines) == 0:
@@ -247,6 +296,7 @@ class FileModifier():
                                     'string_number':str_value,
                                     'type': 'off',
                                     'threshold': threshold,
+                                    'method':method,
                             }# Record the line 
                             
                             if j == len(off_phases):
@@ -256,10 +306,16 @@ class FileModifier():
                     if on_phases != None:
                         for j, on in enumerate(on_phases):
                             # Assign its threshold: {{{
-                            try:
+                            if type(threshold_for_on) == list:
                                 threshold = threshold_for_on[j]  # IF the user gave a list of thresholds
-                            except:
+                            else:
                                 threshold = threshold_for_on
+                            #}}}
+                            # Assign its method: {{{
+                            if type(on_method) == list: 
+                                method = on_method[j]
+                            else:
+                                method = on_method
                             #}}}
                             if j == 0 and len(relevant_lines) == 0:
                                 k = j
@@ -274,6 +330,7 @@ class FileModifier():
                                     'name':prm_name, 
                                     'string_number': str_value,
                                     'type': 'on',
+                                    'method':method,
                                     'threshold':threshold,
                                     'rwp':rwp,
                                 } # record the line 

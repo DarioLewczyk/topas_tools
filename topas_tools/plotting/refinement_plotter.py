@@ -6,7 +6,7 @@
 import copy
 import numpy as np
 import plotly.graph_objects as go
-
+import re
 from topas_tools.plotting.plotting_utils import PlottingUtils
 from topas_tools.utils.topas_utils import UsefulUnicode
 #}}}
