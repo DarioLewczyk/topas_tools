@@ -23,22 +23,22 @@ class RefinementPlotter(PlottingUtils):
         self.rietveld_data = rietveld_data 
         super().__init__(rietveld_data=self.rietveld_data)
     #}}} 
+    # _get_kwarg: {{{
+    def _get_kwarg(self, key):
+        '''
+        This function acts on self._internal_kwargs
+        pass a string to get the value if it exists.
+        '''
+        try:
+            val = self._internal_kwargs[key]
+        except:
+            val = None
+        return val
+    #}}}
     # plot_pattern: {{{
     def plot_pattern(self,
-            index:int = 0, 
-            template:str = 'simple_white',
+            index:int = 0,  
             time_units:str = 'min', 
-            tth_range:list = None,
-            yrange:list = None,
-            use_calc_temp:bool = True,
-            height = 800,
-            width = 1000,
-            show_legend:bool = True,
-            legend_x:float = 1.0,
-            legend_y:float = 1.0,
-            legend_xanchor:str = 'right',
-            legend_yanchor:str = 'top',
-            font_size:int = 20,
             rwp_decimals:int = 2,
             temp_decimals:int = 2,
             printouts:bool = True,
@@ -49,13 +49,8 @@ class RefinementPlotter(PlottingUtils):
             filter_hkli:bool = True,
             single_pattern_offset:float = 0,
             hkli_offset:float = -60,
-            button_xanchor = 'right',
-            button_yanchor = 'top',
-            button_x = 1.4,
-            button_y = 1.,
-            showgrid = False,
-            dtick = 1,
-            ticks = 'inside',
+            use_calc_temp:bool = True, 
+            **kwargs,
         ):
         '''
         This will allow us to plot any of the loaded patterns 
@@ -63,7 +58,84 @@ class RefinementPlotter(PlottingUtils):
         plot_hkli will allow hkl to be plotted for each phase IF the data are present
 
         since you run "get_data()" first, self.check_order will be in place. This will ensure the proper time is recorded.
+
+        use *args or  **kwargs to pass through relevant plot stylings.
+        1. template
+        2. tth_range or xrange or x_range
+        3. y_range or yrange
+        4. height
+        5. width
+        6. show_legend
+        7. legend_x 
+        8. legend_y
+        9. legend_xanchor
+        10. legend_yanchor
+        11. font_size
+        12. button_xanchor
+        13. button_yanchor
+        14. button_x 
+        15. button_y
+        16. showgrid
+        17. dtick
+        18. ticks
+        19. phase_colors # If you choose to give colors for each of the individual phases
         '''
+        # assign variables from kwargs: {{{
+        self._internal_kwargs = {
+            'template' : 'simple_white',
+            'tth_range' : None,
+            'yrange' :None,
+            'height':800,
+            'width':1000,
+            'show_legend':True,
+            'legend_x':None,
+            'legend_y':None,
+            'legend_xanchor':None,
+            'legend_yanchor':None,
+            'font_size':20,
+            'button_xanchor':'right',
+            'button_yanchor':'top',
+            'button_x':1.45,
+            'button_y':1.05,
+            'showgrid':False,
+            'dtick':1,
+            'ticks':'inside',
+            'phase_colors': None,
+        }
+        # Apply any kwarg updates: {{{
+        for key, val in kwargs.items():
+            if key == 'tth_range' or key == 'xrange' or key == 'x_range':
+                self._internal_kwargs['tth_range'] = val
+            elif key == 'yrange' or key == 'y_range':
+                self._internal_kwargs['yrange'] = val
+            elif key == 'colors' or key == 'phase_colors':
+                self._internal_kwargs['phase_colors'] = val
+            else:
+                self._internal_kwargs[key] = val
+        #}}}
+        # Set variables from the dictionary: {{{
+        template = self._get_kwarg('template')
+        tth_range = self._get_kwarg('tth_range')
+        yrange = self._get_kwarg('yrange')
+        height = self._get_kwarg('height')
+        width = self._get_kwarg('width')
+        show_legend = self._get_kwarg('show_legend')
+        legend_x = self._get_kwarg('legend_x')
+        legend_y = self._get_kwarg('legend_y')
+        legend_xanchor = self._get_kwarg('legend_xanchor')
+        legend_yanchor = self._get_kwarg('legend_yanchor')
+        font_size = self._get_kwarg('font_size')
+        button_xanchor = self._get_kwarg('button_xanchor')
+        button_yanchor = self._get_kwarg('button_yanchor')
+        button_x = self._get_kwarg('button_x')
+        button_y = self._get_kwarg('button_y')
+        showgrid = self._get_kwarg('showgrid')
+        dtick = self._get_kwarg('dtick')
+        ticks = self._get_kwarg('ticks')
+        phase_colors = self._get_kwarg('phase_colors')
+        #}}}
+            
+        #}}} 
         # Check if data were collected:{{{
         if not self._data_collected:
             print('You did not yet collect data. Do that now...')
@@ -152,7 +224,16 @@ class RefinementPlotter(PlottingUtils):
                     hkl_tth = np.array(hkl_tth)
                     hkl_d = list(hkl_d)
                 #}}}
-                hkl_color = self._get_random_color()
+                if not phase_colors:
+                    hkl_color = self._get_random_color()
+                else:
+                    try:
+                        if type(phase_colors) == list:
+                            hkl_color = phase_colors[i]
+                        elif type(phase_colors) == dict:
+                            hkl_color = phase_colors[substance] 
+                    except:
+                        hkl_color = self._get_random_color()
                 # Get Data for Phase Plots: {{{
                 if self.sorted_phase_xy and plot_calc_patterns:
                     phase_data = data['phase_xy']
