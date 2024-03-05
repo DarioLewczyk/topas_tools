@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import re
 from topas_tools.plotting.plotting_utils import PlottingUtils
 from topas_tools.utils.topas_utils import UsefulUnicode
+from topas_tools.utils.topas_utils import Utils
 #}}}
 # RefinementPlotter: {{{
 class RefinementPlotter(PlottingUtils):
@@ -23,18 +24,6 @@ class RefinementPlotter(PlottingUtils):
         self.rietveld_data = rietveld_data 
         super().__init__(rietveld_data=self.rietveld_data)
     #}}} 
-    # _get_kwarg: {{{
-    def _get_kwarg(self, key):
-        '''
-        This function acts on self._internal_kwargs
-        pass a string to get the value if it exists.
-        '''
-        try:
-            val = self._internal_kwargs[key]
-        except:
-            val = None
-        return val
-    #}}}
     # plot_pattern: {{{
     def plot_pattern(self,
             index:int = 0,  
@@ -81,7 +70,8 @@ class RefinementPlotter(PlottingUtils):
         19. phase_colors # If you choose to give colors for each of the individual phases
         '''
         # assign variables from kwargs: {{{
-        self._internal_kwargs = {
+        # default kwargs: {{{
+        self._default_kwargs = {
             'template' : 'simple_white',
             'tth_range' : None,
             'yrange' :None,
@@ -102,37 +92,38 @@ class RefinementPlotter(PlottingUtils):
             'ticks':'inside',
             'phase_colors': None,
         }
+        #}}}  
         # Apply any kwarg updates: {{{
-        for key, val in kwargs.items():
-            if key == 'tth_range' or key == 'xrange' or key == 'x_range':
-                self._internal_kwargs['tth_range'] = val
-            elif key == 'yrange' or key == 'y_range':
-                self._internal_kwargs['yrange'] = val
-            elif key == 'colors' or key == 'phase_colors':
-                self._internal_kwargs['phase_colors'] = val
-            else:
-                self._internal_kwargs[key] = val
+        alternates = {
+            'tth_range': ['tth_range', 'xrange', 'x_range'], 
+            'yrange': ['yrange', 'y_range'], 
+            'phase_colors': ['colors', 'phase_colors']
+        }
+        Utils._update_default_kwargs(self, 
+            kwargs=kwargs,
+            alternates=alternates,
+        )
         #}}}
         # Set variables from the dictionary: {{{
-        template = self._get_kwarg('template')
-        tth_range = self._get_kwarg('tth_range')
-        yrange = self._get_kwarg('yrange')
-        height = self._get_kwarg('height')
-        width = self._get_kwarg('width')
-        show_legend = self._get_kwarg('show_legend')
-        legend_x = self._get_kwarg('legend_x')
-        legend_y = self._get_kwarg('legend_y')
-        legend_xanchor = self._get_kwarg('legend_xanchor')
-        legend_yanchor = self._get_kwarg('legend_yanchor')
-        font_size = self._get_kwarg('font_size')
-        button_xanchor = self._get_kwarg('button_xanchor')
-        button_yanchor = self._get_kwarg('button_yanchor')
-        button_x = self._get_kwarg('button_x')
-        button_y = self._get_kwarg('button_y')
-        showgrid = self._get_kwarg('showgrid')
-        dtick = self._get_kwarg('dtick')
-        ticks = self._get_kwarg('ticks')
-        phase_colors = self._get_kwarg('phase_colors')
+        template = Utils._get_kwarg(self,'template')
+        tth_range = Utils._get_kwarg(self,'tth_range')
+        yrange = Utils._get_kwarg(self,'yrange')
+        height = Utils._get_kwarg(self,'height')
+        width = Utils._get_kwarg(self,'width')
+        show_legend = Utils._get_kwarg(self,'show_legend')
+        legend_x = Utils._get_kwarg(self,'legend_x')
+        legend_y = Utils._get_kwarg(self,'legend_y')
+        legend_xanchor = Utils._get_kwarg(self,'legend_xanchor')
+        legend_yanchor = Utils._get_kwarg(self,'legend_yanchor')
+        font_size = Utils._get_kwarg(self,'font_size')
+        button_xanchor = Utils._get_kwarg(self,'button_xanchor')
+        button_yanchor = Utils._get_kwarg(self,'button_yanchor')
+        button_x = Utils._get_kwarg(self,'button_x')
+        button_y = Utils._get_kwarg(self,'button_y')
+        showgrid = Utils._get_kwarg(self,'showgrid')
+        dtick = Utils._get_kwarg(self,'dtick')
+        ticks = Utils._get_kwarg(self,'ticks')
+        phase_colors = Utils._get_kwarg(self,'phase_colors')
         #}}}
             
         #}}} 
