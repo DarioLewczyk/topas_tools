@@ -31,6 +31,7 @@ class AdvancedPlotting:
             self,
             rows:int=2, 
             cols:int=1,
+            specs = None,
             subplot_titles:list= None,
             shared_xaxes:bool=True,
             vertical_spacing:float =0.05,
@@ -43,6 +44,7 @@ class AdvancedPlotting:
         self.fig = make_subplots(
             rows=rows, 
             cols=cols,
+            specs=specs,
             subplot_titles= subplot_titles,
             shared_xaxes= shared_xaxes,
             vertical_spacing = vertical_spacing,
@@ -54,8 +56,10 @@ class AdvancedPlotting:
             self,
             time:list = None,
             total:list = None,
-            subplot_title = 'Total Mole Fraction',
+            temperature:list = None,
+            subplot_title = 'Mole Balance',
             vertical_spacing = [0.7, 0.3],
+            specs:list = None,
             **kwargs
         ):
         '''
@@ -63,12 +67,40 @@ class AdvancedPlotting:
         The bottom figure will be a temperature figure. 
 
         **kwargs:
+
+        THIS NEEDS WORK AT SOME POINT
         
         '''
+        # kwargs: {{{
+        self._default_kwargs = {
+                'vertical_spacing':0.05,
+                'row_heights':[0.7,0.3],
+
+        }
+        #}}}
+        # base subplot: {{{
         self._base_subplot(
             subplot_titles=[subplot_title, ''],
             vertical_spacing=vertical_spacing, 
+            specs=specs,
         )
+        #}}}
+        # Plot data: {{{ 
+        # Mole balance: {{{
+        self.fig.add_scatter(
+            x = time,
+            y = total,
+            mode = 'lines+markers',
+            marker=dict(size=8, symbol="diamond", line=dict(width=2, color="black")),
+            line = dict(color = 'black'),
+            name = 'Total Moles Ta',
+            showlegend = False,
+            row = 1,
+            col = 1
+        )
+        #}}}
+
+        #}}}
     #}}}
 
 #}}}

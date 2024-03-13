@@ -12,8 +12,10 @@ from PIL import Image
 #}}}
 # Utils: {{{
 class Utils: 
+    # __init__: {{{
     def __init__(self):
-        pass
+        self._default_kwargs = {}
+    #}}}
     # generate_table: {{{
     def generate_table(self,
         iterable:list = None,
@@ -171,6 +173,44 @@ class Utils:
                 custom_label = ''
             print(f'Min {custom_label}: {minv}\nMax {custom_label}: {maxv}')
     #}}}
+    # _update_internal_kwargs: {{{
+    def _update_default_kwargs(self,kwargs:dict = None, alternates:dict = None):
+        '''
+        This function allows you to update a
+        dictionary of internal keyword arguments 
+        which is particularly useful for the plotting
+        utilities which have lots of kwargs.
+        '''  
+        # Update the keyword arguments: {{{ 
+        for key, val in kwargs.items(): 
+            if key in self._default_kwargs:
+                self._default_kwargs[key] = val
+            else:
+                try: 
+                    found = False
+                    for k2, v2 in alternates.items(): 
+                        if key in v2:
+                            self._default_kwargs[k2] = val 
+                            found = True
+                            break
+                    if not found:
+                        raise ValueError(f'Your key {key} is invalid!')
+                except:
+                    raise ValueError(f'No alternate keys defined! Your key: {key} is invalid.')
+        #}}} 
+    #}}}
+    # _get_kwarg: {{{
+    def _get_kwarg(self, key:str = None):
+        '''
+        This function acts on self._default_kwargs
+        pass a string to get the value if it exists.
+        '''
+        try:
+            val = self._default_kwargs[key] 
+        except:
+            val = None
+        return val
+    #}}}
 #}}}
 # UsefulUnicode: {{{
 class UsefulUnicode: 
@@ -198,6 +238,33 @@ class UsefulUnicode:
         self._degree_symbol = u'\u00b0'
         self._degree_celsius = u'\u2103'
         self._theta = u'\u03b8'
+
+        self._sub_a = u'\u2090'
+        self._sub_b = u'\u1D47'
+        self._sub_c = u'\u1D9c'
+        self._sub_d = u'\u1D48'
+        self._sub_e = u'\u2091'
+        self._sub_f = u'\u1DA0'
+        self._sub_g = u'\u1D4D'
+        self._sub_h = u'\u2095'
+        self._sub_i = u'\u1D62'
+        self._sub_j = u'\u2C7C'
+        self._sub_k = u'\u2096'
+        self._sub_l = u'\u2097'
+        self._sub_m = u'\u2098'
+        self._sub_n = u'\u2099'
+        self._sub_o = u'\u2092'
+        self._sub_p = u'\u209A'
+        #self._sub_q = u'\u2090'
+        self._sub_r = u'\u1D63'
+        self._sub_s = u'\u209B'
+        self._sub_t = u'\u209C'
+        self._sub_u = u'\u1D64'
+        self._sub_v = u'\u1D65'
+        #self._sub_w = u'\u2090'
+        self._sub_x = u'\u2093'
+        #self._sub_y = u'\u2090'
+        #self._sub_z = u'\u2090'
 #}}}
 # DataCollector: {{{
 class DataCollector: 
