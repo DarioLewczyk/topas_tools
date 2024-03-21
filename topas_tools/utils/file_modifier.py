@@ -41,7 +41,7 @@ class FileModifier():
             on_method:str = 'rwp',
             off_method:str = 'sf',
             current_time:float = None,
-            debug:bool = False,
+            debug:bool =False,
             time_error:float = 1.1,
         ):
         '''
@@ -100,6 +100,8 @@ class FileModifier():
         #}}}
         # For all other indices: {{{
         else:
+            if debug:
+                print(f'file monitor: {self.out_file_monitor}')
             # Loop through the out file monitor: {{{
             for i, key in enumerate(self.out_file_monitor):
                 entry = self.out_file_monitor[key] # this is the current substance entry for the history
@@ -153,6 +155,8 @@ class FileModifier():
                 # Handle the Phase OFF Case: {{{
                 # Handle the SF Trigger Cases: {{{
                 if entry_type == 'off' and method == 'sf':
+                    if debug:
+                        print(f'norm_val: {norm_val}, threshold: {threshold}')
                     if norm_val > threshold:
                         # This means we keep going. The scale factor hasnt fallen far enough
                         entry['values'].append(current_value)
@@ -268,7 +272,9 @@ class FileModifier():
                             threshold = threshold_for_off
                         #}}}
                         # assign the off methods: {{{
-                        if type(off_method) == list:
+                        if debug:
+                            print(f'off method: {off_method}, type: {type(off_method)}')
+                        if type(off_method) == list: 
                             method= off_method[j] # IF the user gave a list of off methods
                         else:
                             method= off_method
@@ -312,6 +318,8 @@ class FileModifier():
                                 threshold = threshold_for_on
                             #}}}
                             # Assign its method: {{{
+                            if debug:
+                                print(f'on method: {on_method}, type: {type(on_method)}')
                             if type(on_method) == list: 
                                 method = on_method[j]
                             else:

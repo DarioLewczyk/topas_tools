@@ -167,10 +167,13 @@ class OUT_Parser:
                         #}}}
                     #}}}
                     # Get lattice parameters if not in a macro: {{{
+                        
                     elif re.findall(r'^\s+a|^\s+b|^\s+c|^\s+al|^\s+be|^\s+ga',line):
-                        #print(line)
-                        words = re.findall(r'a|b|c|al|be|ga',line)
-                        out_phase_dict[phase_num][words[0]] = float(floats[0])
+                        try:
+                            words = re.findall(r'a|b|c|al|be|ga',line)
+                            out_phase_dict[phase_num][words[0]] = float(floats[0])
+                        except:
+                            print(f'Failed at getting {words} to have a value! for {phase}')
                     #}}}
                     # MVW: {{{
                     elif 'MVW' in line:

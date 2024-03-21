@@ -102,7 +102,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         in different ways.
 
         '''
-        debug = False # Set this to True if you want to see debugging information. 
+        debug = False# Set this to True if you want to see debugging information. 
         off_sf_value = 1.0e-100 # This SF val ensures a phase will stop refining. 
         self.reverse_order = reverse_order 
         # if you input a string for either "phases_to_disable" or "phases_to_enable": {{{
@@ -132,7 +132,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                 print(f'"{template_dir}" is invalid. Navigate to the ".inp" file  directory.')
                 template_dir = self.navigate_filesystem()
         # Handle the metadata if you want to monitor times: {{{
-        # Check if you need times: {{{
+        # Check if you need times: {{{ 
         need_time = False
         if check_order == True:
             need_time = True
@@ -272,7 +272,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             Both will be handled with the same function.
             '''
             out = 'Dummy.out' # This is the name of the file we are looking for.
-            if phases_to_disable != None or phases_to_enable != None:  
+            if phases_to_disable != None or phases_to_enable != None:   
                 self._modify_out_for_monitoring(
                         out=out, 
                         on_phases=phases_to_enable,
@@ -300,6 +300,38 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             #}}}
         #}}}
     #}}}
+    # _get_line_info: {{{
+    def _get_line_info(self,string:str, index:int = 0, mode = 0, return_re_list:bool = False):
+        '''
+        This gives us a parameter by name. 
+        By default, it will give any combination of letters and numbers with separations
+        use the index to select where the desired prm falls when you use re
+     
+        mode = 0: gets parameter names and names for substances with separation by "_"
+        mode = 1: gets numerical values.
+        mode = 2: This will only give word keys.
+        '''
+        conv_float = False
+        if mode == 0:
+            res = r'\w+[\d+\w+]' # This should give any parameter name
+        elif mode == 1:
+            res = r'\d+\.?\d+?e\-?\d+|\d+\.?e\-?\d+|\d+\.?\d*' # This should be able to get us any value and not just basic floats. 
+            conv_float = True
+        elif mode == 2:
+            res = r'\S+'
+        lst = re.findall(res,string)
+        try:
+            result = lst[index]
+            if conv_float:
+                result = float(result)
+        except:
+            raise ValueError(f'index: {index} is invalid for the regular expressions:\n{lst}')
+        if return_re_list:
+            return lst
+        else:
+            return result
+
+    #}}} 
     # _calculate_phase_from_out: {{{
     def _calculate_phase_from_out(
             self,
@@ -329,6 +361,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             lines = f.readlines()
             keep_reading = False # This will inform the program that the first str has been reached
             header_done = False # This informs the program that the header has been completed. 
+            symbol = None
             for i, lne in enumerate(lines):
                 line = copy.deepcopy(lne) # Need to preserve the original line
                 # Handle header lines: {{{
@@ -370,9 +403,31 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                         })  
                     except:
                         pass
+                    
                 #}}}
                 # Keep reading: {{{
-                if keep_reading:
+                if keep_reading: 
+                    if symbol: 
+                        bare_line = copy.deepcopy(line).strip('\t\n') 
+                        bare_line_no_comments = bare_line.split("'")[0] # remove all comments
+                        bare_line_no_comments = bare_line_no_comments.replace('@','')
+                        # Check for a mismatched key for lattice parameters: {{{
+                        split_bareline = bare_line_no_comments.split(' ')
+                        if split_bareline[0] in ['a','b','c','al','be','ga']:
+                            split_bareline = self._get_line_info(bare_line_no_comments, mode = 2, return_re_list = True)
+                            if split_bareline[1] == '=':
+                                test_str = '_'.join(split_bareline[2].split('_')[0:2])
+                                if test_str != symbol:
+                                    #print(split_bareline)
+                                    #print(line)
+                                    try:
+                                        value = float(self._get_line_info(split_bareline[3], index=0, mode=1)) 
+                                    except:
+                                        value = float(0)
+
+                                    line = f'\t{split_bareline[0]}\t{value}'
+                                    #print(f'{symbol}: {split_bareline[0]} = {value} ')
+                            #}}}
                     phase_lines.append(line) # This adds the line to the list which will be added to a dict. 
                 #}}}
                 #}}}
