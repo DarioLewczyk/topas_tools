@@ -211,6 +211,42 @@ class Utils:
             val = None
         return val
     #}}}
+    # get_time_range: {{{ 
+    def _get_time_range(self, metadata_data:dict = None, time_range:list = None,max_idx:int = None):
+        '''
+        This function serves to define a new range for the automated refinement tool 
+        to work from. 
+        One thing to note is that the indices are always 1 higher than pythonic indices. 
+        e.g. 1 == 0 because we use len(range) to get the last data point. 
+        '''
+        mdd_keys = list(metadata_data.keys())
+        t0 = metadata_data[mdd_keys[0]]['epoch_time'] # This is the first time in the series. This will be shown to user
+        start = 1
+        end = max_idx
+        print(f'Starting epoch time: {t0} s')
+
+        found_start = False
+        found_end = False
+        for i, (rt, entry) in enumerate(metadata_data.items()): 
+            ti = entry['epoch_time']
+            time = (ti - t0)/60
+            # Handle the start case: {{{
+            if time >= time_range[0] and not found_start:
+                start = i+1 # make the index +1 because we subtract later. 
+                print(f'Starting time: {time*60} s')
+                found_start = True
+            #}}}
+            # Handle the end case: {{{
+            elif  time >= time_range[1] and not found_end:
+                if i+1 < max_idx:
+                    end = i+1 # make the index +1 because we subtract later.
+                else:
+                    end = max_idx
+                found_end = True
+                break
+            #}}}
+        return (start,end)
+    #}}}
 #}}}
 # UsefulUnicode: {{{
 class UsefulUnicode: 

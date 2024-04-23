@@ -41,6 +41,7 @@ class MetadataParser:
         self,
         time_key:str = 'time:',
         temp_key:str = 'element_temp',
+        voltage_key:str = 'Voltage_percent'
         ): 
         metadata = tqdm(self.metadata,desc="Working on Metadata")
         for i, key in enumerate(metadata):
@@ -58,6 +59,8 @@ class MetadataParser:
                             time = float(t[0]) # Gives us the epoch time in float form.   
                     if temp_key in line:
                         temp = np.around(float(re.findall(r'\d+\.\d?',line)[0]) - 273.15, 2) #           This gives us the Celsius temperature of the element thermocouple.  
+                    if voltage_key in line:
+                        voltage = float(re.findall(r'\d+\.\d+',line)[0])
                         
                 f.close() 
             #}}}
@@ -66,6 +69,7 @@ class MetadataParser:
                 'readable_time': int(key),
                 'epoch_time': time,
                 'temperature': temp,
+                'pct_voltage': voltage,
                 'pattern_index': i,
                 'filename': filename,
             }

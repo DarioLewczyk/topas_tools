@@ -65,6 +65,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
     # run_auto_rietveld: {{{
     def run_auto_rietveld(self,
             refinements:int = 200, 
+            time_range:list = None, 
             data_dir:str = None, 
             template_dir:str = None,
             reverse_order:bool = False,
@@ -84,27 +85,28 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         Expansion of the code written by Adam A Corrao and Gerrard Mattei. 
 
             1. refinements: number of patterns to refine
-            2. data_dir: directory with data files.
-            3. template_dir: directory with a template ".inp"
-            4. reverse_order: allows you to reverse the order of your refinements
-            5. get_individual_phases: Do you want deconvoluted calculated patterns?
-            6. subtract_bkg: Do you want to perform background subtraction? Rolling ball method
-            7. phases_to_enable: Phase(s) to monitor to enable
-            8. phases_to_disable: Phase(s) to monitor to disable
-            9. threshold_for_on: Threshold(s) to trigger on
-            10. threshold_for_off: Threshold(s) to trigger off (percent of scale factor)
-            11. on_method: either "time" or "rwp"
-            12. off_method: either 'time' or 'sf'
-            13. time_error: if "on_method" is time, how much ±?    
-            14. on_sf_value: SF Value(s) for when a phase is enabled.     
-            15. check_order: If time recording gets messed up, this will ensure order is set properly
+            2. time_range: The start and end times (low time, high time) over which you want to refine
+            3. data_dir: directory with data files.
+            4. template_dir: directory with a template ".inp"
+            5. reverse_order: allows you to reverse the order of your refinements
+            6. get_individual_phases: Do you want deconvoluted calculated patterns?
+            7. subtract_bkg: Do you want to perform background subtraction? Rolling ball method
+            8. phases_to_enable: Phase(s) to monitor to enable
+            9. phases_to_disable: Phase(s) to monitor to disable
+            10. threshold_for_on: Threshold(s) to trigger on
+            11. threshold_for_off: Threshold(s) to trigger off (percent of scale factor)
+            12. on_method: either "time" or "rwp"
+            13. off_method: either 'time' or 'sf'
+            14. time_error: if "on_method" is time, how much ±?    
+            15. on_sf_value: SF Value(s) for when a phase is enabled.     
+            16. check_order: If time recording gets messed up, this will ensure order is set properly
         NOTE: both on and off methods can be lists because some phases you may want to treat
         in different ways.
 
         '''
         debug = False# Set this to True if you want to see debugging information. 
         off_sf_value = 1.0e-100 # This SF val ensures a phase will stop refining. 
-        self.reverse_order = reverse_order 
+        self.reverse_order = reverse_order  
         # if you input a string for either "phases_to_disable" or "phases_to_enable": {{{
         if type(phases_to_disable) == list or phases_to_disable== None:
             pass
@@ -134,7 +136,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         # Handle the metadata if you want to monitor times: {{{
         # Check if you need times: {{{ 
         need_time = False
-        if check_order == True:
+        if check_order:
             need_time = True
         elif type(on_method) == list or type(off_method) == list:
             if 'time' in on_method or 'time' in off_method:
@@ -142,10 +144,14 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         elif type(on_method) == str or type(off_method) == str:
             if on_method == 'time' or off_method == 'time':
                 need_time = True
+        if time_range:
+            need_time = True
+            print('need time')
         #}}}
         if need_time:
             # Find the metadata directory: {{{
             metadata_dir = os.path.join(data_dir, 'meta') # metadata should be in your data path + meta
+            print(metadata_dir)
             try:
                 os.chdir(metadata_dir)
             except: 
@@ -200,7 +206,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         data.scrape_files() # This collects and orders the files
         data_dict_keys = list(data.file_dict.keys()) # Filename timecodes in order
         os.chdir(template_dir) # Return to the template directory 
-        tmp_rng = np.linspace(1, len(data_dict_keys), refinements) # Gives a range over the total number of scans that we want to refine. 
+        
+        rng_start = 1 # This is the initial start for the range
+        rng_end = len(data_dict_keys) # This is the initial end for the range.
+        if time_range:
+            rng_start, rng_end = self._get_time_range(metadata_data=self.metadata_data, time_range= time_range, max_idx=rng_end) # Get new range
+        tmp_rng = np.linspace(rng_start, rng_end, refinements) # Gives a range over the total number of scans that we want to refine. 
+
         if self.reverse_order:
             tmp_rng = tmp_rng[::-1] # This reverses the order of the array by converting it to a list slice 
         #}}}

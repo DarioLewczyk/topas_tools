@@ -188,48 +188,58 @@ class ResultParser:
 
         If you want to have the hkli sorted by tth, you can but it significantly slows processing.
         ''' 
-        hkli_data = np.loadtxt(hkli_file) # This gives us our data in an array. Now just need to parse it.  
-        # assign the columns to variables: {{{
-        h = hkli_data[:,0]
-        k = hkli_data[:,1]
-        l = hkli_data[:,2]
-        m = hkli_data[:,3]
-        d = hkli_data[:,4]
-        tth = hkli_data[:,5]
-        intensity = hkli_data[:,6]
-        #}}}
-        # Group hkl into a tuple: (h,k,l):{{{
-        hkl = [(int(h[i]), int(k[i]), int(l[i])) for i, v in enumerate(hkli_data)]
-        #}}}
-        # Sort by 2theta: {{{
-        if sort_hkli:
-            sorted_tth = sorted(tth) # This creates a separate list that is sorted from low to hi tth
-            j = list(tth) # Cast tth as a list so we can use the index functionality to sort the other arrays
-            sorted_hkl = []
-            sorted_m = []
-            sorted_d = []
-            sorted_i = []
-            for val in sorted_tth:
-                sorted_hkl.append(hkl[j.index(val)])
-                sorted_m.append(m[j.index(val)])
-                sorted_d.append(d[j.index(val)])
-                sorted_i.append(intensity[j.index(val)])
+        try:
+            hkli_data = np.loadtxt(hkli_file) # This gives us our data in an array. Now just need to parse it.  
+            # assign the columns to variables: {{{
+            h = hkli_data[:,0]
+            k = hkli_data[:,1]
+            l = hkli_data[:,2]
+            m = hkli_data[:,3]
+            d = hkli_data[:,4]
+            tth = hkli_data[:,5]
+            intensity = hkli_data[:,6]
+            #}}}
+            # Group hkl into a tuple: (h,k,l):{{{
+            hkl = [(int(h[i]), int(k[i]), int(l[i])) for i, v in enumerate(hkli_data)]
+            #}}}
+            # Sort by 2theta: {{{
+            if sort_hkli:
+                sorted_tth = sorted(tth) # This creates a separate list that is sorted from low to hi tth
+                j = list(tth) # Cast tth as a list so we can use the index functionality to sort the other arrays
+                sorted_hkl = []
+                sorted_m = []
+                sorted_d = []
+                sorted_i = []
+                for val in sorted_tth:
+                    sorted_hkl.append(hkl[j.index(val)])
+                    sorted_m.append(m[j.index(val)])
+                    sorted_d.append(d[j.index(val)])
+                    sorted_i.append(intensity[j.index(val)])
             
-            tth = sorted_tth
-            hkl = sorted_hkl
-            m = sorted_m
-            d = sorted_d
-            intensity = sorted_i
-        #}}}
-        # update the hkli out: {{{
-        hkli_out = {
-            'hkl':hkl,
-            'm': m,
-            'd':d,
-            'tth':tth,
-            'i':intensity,
-        }
-        #}}} 
+                tth = sorted_tth
+                hkl = sorted_hkl
+                m = sorted_m
+                d = sorted_d
+                intensity = sorted_i
+            #}}}
+            # update the hkli out: {{{
+            hkli_out = {
+                'hkl':hkl,
+                'm': m,
+                'd':d,
+                'tth':tth,
+                'i':intensity,
+            }
+            #}}} 
+        except:
+            print(f'There was a problem with the hkli file: {hkli_file}')
+            hkli_out = {
+                    'hkl': [0],
+                    'm': [0],
+                    'd': [0],
+                    'tth':[0],
+                    'i': [0],
+            }
         return hkli_out
 
     #}}} 
