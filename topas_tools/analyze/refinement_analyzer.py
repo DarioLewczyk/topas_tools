@@ -225,6 +225,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             flag_search:str = 'CHECK', 
             check_order:bool = False,
             time_offset:float = 0.0, 
+            mtf_version:int = 1,
         ):
         '''
         1. csv_labels: A list of all of the data labels for the CSV files generated.
@@ -236,6 +237,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         7. flag_search: This is the flag to look for under the correlations dictionary for c matrix
         8. check_order: If your file's timecodes are out of order, use this. It cross references metadata epoch time.
         9. time_offset: The offset of time in seconds to shift t0 (useful for doing 2 part refinements) 
+        10. mtf_version: This information will change if temperature is corrected. 
         ''' 
         # Default Values Set: {{{
         print_files = False# Use this if you are having trouble finding files.
@@ -398,15 +400,25 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                     print(f'Failed to find time: {file_time} in metadata.\nYour file times are:')
                     sys.exit()
                 fd = self.file_dict[file_time]
+                # Correct temperature (IF NEEDED): {{{
+                if mtf_version > 1:
+                    corrected_t = md['temperature']
+                    self.min_tcalc = corrected_t
+                    self.max_tcalc = corrected_t
+                elif mtf_version == 1:
+                    corrected_t = self.correct_t(md['temperature']) # Correct the temperature using the function
+                #}}}
                 self.rietveld_data[i].update({
                     'original_name':fd,
                     'readable_time':md['readable_time'],
                     'epoch_time':md['epoch_time'],
                     'temperature':md['temperature'],
-                    'corrected_temperature': self.correct_t(md['temperature']), # Correct the temperature using the function
+                    'pct_voltage':md['pct_voltage'],
+                    'corrected_temperature': corrected_t,
                     'min_t':self.min_tcalc,  # Min temp (error bar)
                     'max_t':self.max_tcalc, # Max temp (error bar)
                     'pattern_index':md['pattern_index'],
+                    'MTF_version': mtf_version,
                 })
             for i ,entry in self.rietveld_data.items():     
                 self._get_time(i,time_units='s', check_order=self.check_order) # get the time in seconds
