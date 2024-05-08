@@ -216,6 +216,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
     #}}}
     # get_data: {{{
     def get_data(self, 
+            data_dir:str = None,
             csv_labels:list = None, 
             file_prefix:str = "result",    
             get_orig_patt_and_meta:bool = True, 
@@ -296,9 +297,18 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         #}}}
         # GET ORIGINAL Data and METADATA: {{{
         if get_orig_patt_and_meta:
-            print('Navigate to the data directory.')
-            self.data_dir = self.navigate_filesystem()
-            self.meta_dir = os.path.join(self.data_dir,'meta') # This gives us the metadata folder
+            if data_dir:
+                if os.path.isdir(data_dir) and os.path.isdir(os.path.join(data_dir,'meta')):
+                    self.data_dir = data_dir
+                    self.meta_dir = os.path.join(self.data_dir, 'meta')
+                    os.chdir(self.data_dir)
+                else:
+                    print(f'{data_dir} was invalid! Select the right one.')
+                    data_dir = None
+            if not data_dir:
+                print('Navigate to the data directory.')
+                self.data_dir = self.navigate_filesystem()
+                self.meta_dir = os.path.join(self.data_dir,'meta') # This gives us the metadata folder
             # Get all of the original data and times: {{{
             self.scrape_files() # Gather the original data.  
             self.file_dict_keys = list(self.file_dict.keys()) # Gives us the times. 
