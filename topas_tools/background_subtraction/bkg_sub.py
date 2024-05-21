@@ -71,6 +71,19 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             rel_height
             plateau_size
         '''
+        # Default values for peak finding{{{ 
+        '''
+        The reason these are saved is for use later.
+        '''
+        self._height = [950, 1800]
+        self._threshold = None
+        self._distance = None
+        self._prominence = None
+        self._width = [0,100]
+        self._wlen = None
+        self._rel_height = 0.5
+        self._plateau_size = None
+        #}}}
         glass_file = None
         air_file = None
         data_files = None
@@ -250,14 +263,24 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         It uses printouts and plots to give real-time feedback on how well the fitting algorithm is working. 
         '''
         # Set defaults: {{{
-        height= kwargs.get('height',[950, 1800]) 
-        threshold = kwargs.get('threshold',None) 
-        distance = kwargs.get('distance', None)
-        prominence = kwargs.get('prominence', None)
-        width =kwargs.get('width', [0,100])
-        wlen = kwargs.get('wlen', None)
-        rel_height = kwargs.get('rel_height', 0.5)
-        plateau_size = kwargs.get('plateau_size', None)
+        height= kwargs.get('height',self._height) 
+        threshold = kwargs.get('threshold',self._threshold) 
+        distance = kwargs.get('distance',self._distance)
+        prominence = kwargs.get('prominence',self._prominence)
+        width =kwargs.get('width', self._width)
+        wlen = kwargs.get('wlen',self._wlen)
+        rel_height = kwargs.get('rel_height', self._rel_height)
+        plateau_size = kwargs.get('plateau_size',self._plateau_size)
+        # update defaults: {{{
+        self._height = height
+        self._threshold = threshold
+        self._distance = distance
+        self._prominence = prominence
+        self._width = width
+        self._wlen = wlen
+        self._rel_height = rel_height
+        self._plateau_size = plateau_size
+        #}}}
 
         plot_height = kwargs.get('plot_height', 800)
         plot_width  = kwargs.get('plot_width', 1000)
@@ -314,7 +337,6 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                 legend_y = legend_y,
             )
         #}}}
-
     #}}}
     # get_data_glass_peak: {{{ 
     def get_data_glass_peak(self,
