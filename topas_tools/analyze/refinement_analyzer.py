@@ -312,7 +312,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             # Get all of the original data and times: {{{
             self.scrape_files() # Gather the original data.  
             self.file_dict_keys = list(self.file_dict.keys()) # Gives us the times. 
-            #}}}
+            #}}} 
             # Work with the metadata: {{{
             os.chdir(self.meta_dir) # Go into the metadata
             self._md = MetadataParser(metadata_data=self.metadata_data)
@@ -323,9 +323,10 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             # If you need to check the order of patterns against metadata: {{{
             if self.check_order:
                 num_scans_refined = len(self.sorted_csvs) # This is the most robust counter of the total patterns.
-                tmp_rng = np.linspace(1,len(self.file_dict_keys), num_scans_refined) # Get the original indices of each pattern.
+                tmp_rng = np.linspace(1,len(self.file_dict_keys), num_scans_refined, dtype=int) # Get the original indices of each pattern. 
                 #dc = DataCollector(metadata_data=self.metadata_data) # Need to init this class to check the order.
-                self.corrected_range = dc.check_order_against_time(tmp_rng=tmp_rng, data_dict_keys=self.file_dict_keys,metadata_data=self.metadata_data, mode=1) #Get a new order
+                self.corrected_range = self.check_order_against_time(
+                        tmp_rng=tmp_rng, data_dict_keys=self.file_dict_keys,metadata_data=self.metadata_data, mode=1) #Get a new order
                 # Correct the file lists: {{{
                 # Define temporary lists for data: {{{
                 tmp_csv = []
@@ -333,7 +334,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                 tmp_out = [] 
                 tmp_bkg_xy = [] 
                 #}}}
-                for rng_idx in self.corrected_range:
+                for rng_idx in self.corrected_range: 
                     tmp_csv.append(self.sorted_csvs[rng_idx]) # Adds the correct csv in the correct order
                     tmp_xy.append(self.sorted_xy[rng_idx])
                     tmp_out.append(self.sorted_out[rng_idx])
@@ -348,19 +349,20 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                 #}}}
                 # Now, Handle the phase XYs{{{
                 try:
-                    for xy_key, xy_val in self._phase_xy.items():
-                        tmp_xy_file_list= [] # Updated list
-                        tmp_hkli_file_list = [] # Updated list
+                    if parse_hkli:
+                        for xy_key, xy_val in self._phase_xy.items():
+                            tmp_xy_file_list= [] # Updated list
+                            tmp_hkli_file_list = [] # Updated list
 
-                        original_xy_file_list = xy_val['files']
-                        original_hkli_file_list = self._hkli[xy_key]['files']
+                            original_xy_file_list = xy_val['files']
+                            original_hkli_file_list = self._hkli[xy_key]['files']
 
-                        for i in self.corrected_range:
-                            tmp_xy_file_list.append(original_xy_file_list[i]) # Add in the position corrected file.
-                            tmp_hkli_file_list.append(original_hkli_file_list[i]) # Add the position corrected file
+                            for i in self.corrected_range:
+                                tmp_xy_file_list.append(original_xy_file_list[i]) # Add in the position corrected file.
+                                tmp_hkli_file_list.append(original_hkli_file_list[i]) # Add the position corrected file
 
-                        self._phase_xy[xy_key]['files'] = tmp_xy_file_list
-                        self._hkli[xy_key]['files'] = tmp_hkli_file_list
+                            self._phase_xy[xy_key]['files'] = tmp_xy_file_list
+                            self._hkli[xy_key]['files'] = tmp_hkli_file_list
                 except:
                     print('Failed to re-order substance-specific XY and HKLI files.')
                     raise
@@ -535,64 +537,89 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
     # get_pattern_dict: {{{
     def get_pattern_dict(self,
             index:int = None, 
-            hkli_threshold = 1e-5, 
+            hkli_threshold = None,
             return_dataframes:bool = True, 
-            offset_val = -100, 
-            offset_multiplier = 1
+            #offset_val = -100, 
+            #offset_multiplier = 1
         ):
         '''
         This function will return a dictionary with all of the relevant information to 
         recreate any of the single pattern plots output by this code. 
+
+        also places the time in the name of each of the columns. 
         '''
         entry = self.rietveld_data[index]
+        time = str(np.around(entry['corrected_time']/60, 1)).replace('.','p') # Time in a string format
         self.pattern_dict = {} # This will be a dictionary containing all the info we want for a pattern.  
         xy = entry['xy']
         phase_xy = entry['phase_xy']
         rietveld_hkli = entry['hkli']
         bkg = entry['bkg'] 
         # Update the xy observed data {{{
+        updated_xy = {}
+        for label, xy_entry in xy.items():
+            updated_xy[f'{label}_{time}'] = xy_entry 
+        xy = updated_xy
         self.pattern_dict.update(xy)
         #}}}  
         # Update the phase_xy data: {{{
         for idx, phase_dict in phase_xy.items():
             substance = phase_dict['substance'] # This should accompany each entry recorded. 
             ycalc = phase_dict['ycalc'] # This is the calculated intensity across the tth range for the phase. 
-            self.pattern_dict[f'{substance}_ycalc'] = ycalc
+            self.pattern_dict[f'{substance}_ycalc_{time}'] = ycalc
         #}}}
         # Update the background data: {{{
-        self.pattern_dict['bkg_calc'] = bkg['ycalc']
+        self.pattern_dict[f'bkg_calc_{time}'] = bkg['ycalc']
         #}}}
         base_pattern_info = copy.deepcopy(self.pattern_dict)
         # Update the hkli data: {{{
         hkli_dicts = []
-        multiplier = offset_multiplier
+        #multiplier = offset_multiplier
         for idx, hkli_dict in rietveld_hkli.items():
             substance = hkli_dict['substance']
             hkli = hkli_dict['hkli'] # This contains: hkl, m, d, tth, i
             hkl = hkli['hkl']
             d = hkli['d']
             tth = hkli['tth']
-            offset = [offset_val*multiplier]*len(tth)
-            multiplier += 1
+            #offset = [offset_val*multiplier]*len(tth)
+            #multiplier += 1
             i = hkli['i']
-            reported_hkl = []
+            reported_h = []
+            reported_k = []
+            reported_l = []
+            #reported_hkl = []
             reported_d = []
             reported_tth = []
-            reported_offset = []
+            #reported_offset = []
             reported_i = []
             for idx,val in enumerate(i):
-                if val > hkli_threshold:
-                    reported_hkl.append(hkl[idx])
+                # Handle the reporting of HKLs: {{{
+                report = False
+                if hkli_threshold:
+                    if val > hkli_threshold:
+                        report = True
+                else:
+                    report = True
+                if report: 
+                    h,k,l = hkl[idx] # This gives the h, k, l values to each of the vars.
+                    reported_h.append(h)
+                    reported_k.append(k)
+                    reported_l.append(l)
+                    #reported_hkl.append(hkl[idx])
                     reported_d.append(d[idx])
                     reported_tth.append(tth[idx])
-                    reported_offset.append(offset[idx])
+                    #reported_offset.append(offset[idx])
                     reported_i.append(val)
+                #}}}
             reported_dict = {
-                f'{substance}_tth': reported_tth,
-                f'{substance}_offset': reported_offset,
-                f'{substance}_hkl': reported_hkl,
-                f'{substance}_d': reported_d,
-                f'{substance}_i': reported_i,
+                f'{substance}_tth_{time}': reported_tth,
+                #f'{substance}_offset_{time}': reported_offset,
+                f'{substance}_h_{time}': reported_h,
+                f'{substance}_k_{time}': reported_k,
+                f'{substance}_l_{time}': reported_l,
+                #f'{substance}_hkl_{time}': reported_hkl,
+                f'{substance}_d_{time}': reported_d,
+                f'{substance}_i_{time}': reported_i,
             }
             self.pattern_dict.update(reported_dict) 
             hkli_dicts.append(pd.DataFrame(reported_dict)) # Add dataframes to the output 

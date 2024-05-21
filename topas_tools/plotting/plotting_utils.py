@@ -28,6 +28,7 @@ class GenericPlotter(UsefulUnicode):
         x = None,
         y = None,
         name = 'series',
+        show_in_legend:bool = True,
         mode:str = 'markers',
         title_text:str = 'Figure',
         xaxis_title:str = 'X',
@@ -38,8 +39,9 @@ class GenericPlotter(UsefulUnicode):
         height = 800,
         width = 1000, 
         show_legend:bool = True,
-        font_size:int = 20,
-        marker_size:int = 12,
+        font_size:int = 16,
+        marker_size:int = 5,
+        dash:str = None,
         color:str = None,
         show_figure:bool = False,
         legend_xanchor:str = 'right',
@@ -47,6 +49,8 @@ class GenericPlotter(UsefulUnicode):
         legend_x:float = 0.99,
         legend_y:float = 0.99, 
         ticks:str = 'inside',
+        mirror_x = 'allticks', 
+        mirror_y = 'allticks',
         ):
         '''
         This allows you to plot a dataset
@@ -65,9 +69,11 @@ class GenericPlotter(UsefulUnicode):
                 ),
                 line = dict(
                     color = color,
+                    dash = dash,
                 ),
                 name = name,
                 yaxis = 'y1',
+                showlegend = show_in_legend,
         )
         #}}}
         # Update Layout: {{{
@@ -98,10 +104,12 @@ class GenericPlotter(UsefulUnicode):
                 domain = [0.15,1], 
                 range = xrange, 
                 ticks = ticks,
+                mirror = mirror_x,
             ),
             yaxis = dict(
                 title = yaxis_title,  
                 ticks = ticks,
+                mirror = mirror_y,
             ),
         )
         #}}}
@@ -110,13 +118,15 @@ class GenericPlotter(UsefulUnicode):
     #}}} 
     # add_data_to_plot: {{{
     def add_data_to_plot(self,
-            x,
-            y,
-            name,
+            x:list = None,
+            y:list = None,
+            name:str = 'series',
+            show_in_legend:bool = True,
             mode = 'markers',
             xrange:list = None,
             yrange:list = None,
-            marker_size:int = 12,
+            marker_size:int = 5,
+            dash:str = None,
             y2:bool = False,
             y2_title:str = 'Y2',
             y2_position:float = 0,
@@ -158,8 +168,10 @@ class GenericPlotter(UsefulUnicode):
             ),
             line =dict(
                 color = color,
+                dash = dash,
             ),
             yaxis = yaxis,
+            showlegend = show_in_legend,
         )
         #}}}
         # Update Layout: {{{

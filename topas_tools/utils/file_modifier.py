@@ -264,49 +264,50 @@ class FileModifier():
                     prm_name = line_prms[1] # The second word should always be a parameter name for the scale factor.
                     str_value = line_prms[2] # The third item is the value (may include an error oo.)
                     # Handle cases where you want to turn a phase off: {{{
-                    for j, off in enumerate(off_phases):
-                        # assign its threshold: {{{
-                        if type(threshold_for_off) == list:
-                            threshold = threshold_for_off[j] # If the user gave a list of thresholds for each phase...
-                        else:
-                            threshold = threshold_for_off
-                        #}}}
-                        # assign the off methods: {{{
-                        if debug:
-                            print(f'off method: {off_method}, type: {type(off_method)}')
-                        if type(off_method) == list: 
-                            method= off_method[j] # IF the user gave a list of off methods
-                        else:
-                            method= off_method
-                        #}}}
-                        #define the index for the dict: {{{ 
-                        if j == 0 and len(relevant_lines) == 0:
-                            # This is the first entry
-                            k = j
-                        else:
-                            k = len(relevant_lines)
-                        #}}}
-                        if debug: 
-                            print(off.lower()) 
-                            print(prm_name.lower())
-                        if  off.lower() in prm_name.lower():
+                    if off_phases != None:
+                        for j, off in enumerate(off_phases):
+                            # assign its threshold: {{{
+                            if type(threshold_for_off) == list:
+                                threshold = threshold_for_off[j] # If the user gave a list of thresholds for each phase...
+                            else:
+                                threshold = threshold_for_off
+                            #}}}
+                            # assign the off methods: {{{
                             if debug:
-                                print('%s Inside'%off.lower()) 
-                                print('%s Inside'%prm_name.lower())
-                            value = self._parse_scale_factor_line(line,debug=debug)
-                            relevant_lines[k] = {
-                                    'linenumber': i,
-                                    'line': line,
-                                    'value': value, 
-                                    'name': prm_name, 
-                                    'string_number':str_value,
-                                    'type': 'off',
-                                    'threshold': threshold,
-                                    'method':method,
-                            }# Record the line 
-                            
-                            if j == len(off_phases):
-                                break # If you reach the end, no point in reading more lines.
+                                print(f'off method: {off_method}, type: {type(off_method)}')
+                            if type(off_method) == list: 
+                                method= off_method[j] # IF the user gave a list of off methods
+                            else:
+                                method= off_method
+                            #}}}
+                            #define the index for the dict: {{{ 
+                            if j == 0 and len(relevant_lines) == 0:
+                                # This is the first entry
+                                k = j
+                            else:
+                                k = len(relevant_lines)
+                            #}}}
+                            if debug: 
+                                print(off.lower()) 
+                                print(prm_name.lower())
+                            if  off.lower() in prm_name.lower():
+                                if debug:
+                                    print('%s Inside'%off.lower()) 
+                                    print('%s Inside'%prm_name.lower())
+                                value = self._parse_scale_factor_line(line,debug=debug)
+                                relevant_lines[k] = {
+                                        'linenumber': i,
+                                        'line': line,
+                                        'value': value, 
+                                        'name': prm_name, 
+                                        'string_number':str_value,
+                                        'type': 'off',
+                                        'threshold': threshold,
+                                        'method':method,
+                                }# Record the line 
+                             
+                                if j == len(off_phases):
+                                    break # If you reach the end, no point in reading more lines.
                     #}}}
                     # Handle the cases where you want to turn on a phase: {{{
                     if on_phases != None:
@@ -342,7 +343,7 @@ class FileModifier():
                                     'threshold':threshold,
                                     'rwp':rwp,
                                 } # record the line 
-                                if j == len(off_phases)-1:
+                                if j == len(on_phases)-1:
                                     break # IF you reach the end, stop reading
     
                     #}}}

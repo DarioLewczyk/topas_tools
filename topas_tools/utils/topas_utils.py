@@ -312,7 +312,7 @@ class DataCollector:
     '''
     # __init__: {{{
     def __init__(
-            self,
+            self, 
             fileextension:str = 'xy',
             position_of_time = 1,
             len_of_time = 6,
@@ -320,6 +320,7 @@ class DataCollector:
             file_time_units:str = 'sec',
             skiprows = 1, 
             metadata_data:dict = {},
+            mode = 0,
         ):
         '''
         1. fileextension: The extension (without a .)
@@ -328,6 +329,11 @@ class DataCollector:
         4. time_units: The time units you want at the end of processing
         5. file_time_units: The units of time recorded in the filenname
         6. skiprows: The number of rows to skip when reading the data (necessary when using numpy and headers are present).
+
+        mode: 
+            The mode is 0 by default. This means that the program will expect to see time stamps in your xy files
+            If you want to just get all files of a particular extension without that requirement, use "1"
+
         '''
         # Initialize values: {{{
         self._fileextension = fileextension
@@ -337,6 +343,7 @@ class DataCollector:
         self.file_time_units = file_time_units 
         self.skiprows = skiprows  
         self.metadata_data = metadata_data # Transfer the metadata or start fresh 
+        self._datacollector_mode = mode
         #}}}
         # Determine if working with images: {{{
         if self._fileextension == 'tif' or self._fileextension == 'tiff':
@@ -354,12 +361,15 @@ class DataCollector:
         '''
         self.files = glob.glob(f'*.{self._fileextension}')
         tmp = {}
-        for f in self.files:
-            numbers = re.findall(r'\d{'+str(self.len_of_time)+r'}',f) 
-            number = int(numbers[self.position_of_time])
-            if number:
-                tmp[number] = f # The files will be indexed by their timecode
-             # We now sort the dictionary entries by their number (least to greatest.) 
+        for i, f in enumerate(self.files):
+            if self._datacollector_mode == 0:
+                numbers = re.findall(r'\d{'+str(self.len_of_time)+r'}',f) 
+                number = int(numbers[self.position_of_time])
+                if number:
+                    tmp[number] = f # The files will be indexed by their timecode
+            elif self._datacollector_mode == 1:
+                 tmp[i] = f
+            # We now sort the dictionary entries by their number (least to greatest.) 
         self.file_dict = dict(sorted(tmp.items())) 
     #}}}
     # set_time_range: {{{
@@ -589,11 +599,12 @@ class DataCollector:
                         fixed_range.append(number) 
                     else:
                         fixed_range.append(idx)
-        else:
-            fixed_range = tmp_rng
+        else: 
+            fixed_range = np.linspace(0, len(tmp_rng)-1, len(tmp_rng), dtype=int)
 
-        #}}}
+        #}}} 
         return fixed_range
+    
     #}}} 
 #}}}
 
