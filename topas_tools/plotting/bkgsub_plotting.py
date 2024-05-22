@@ -80,6 +80,9 @@ class BkgSubPlotter(GenericPlotter):
         # Get data arrays: {{{
         x = bkg_sub_data[idx]['tth']
         y = bkg_sub_data[idx]['yobs']
+        uninterp_x = bkg_sub_data[idx]['uninterpolated'][:,0]
+        uninterp_y = bkg_sub_data[idx]['uninterpolated'][:,1]
+        interpolated = bkg_sub_data[idx]['interpolated'] # boolean to tell if interpolation was used
         fn = bkg_sub_data[idx]['fn']
         zeros = np.zeros(len(x)) # Get an array of zeros to make visualization easy
         #}}}
@@ -98,6 +101,16 @@ class BkgSubPlotter(GenericPlotter):
             
         )
         #}}}
+        # Plot uninterpolated bkgsub data: {{{
+        if interpolated:
+            self.add_data_to_plot(
+                x = uninterp_x,
+                y = uninterp_y, 
+                name = f'bkgsub_{idx} (uninterpolated)',
+                color = 'red',
+                mode = 'markers', 
+            )
+        #}}}
         # plot zeros: {{{
         self.add_data_to_plot(
             x=x,
@@ -112,5 +125,92 @@ class BkgSubPlotter(GenericPlotter):
         )
         #}}}
 
+    #}}}
+    # plot_bkgsub_data: {{{
+    def plot_bkgsub_data(self,
+            bkgsub_data:dict,
+            **kwargs
+        ):
+        '''
+        This function serves as a sanity check that the background
+        subtraction is working as expected.
+
+        kwargs:
+            marker_size,
+            legend_x,
+            legend_y,
+            y2_position,
+        '''
+        # kwargs: {{{
+        marker_size = kwargs.get('marker_size', 5)
+        legend_x = kwargs.get('legend_x',0.99)
+        legend_y = kwargs.get('legend_y',0.99)
+        y2_position = kwargs.get('y2_position',0)
+        #}}}
+        indices = []
+        scale_factors = []
+        ref_peaks = []
+        data_peaks = []
+        tth_offsets = []
+        # get data to plot: {{{
+        for i, entry in bkgsub_data.items():
+            indices.append(i)
+            scale_factors.append(entry['scale_factor'])
+            ref_peaks.append(entry['ref_peak'])
+            data_peaks.append(entry['data_peak'])
+            tth_offsets.append(entry['tth_offset'])
+        #}}}
+        # Plot scale factor: {{{
+        self.plot_data(
+                x = indices,
+                y = scale_factors,
+                name = 'Scale Factor',
+                color = 'blue',
+                mode = 'lines+markers',
+                marker_size=marker_size,
+                title_text= 'BKG Sub Validation',
+                xaxis_title='Pattern IDX',
+                yaxis_title='Scale Factor',
+
+        )
+        #}}}
+        # plot peaks: {{{
+        self.add_data_to_plot(
+            x = indices,
+            y = ref_peaks,
+            name= 'Ref pattern peaks',
+            mode = 'lines+markers',
+            marker_size=marker_size,
+            color= 'green',
+            y2 = True,
+            y2_title=f'Peak position (2{self._theta}{self._degree})',
+        )
+        self.add_data_to_plot(
+            x = indices,
+            y = data_peaks,
+            name= 'Data pattern peaks',
+            mode = 'lines+markers',
+            marker_size=marker_size,
+            color = 'red',
+            y2 = True,
+            y2_position = y2_position,
+            y2_title=f'Peak position (2{self._theta}{self._degree})',
+        )
+        #}}}
+        # plot offset: {{{
+        self.add_data_to_plot(
+            x = indices,
+            y = tth_offsets,
+            name = f'2{self._theta} offset',
+            mode = 'lines+markers',
+            marker_size = marker_size,
+            y3 = True,
+            y3_title= f'Offset (2{self._theta}{self._degree})',
+            color = 'black',
+            legend_x=legend_x,
+            legend_y = legend_y,
+        )
+        #}}}
+        self.show_figure()
     #}}}
 #}}}

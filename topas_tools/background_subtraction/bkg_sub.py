@@ -222,13 +222,18 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         #}}}
         # If an air file was loaded, subtract it from the glass pattern: {{{
         if air_file:
-            air_sub_data = self.subtract_patterns(self.patterns['glass']['data'], self.patterns['air']['data'], tolerance = tolerance)
+            subtraction_output = self.subtract_patterns(self.patterns['glass']['data'], self.patterns['air']['data'], tolerance = tolerance)
+            air_sub_data = subtraction_output['bkgsub_interpolated'] # Only interpolated if necessary
+            uninterpolated_air_sub_data = subtraction_output['bkgsub'] # non-interpolated
+            interpolated = subtraction_output['interpolated'] # Tells if the result was interpolated
             self.patterns.update({
                 'air_sub_glass':  {
                     'data': air_sub_data,
                     'tth': air_sub_data[:,0],
                     'yobs':air_sub_data[:,1],
                     'fn':'air_sub_glass',
+                    'interpolated': interpolated,
+                    'uninterpolated':uninterpolated_air_sub_data,
                     }
                 })
         else:
@@ -341,6 +346,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
     # get_data_glass_peak: {{{ 
     def get_data_glass_peak(self,
             idx:int = 0,
+            ignore_below:float = 1,
             run_in_loop:bool = False,
             glass_peak_idx:int = 0,
             tolerance_for_bkgsub:float = 0.001,
@@ -381,6 +387,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             res = self.find_peak_positions(
                 x = x,
                 y = y,
+                ignore_below=ignore_below,
                 height=height,
                 threshold = threshold,
                 distance = distance,
@@ -396,7 +403,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         else:
             # Define output attributes: {{{
             self.data_peaks = {}
-            self.bkgsub_data = {}
+            self.bkgsub_data = {} 
             #}}}
             loop_failures = [] # This keeps track of the indices where no peaks were obtained
             loop_warnings = [] # This keeps track of the indices where there are more than one peak.
@@ -411,6 +418,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                 self.data_peaks[idx] = self.find_peak_positions(
                     x = x,
                     y = y,
+                    ignore_below=ignore_below,
                     height = height,
                     threshold = threshold,
                     distance = distance,
@@ -446,7 +454,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             #}}}
             # if NO failures, continue to shifting the bkg and running subtraction: {{{
             if not loop_failures:
-                print('Now, shifting glass for each pattern.')
+                print('PASSED: Now aligning reference, scaling, and background subtracting.')
                 self.shifted_glass_ref = {} # This will contain the shifted glass stuff for the dataset
                 d = tqdm(data) # Make a new progress bar
                 for i, idx in enumerate(d):
@@ -499,14 +507,30 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                     # Then background subtract/interpolate if necessary: {{{
                     d1 = data[idx]['data'] # This is the dataset for the current pattern
                     d2 = scaled_glass['data'] # This is the dataset for the current scaled glass
-                    glass_sub_data = self.subtract_patterns(d1 = d1, d2 = d2, tolerance = tolerance_for_bkgsub)
+
+                    scale_factor = scaled_glass['scale_factor'] # Get the scale factor
+                    ref_peak_pos = self.glass_ref_peaks['tth'][0] # glass peak position
+                    data_peak_pos = self.data_peaks[idx]['tth'][glass_peak_idx] # Glass peak in data position
+                    
+                    subtraction_output = self.subtract_patterns(d1 = d1, d2 = d2, tolerance = tolerance_for_bkgsub)
+                    glass_sub_data = subtraction_output['bkgsub_interpolated']
+                    uninterpolated_glass_sub_data = subtraction_output['bkgsub'] # uninterpolated
+                    interpolated = subtraction_output['interpolated']
                     self.bkgsub_data[idx] = {
                             'data': glass_sub_data,
                             'tth': glass_sub_data[:,0],
                             'yobs': glass_sub_data[:,1],
                             'fn':data[idx]['fn'],
+                            'scale_factor':scale_factor,
+                            'tth_offset':tth_offset,
+                            'ref_peak': ref_peak_pos,
+                            'data_peak': data_peak_pos,
+                            'interpolated':interpolated,
+                            'uninterpolated':uninterpolated_glass_sub_data,
                     }
                     #}}}
+                self.plot_bkgsub_data(self.bkgsub_data) # Plot the results of the fitting.
+                self.print_bkgsub_results(self.bkgsub_data) # Print stats for the fitting reuslts
 
             #}}} 
         #}}}

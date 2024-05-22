@@ -112,6 +112,7 @@ class BkgsubUtils:
                 'tth': scaled[:,0],
                 'yobs': scaled[:,1],
                 'fn': 'Scaled bkg',
+                'scale_factor':scale_factor,
         }
         #}}}
         return scaled_ref
@@ -131,6 +132,8 @@ class BkgsubUtils:
         '''
         
         differences = [] 
+        differences_interp = []
+        interpolated = False
         # Perform the subtraction: {{{
         for xa, ya in d1:
             # Find the index of the closest x value in the other dataset.
@@ -147,16 +150,26 @@ class BkgsubUtils:
         #}}}
         # interpolate if necessary: {{{
         if True in diff_mask: 
+            interpolated = True 
             non_nan_indices = np.where(~np.isnan(differences))[0]
-            differences_interp = np.interp(d1[:,0], d1[non_nan_indices,0], differences[non_nan_indices])
-            differences = differences_interp # Update the differences array
+            differences_interp = np.interp(d1[:,0], d1[non_nan_indices,0], differences[non_nan_indices]) 
+        else:
+            differences_interp = differences
         #}}}
-        return np.array(list(zip(d1[:,0], differences))) # Return the result in a dataset form.
+        differences = np.array(list(zip(d1[:,0], differences))) # Return the result in a dataset form.
+        differences_interp = np.array(list(zip(d1[:,0], differences_interp))) # Return the result of interpolation
+        output = {
+                'bkgsub': differences,
+                'bkgsub_interpolated': differences_interp,
+                'interpolated':interpolated,
+        }
+        return output
     #}}}
     # find_peak_positions: {{{
     def find_peak_positions(self,
             x,
             y, 
+            ignore_below = 1,
             height=[950, 1800], 
             threshold = None, 
             distance = None, 
@@ -169,12 +182,19 @@ class BkgsubUtils:
         '''
         x is the 2theta degrees positions
         y is the intensities
+        ignore_below: tells the program to ignore peaks at 2theta below this value
 
         This algorithm uses the scipy peak finding algorithm
         The default values should be restrictive enough to isolate the glass peak but 
         it may be necessary to play with the parameters to ensure that you get the glass peak
         only or at least, that the glass peak is listed first. 
         '''
+        # ignore below: {{{
+        passing_x = np.where(x>ignore_below) # Gives the indices above the set threshold
+        x = x[passing_x] # Redefine the array of x values
+        y = y[passing_x] # Redefine the array of y values
+        #}}}
+        
         peaks, peak_info = find_peaks(y,
                 height=height, 
                 threshold=threshold, 
@@ -184,7 +204,7 @@ class BkgsubUtils:
                 wlen = wlen, 
                 rel_height = rel_height, 
                 plateau_size = plateau_size
-        )
+        ) 
         peak_dict = {
                 'peak_idx': peaks,
                 'peak_info': peak_info,
@@ -192,5 +212,44 @@ class BkgsubUtils:
                 'yobs': [y[i] for i in peaks],
         }
         return peak_dict
+    #}}}
+    # print_bkgsub_results: {{{
+    def print_bkgsub_results(self, bkgsub_data:dict = None):
+        '''
+        This function prints statistical information on the results of background subtraction
+        '''
+        scale_factors = []
+        ref_peaks = []
+        data_peaks = []
+        tth_offsets = []
+        # get data: {{{
+        for i, entry in bkgsub_data.items():
+            scale_factors.append(entry['scale_factor'])
+            ref_peaks.append(entry['ref_peak'])
+            data_peaks.append(entry['data_peak'])
+            tth_offsets.append(entry['tth_offset'])
+        #}}}
+        # get stats: {{{
+        sf_sd, sf_min, sf_max, sf_avg = (np.std(scale_factors), min(scale_factors), max(scale_factors), np.average(scale_factors))
+        ref_sd, ref_min, ref_max, ref_avg  = (np.std(ref_peaks), min(ref_peaks), max(ref_peaks), np.average(ref_peaks))
+        data_sd, data_min, data_max, data_avg = (np.std(data_peaks), min(data_peaks), max(data_peaks), np.average(data_peaks))
+        tth_offset_sd, tth_offset_min, tth_offset_max, tth_offset_avg  = (np.std(tth_offsets), min(tth_offsets), max(tth_offsets), np.average(tth_offsets))
+        #}}}
+        # printouts: {{{ 
+        labels = ['scale factor', 'reference peak positions', 'data peak positions', '2theta positions']
+        data_labels = ['average','min','max','standard deviation']
+        data = [
+            [sf_avg, sf_min, sf_max, sf_sd],
+            [ref_avg, ref_min, ref_max, ref_sd],
+            [data_avg, data_min, data_max, data_sd],
+            [tth_offset_avg, tth_offset_min, tth_offset_max, tth_offset_sd],
+        ]
+        for i, entries in enumerate(data):
+            label = labels[i]
+            print(f'{label}')
+            for j, v in enumerate(entries):
+                qty = data_labels[j] # Defines what v is
+                print(f'\t{qty}: {np.around(v,4)}')
+        #}}}
     #}}}
 #}}}
