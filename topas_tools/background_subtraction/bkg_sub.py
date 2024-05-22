@@ -466,8 +466,19 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                     # Perform the 2theta shift: {{{
                     shifted_x1 = [x+tth_offset for x in shifted_glass[:,0]]
                     shifted_glass[:,0] = shifted_x1 # Update the 2 theta with the shift
-                    # Run peak finding with defaults.
-                    shifted_peaks = self.find_peak_positions(x = shifted_glass[:,0], y = shifted_glass[:,1])
+                    # Run peak finding with defaults. (Set by the glass manual assignment)
+                    shifted_peaks = self.find_peak_positions(
+                            x = shifted_glass[:,0], 
+                            y = shifted_glass[:,1],
+                            height = self._height,
+                            threshold=self._threshold,
+                            distance = self._distance,
+                            prominence = self._prominence,
+                            width = self._width,
+                            wlen = self._wlen,
+                            rel_height = self._rel_height,
+                            plateau_size = self._plateau_size,
+                    )
                     self.shifted_glass_ref[idx] = {
                             'pattern_info': {
                                 'data': shifted_glass,
@@ -501,12 +512,12 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         #}}}
         # Print information about the data peaks: {{{
         if print_results or plot_result:
-            dp = self.data_peaks[idx] # This gives the index you selected
+            dp = res # This gives the index you selected
         if print_results:      
-            print(f'{dp["peak_info"]}\n')
-            for i, idx in enumerate(dp['peak_idx']): 
-                tth = dp['tth'][i]
-                intensity = dp['yobs'][i]
+            print(f'{res["peak_info"]}\n')
+            for i, idx in enumerate(res['peak_idx']): 
+                tth = res['tth'][i]
+                intensity = res['yobs'][i]
                 print(f'Peak_IDX: {idx}\n\ttth: {tth}\n\tIntensity: {intensity}')
         #}}}
         # Plot the result: {{{
@@ -515,8 +526,8 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                 pattern_tth = x,
                 pattern_yobs = y,
                 pattern_name = name,
-                peaks_tth= dp['tth'],
-                peaks_yobs=dp['yobs'],
+                peaks_tth= res['tth'],
+                peaks_yobs= res['yobs'],
                 peaks_name = f'Data Peaks (idx: {idx})',
                 height = plot_height,
                 width = plot_width,
