@@ -539,6 +539,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             index:int = None, 
             hkli_threshold = None,
             return_dataframes:bool = True, 
+            log_scale:bool = False,
             #offset_val = -100, 
             #offset_multiplier = 1
         ):
@@ -551,14 +552,39 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         entry = self.rietveld_data[index]
         time = str(np.around(entry['corrected_time']/60, 1)).replace('.','p') # Time in a string format
         self.pattern_dict = {} # This will be a dictionary containing all the info we want for a pattern.  
-        xy = entry['xy']
-        phase_xy = entry['phase_xy']
+        xy = copy.deepcopy(entry['xy'])
+        phase_xy = copy.deepcopy(entry['phase_xy'])
+        # If you want to output log scale data: {{{
+        if log_scale:
+            # Handle XY data: {{{
+            orig_ydat = xy['yobs']
+            orig_ycalc = xy['ycalc']
+            orig_ydiff = xy['ydiff']
+
+            log_ydat = np.log10(orig_ydat)
+            log_ycalc = np.log10(orig_ycalc)
+            log_ydiff = np.log10(orig_ydiff)
+
+            xy['yobs'] = log_ydat
+            xy['ycalc'] = log_ycalc
+            xy['ydiff'] = log_ydiff
+            
+            #}}}
+            # Handle Phase XY Data: {{{
+            for pxy_i,pxy in phase_xy.items():
+                orig_ycalc = pxy['ycalc']
+                phase_xy[pxy_i]['ycalc'] = np.log10(orig_ycalc)
+            #}}}
+        #}}}
         rietveld_hkli = entry['hkli']
         bkg = entry['bkg'] 
         # Update the xy observed data {{{
         updated_xy = {}
         for label, xy_entry in xy.items():
-            updated_xy[f'{label}_{time}'] = xy_entry 
+            if log_scale:
+                updated_xy[f'{label}_{time}_log'] = xy_entry 
+            else:
+                updated_xy[f'{label}_{time}'] = xy_entry 
         xy = updated_xy
         self.pattern_dict.update(xy)
         #}}}  
@@ -566,7 +592,10 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         for idx, phase_dict in phase_xy.items():
             substance = phase_dict['substance'] # This should accompany each entry recorded. 
             ycalc = phase_dict['ycalc'] # This is the calculated intensity across the tth range for the phase. 
-            self.pattern_dict[f'{substance}_ycalc_{time}'] = ycalc
+            if log_scale:
+                self.pattern_dict[f'{substance}_ycalc_{time}_log'] = ycalc
+            else:
+                self.pattern_dict[f'{substance}_ycalc_{time}'] = ycalc
         #}}}
         # Update the background data: {{{
         self.pattern_dict[f'bkg_calc_{time}'] = bkg['ycalc']
