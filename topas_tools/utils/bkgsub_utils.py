@@ -94,15 +94,17 @@ class BkgsubUtils:
         return data_dict
     #}}}
     # scale_reference:  {{{
-    def scale_reference(self,reference_data:np.ndarray = None, reference_peak = None, data_peak = None,):
+    def scale_reference(self,reference_data:np.ndarray = None, reference_peak = None, data_peak = None, scale_modifier:float = 1.0):
         '''
         reference_data: the x,y data for the reference
         reference_peak: the intensity observed for the reference peak
         data_peak: the intensity observed for the data peak
 
+        scale_modifier: This parameter is the scaling of the scale factor. If you find that the background is being over or under fit, you can adjust this to modify the amount of scale factor applied. 
+
         This function returns a dictionary for the scaled reference.
         ''' 
-        scale_factor = data_peak/reference_peak
+        scale_factor = (data_peak/reference_peak) * scale_modifier
 
         scaled = reference_data.copy()
         scaled[:,1] = reference_data[:,1] * scale_factor # This scales the data by the scale factor
@@ -212,6 +214,96 @@ class BkgsubUtils:
                 'yobs': [y[i] for i in peaks],
         }
         return peak_dict
+    #}}}
+    # chebychev_bakground: {{{
+    def chebychev_bakground(self,
+            idx:int = 0, 
+            bkgsub_data:dict = None,
+            order:int = 8,
+            height_offset = 40,
+            bkg_offset = 10, 
+            **kwargs
+            ):
+        '''
+        This function enables the performance of 
+        all background subtraction functionality 
+        using a chebychev polynomial and can be automated
+        in the function chebychev_subtraction
+
+        idx: index of the pattern
+        bkgsub_data: dictionary of background subtracted data to work with.
+        order: Chebychev polynomial order
+        height_offset: tolerance below max intensity of the inverted pattern.
+        bkg_offset: This is the amount that the background points will be moved to not over-subtract background
+        '''
+        
+        x = bkgsub_data[idx]['tth']
+        y = bkgsub_data[idx]['yobs']
+        fn = bkgsub_data[idx]['fn']
+        yinv = y * -1 # Invert the data so peak finding gets baseline peaks
+        # Defaults: {{{
+        height = kwargs.get('height',max(yinv) - height_offset)
+        threshold = kwargs.get('threshold',None)
+        distance = kwargs.get('distance',None)
+        prominence =kwargs.get('prominence',None)
+        width = kwargs.get('width',[0,400])
+        wlen = kwargs.get('wlen', None)
+        rel_height = kwargs.get('rel_height', 1.5)
+        plateau_size = kwargs.get('plateau_size',None)
+        ignore_below = kwargs.get('ignore_below', 1)
+        #}}}
+        # Map the baselinge with peaks: {{{
+        peaks = self.find_peak_positions(
+                x, 
+                yinv, 
+                ignore_below=ignore_below,
+                height=height, 
+                threshold = threshold, 
+                prominence=prominence, 
+                distance=distance,
+                width = width,
+                wlen = wlen,
+                rel_height = rel_height,
+                plateau_size = plateau_size,
+                )
+        peak_x = peaks['tth']
+        peak_y = peaks['yobs']
+        #}}}
+        # Modify Peak Y Positions: {{{
+        mod_peak_y = []
+        for i, curr_y in enumerate(peak_y):
+            mod_peak_y.append(curr_y + bkg_offset)
+        mod_peak_y = np.array(mod_peak_y) # convert to an array
+        #}}}
+        # Fit the background using the modified peak positions: {{{
+        if ignore_below:
+            new_x = []
+            for tth in x:
+                if tth < ignore_below:
+                    new_x.append(max(x))
+                else:
+                    new_x.append(tth)
+        else:
+            new_x = x
+        new_x = np.array(new_x)
+
+        fit = np.polynomial.chebyshev.chebfit(peak_x, mod_peak_y, deg = order, full = False) 
+        bkg_curve = np.polynomial.chebyshev.chebval(new_x, fit) * -1 # This re-inverts the fit so it can be subtracted from the positive curve
+        bkgsub = y - bkg_curve # Give the background subtracted curve
+        #}}}
+        data = np.array(list(zip(x,bkgsub )))
+        output = {
+                'data': data,
+                'tth': x,
+                'yobs':bkgsub,
+                'fn':fn,
+                'peak_x':peak_x,
+                'peak_y':peak_y,
+                'orig_y':y,
+                'yinv':yinv, 
+                'bkg_curve':bkg_curve,
+        }
+        return output
     #}}}
     # print_bkgsub_results: {{{
     def print_bkgsub_results(self, bkgsub_data:dict = None):

@@ -213,4 +213,103 @@ class BkgSubPlotter(GenericPlotter):
         #}}}
         self.show_figure()
     #}}}
+    # plot_inverted_bkgsub: {{{
+    def plot_chebychev_bkgsub(self,idx:int = 0, chebychev_data:dict = None, **kwargs):
+        '''
+        This function enables the visualization of background 
+        subtraction with chebychev polynomials so you get a sense of the 
+        quality of fit.
+        '''
+        # kwargs: {{{
+        marker_size = kwargs.get('marker_size', 3)
+        legend_x = kwargs.get('legend_x',0.99)
+        legend_y = kwargs.get('legend_y',0.99) 
+        #}}}
+        # collect the data: {{{
+        entry = chebychev_data[idx]
+        x =entry['tth']
+        y =entry['orig_y']
+        yinv =entry['yinv']
+        bkgsub =entry['yobs']
+        peak_x =entry['peak_x']
+        peak_y =entry['peak_y']
+        bkg_curve =entry['bkg_curve']
+        fn =entry['fn']
+        #}}}
+        xaxis_title = f'2{self._theta}{self._degree}'
+        yaxis_title = 'Intensity'
+        # plot the data: {{{
+        # original bkgsub: {{{
+        self.plot_data(
+            x = x,
+            y = y,
+            color = 'black',
+            mode = 'lines',
+            xaxis_title = xaxis_title,
+            yaxis_title = yaxis_title,
+            name = 'Original bkg sub data',
+            title_text= 'Background finding',
+        )
+        #}}}
+        # inverted bkgsub: {{{
+        self.add_data_to_plot(
+            x,
+            yinv, 
+            color = 'blue',
+            mode = 'lines',
+            name = 'Inverted bkgsub data',
+                )
+        #}}}
+        # Add peak markers: {{{
+        self.add_data_to_plot(
+            peak_x,
+            peak_y,
+            color = 'red',
+            mode = 'markers',
+            name = 'Inverted baseline peaks',
+            marker_size=marker_size,
+                )
+        #}}}
+        # Plot background: {{{
+        self.add_data_to_plot(
+            x,
+            bkg_curve,
+            color = 'red',
+            mode = 'lines',
+            dash = 'dash',
+            name = 'Chebychev background curve',
+            )
+        #}}}
+        # baseline_peaks: {{{
+        self.add_data_to_plot(
+            peak_x,
+            np.array(peak_y)*-1,
+            color = 'green',
+            name = 'Baseline peaks',
+            mode = 'markers',
+            marker_size=marker_size,
+            legend_x = legend_x,
+            legend_y = legend_y,
+        )
+        #}}}
+        self.show_figure()
+        #}}}
+        # Plot the new bkgsub: {{{
+        self.plot_data(
+            x, bkgsub,
+            color = 'black',
+            name = 'Chebychev subtracted',
+            mode = 'lines',
+            xaxis_title = xaxis_title,
+            yaxis_title = yaxis_title,
+            title_text= 'Chebychev subtracted',
+        )
+        self.add_data_to_plot(
+            x, np.zeros(len(x)),
+            show_in_legend=False,mode = 'lines',dash = 'dash',color = 'blue',
+        )
+        self.show_figure()
+        #}}}
+        print(f'filename: {fn}')
+    #}}}
 #}}}

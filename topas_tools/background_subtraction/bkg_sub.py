@@ -350,6 +350,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             run_in_loop:bool = False,
             glass_peak_idx:int = 0,
             tolerance_for_bkgsub:float = 0.001,
+            scale_modifer:float = 1.0,
             plot_result:bool = True,
             print_results:bool = True, 
             **kwargs):
@@ -360,6 +361,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         run_in_loop: if true, this creates a dictionary of all glass peak positions
         glass_peak_idx: this is the index of the peak used to align your ref pattern
         tolerance_for_bkgsub: This is the tolerance for 2theta positions to be equal.
+        scale_modifer: Use this if you want to increase or decrease the scale factor. By default, it uses the full scale factor.
         '''
         # defaults/kwargs: {{{
         height = kwargs.get('height', self._height)
@@ -501,7 +503,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                     ref_peak = self.shifted_glass_ref[idx]['peak_info']['yobs'][0] # Shifted glass peak
                     data_peak = self.data_peaks[idx]['yobs'][glass_peak_idx] # Data glass peak
 
-                    scaled_glass = self.scale_reference(shifted_glass, ref_peak, data_peak)
+                    scaled_glass = self.scale_reference(shifted_glass, ref_peak, data_peak, scale_modifer)
                     self.shifted_glass_ref[idx].update({'scaled_glass': scaled_glass}) # Update the dictionary
                     #}}}
                     # Then background subtract/interpolate if necessary: {{{
@@ -564,19 +566,102 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             return res
         #}}}
     #}}}
+    # chebychev_subtraction: {{{
+    def chebychev_subtraction(self,idx:int = None,
+            run_in_loop:bool = True,
+            order:int = 8,
+            height_offset = 40,
+            bkg_offset = 10,
+            **kwargs,
+        ):
+        '''
+        This allows you to clean up the background 
+        subtraction automatically done with 
+        finding the data glass peak. 
+        
+        '''
+        # Defaults: {{{ 
+        threshold = kwargs.get('threshold',None)
+        distance = kwargs.get('distance',None)
+        prominence =kwargs.get('prominence',None)
+        width = kwargs.get('width',[0,400])
+        wlen = kwargs.get('wlen', None)
+        rel_height = kwargs.get('rel_height', 1.5)
+        plateau_size = kwargs.get('plateau_size',None)
+        ignore_below = kwargs.get('ignore_below', 1)
+        marker_size = kwargs.get('marker_size', 3)
+        legend_x = kwargs.get('legend_x',0.99)
+        legend_y = kwargs.get('legend_y',0.99) 
+        #}}}
+        # run_in_loop:{{{ 
+        if idx:
+            run_in_loop = False
+        #}}}
+        # if NOT in a loop: {{{
+        if not run_in_loop:
+            tst = self.chebychev_bakground(
+                idx,
+                bkgsub_data = self.bkgsub_data,
+                order = order, 
+                height_offset=height_offset,
+                bkg_offset=bkg_offset,
+                threshold = threshold,
+                distance = distance,
+                prominence = prominence,
+                width = width,
+                wlen = wlen,
+                rel_height = rel_height,
+                plateau_size = plateau_size,
+                ignore_below = ignore_below,
+            )
+            self.plot_chebychev_bkgsub(chebychev_data={0:tst}, marker_size=marker_size,legend_x=legend_x,legend_y=legend_y)
+        #}}}
+        # if run in a loop: {{{
+        else:
+            self.chebychev_data = {}
+            pb = tqdm(self.bkgsub_data,desc = 'Chebychev bkgsub')
+            for i in pb:
+                self.chebychev_data[i] = {} # Initialize the dict
+                self.chebychev_data[i].update(
+                    self.chebychev_bakground(
+                        i,
+                        bkgsub_data = self.bkgsub_data,
+                        order = order, 
+                        height_offset=height_offset,
+                        bkg_offset=bkg_offset,
+                        threshold = threshold,
+                        distance = distance,
+                        prominence = prominence,
+                        width = width,
+                        wlen = wlen,
+                        rel_height = rel_height,
+                        plateau_size = plateau_size,
+                        ignore_below = ignore_below,
+                    )
+                )
+        #}}}
+    
+    #}}}
     # output_results: {{{
-    def output_results(self,):
+    def output_results(self,chebychev:bool = False):
         '''
         This will output the data and copy the metadata for the data
         to the output directory.
+        chebychev: set to true if you want to save the chebychev subtracted data
         '''
-        prog = tqdm(self.bkgsub_data) # Create a progress bar
+        if chebychev:
+            prog = tqdm(self.chebychev_data)
+        else:
+            prog = tqdm(self.bkgsub_data) # Create a progress bar
         md_srce = os.path.join(self._data_dir,'meta')
         md_dest = os.path.join(self.output_dir, 'meta')
         # Save all of the data in .xy format: {{{
         os.chdir(self.output_dir) # Go to the output directory
         for i, idx in enumerate(prog):
-            res = self.bkgsub_data[idx]
+            if chebychev:
+                res = self.chebychev_data[idx]
+            else:
+                res = self.bkgsub_data[idx]
 
             x = res['tth']
             y = res['yobs']
