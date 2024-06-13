@@ -12,6 +12,7 @@ Purpose:
 # Imports: {{{
 import os, sys
 import numpy as np
+import re
 from tqdm import tqdm
 from scipy.signal import find_peaks
 
@@ -66,7 +67,18 @@ class BkgsubUtils:
             #  Get the data: {{{
             elif type(fn) != str:
                 for j, (time,f) in enumerate(fn.items()):
-                    data = np.loadtxt(f, skiprows= skiprows)
+                    try:
+                        data = np.loadtxt(f, skiprows= skiprows)
+                    except: 
+                        print(f'Warning: {f} has a formatting error')
+                        new_f = []
+                        with open(f, 'r') as open_f:
+                            lines = open_f.readlines()
+                            for line in lines:
+                                cols = re.findall(r'\w+\.?\w*', line)
+                                if len(cols) >=2:
+                                    new_f.append(line)
+                        data = np.loadtxt(new_f,skiprows=1) 
                     tth = data[:,0]
                     yobs = data[:,1]
                     data_dict[entry][j] = {

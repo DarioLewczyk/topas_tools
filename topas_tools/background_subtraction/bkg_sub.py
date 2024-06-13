@@ -352,7 +352,8 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             tolerance_for_bkgsub:float = 0.001,
             scale_modifer:float = 1.0,
             plot_result:bool = True,
-            print_results:bool = True, 
+            print_results:bool = False, 
+            verbose_prints:bool = False,
             **kwargs):
         '''
         Uses the same kwargs as the glass peak finder.
@@ -438,18 +439,22 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                 #}}}
             # Printout for failures: {{{
             if loop_failures:
-                print(f'The following indices failed to obtain a glass peak: \n\t{loop_failures}')
-                print(f'You should change your parameters: \n\theight: {height}\n\tthreshold: {threshold}'+
+                if verbose_prints:
+                    print(f'The following indices failed to obtain a glass peak: \n\t{loop_failures}')
+                    print(f'You should change your parameters: \n\theight: {height}\n\tthreshold: {threshold}'+
                         f'\n\tdistance: {distance}\n\tprominence: {prominence}\n\twidth: {width}\n\twlen: {wlen}'+
                         f'\n\trel_height: {rel_height}\n\tplateau_size: {plateau_size}'
                         )
+                else:
+                    print(f'{len(loop_failures)} patterns found more than one glass peak for your data. may want to re-parameterize')
             #}}}
             # Printout for warnings: {{{
             if loop_warnings:
                 if loop_failures:
                     print('\n')
-                print(f'The following indices returned more than one peak... be sure that the glass idx is consistent\n\t {loop_warnings}')
-                print(f'You may want to change your parameters: \n\theight: {height}\n\tthreshold: {threshold}'+
+                if verbose_prints:
+                    print(f'The following indices returned more than one peak... be sure that the glass idx is consistent\n\t {loop_warnings}')
+                    print(f'You may want to change your parameters: \n\theight: {height}\n\tthreshold: {threshold}'+
                         f'\n\tdistance: {distance}\n\tprominence: {prominence}\n\twidth: {width}\n\twlen: {wlen}'+
                         f'\n\trel_height: {rel_height}\n\tplateau_size: {plateau_size}'
                         )
@@ -533,6 +538,10 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                     #}}}
                 self.plot_bkgsub_data(self.bkgsub_data) # Plot the results of the fitting.
                 self.print_bkgsub_results(self.bkgsub_data) # Print stats for the fitting reuslts
+                # check for negative profile: {{{
+                self.check_for_negative_peaks(mode = 0, ignore_below=ignore_below) 
+                self._plot_neg_check(working_dict= self.bkgsub_data)
+                #}}}
 
             #}}} 
         #}}}
@@ -572,6 +581,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             order:int = 8,
             height_offset = 40,
             bkg_offset = 10,
+            ignore_below = 1.0,
             **kwargs,
         ):
         '''
@@ -620,6 +630,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         else:
             self.chebychev_data = {}
             pb = tqdm(self.bkgsub_data,desc = 'Chebychev bkgsub')
+            #  loop through and bkg subtract: {{{ 
             for i in pb:
                 self.chebychev_data[i] = {} # Initialize the dict
                 self.chebychev_data[i].update(
@@ -639,8 +650,61 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                         ignore_below = ignore_below,
                     )
                 )
+            #}}}
+            # check for negative peaks: {{{ 
+            self.check_for_negative_peaks(mode = 1, ignore_below=ignore_below)
+            self._plot_neg_check(working_dict=self.chebychev_data)
+            #}}}
+
         #}}}
     
+    #}}}
+    # check_for_negative_peaks: {{{
+    def check_for_negative_peaks(self, mode = 0, ignore_below:float = 1.0):
+        '''
+        This function is designed to quickly scan patterns for negative peaks and give feedback on those that have negative peaks. 
+        
+        mode:
+            0: This uses the dictionary: bkgsub_data
+            1: This uses the dictionary: chebychev_data
+        ''' 
+        # get the dictionary: {{{
+        if mode == 0:
+            working_dict = self.bkgsub_data 
+        elif mode == 1:
+            working_dict = self.chebychev_data 
+        #}}}
+        # Loop through to check for negative regions: {{{
+        for i, entry in working_dict.items():
+            negative = False # This will record if the pattern goes negative above your defined minimum
+            tth = entry['tth']
+            yobs = entry['yobs']
+            tth_ranges = []
+            start_angle = None # Record the first angle at which the profile went below
+            for j, y in enumerate(yobs):
+                curr_angle = tth[j]
+                # Record first angle: {{{
+                if y < 0 and start_angle == None:
+                    start_angle = curr_angle
+                    if curr_angle >= ignore_below:
+                        negative = True 
+                #}}}
+                # Record last angle and reset start angle: {{{
+                elif y >= 0 and start_angle != None:
+                    tth_ranges.append((start_angle, curr_angle))
+                    start_angle = None # Reset the finder
+                    if curr_angle >= ignore_below:
+                        negative = True
+                #}}}
+            # if nothing goes neg: tth_ranges = None: {{{
+            if not tth_ranges:
+                tth_ranges = None
+            #}}}
+            working_dict[i].update({
+                'negative_ranges':tth_ranges,
+                'negative_above_min_tth': negative,
+            })
+        #}}} 
     #}}}
     # output_results: {{{
     def output_results(self,chebychev:bool = False):

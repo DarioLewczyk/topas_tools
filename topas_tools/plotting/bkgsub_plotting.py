@@ -312,4 +312,166 @@ class BkgSubPlotter(GenericPlotter):
         #}}}
         print(f'filename: {fn}')
     #}}}
+    # _plot_neg_check: {{{
+    def _plot_neg_check(self,working_dict:dict = None):
+        '''
+        This takes dictionaries: 
+            bkgsub_data 
+            chebychev_data
+        This should only be run after you have evaluated negative values in the range. 
+        '''
+        shown_pos_legend = False
+        shown_neg_legend = False
+        # Loop to generate plots: {{{
+        for i, entry in working_dict.items(): 
+            neg_obs_above_min_tth = entry['negative_above_min_tth'] # Boolean, defines coloring
+            xrange = [0, len(working_dict)-1] # Define the 2theta range.
+            show_in_legend = False # Default behavior so legend does not go crazy
+            # Negative plot parameters: {{{
+            if neg_obs_above_min_tth:
+                color = 'red'
+                name = 'contains_negative'
+                if not shown_neg_legend:
+                    shown_neg_legend = True
+                    show_in_legend = True
+            #}}}
+            # Positive plot prms: {{{ 
+            else:
+                color = 'black'
+                name = 'only_positive'
+                if not shown_pos_legend:
+                    shown_pos_legend = True
+                    show_in_legend = True
+            #}}}
+            # initial plot definition: {{{ 
+            if i == 0:
+                self.plot_data(
+                    [i],
+                    [i],
+                    color = color,
+                    title_text = 'Negative BKG sub patterns',
+                    xaxis_title='Pattern IDX',
+                    yaxis_title = 'Pattern_IDX',
+                    show_in_legend=show_in_legend,
+                    name = name,
+                )
+            #}}}
+            # add additional data: {{{ 
+            else:
+                self.add_data_to_plot(
+                        [i],
+                        [i],
+                        color = color,
+                        show_in_legend=show_in_legend,
+                        name = name,
+                        xrange = xrange,
+                        legend_xanchor='left',
+                        legend_x = 0.2,
+                )
+            #}}}
+        #}}} 
+        self.show_figure()
+    #}}}
+    # plot_negative_peak_ranges: {{{
+    def plot_negative_peak_ranges(self,idx:int = 0, working_dict:dict = None, offset = -10):
+        '''
+        This function serves to show the background subtracted data 
+        with the negative ranges highlighted on the plot. (if there are any)
+        '''
+        
+        tth = working_dict[idx]['tth']
+        yobs = working_dict[idx]['yobs']
+
+        self.plot_data(
+            tth,
+            yobs,
+            color = 'black',
+            name = f'Pattern: {idx}',
+            mode = 'lines',
+            xaxis_title = f'2{self._theta}',
+            yaxis_title = 'Intensity',
+            title_text = 'Negative Peak Ranges'
+        )
+        self.add_data_to_plot(
+            tth,
+            np.zeros(len(tth)),
+            color = 'blue',
+            name = 'zeros',
+            show_in_legend = False,
+            mode = 'lines',
+            dash = 'dash',
+        )
+        tth_range = working_dict[idx]['negative_ranges'] # Get the 2theta ranges
+        if tth_range:
+            for i, tpl in enumerate(tth_range):
+                self.add_data_to_plot(
+                    tpl,
+                    np.ones(len(tpl))*offset,
+                    name = f'idx: {i}',
+                    mode = 'lines+markers',
+                    legend_x = 1.3,
+                )
+        self.show_figure()
+    #}}}
+    # plot_original_vs_bkgsub: {{{
+    def plot_original_vs_bkgsub(self, idx:int = 0, patterns:dict = None, bkgsub_data:dict = None, chebychev_data:dict = None,**kwargs):
+        '''
+        This allows you to directly compare original patterns to background subtraction via glass
+        to background subtraction via chebychev polynomial subtraction and anything between. 
+
+        kwargs: legend_x or legend_y or xrange
+        '''
+        # kwargs: {{{
+        legend_x = kwargs.get('legend_x', 0.99)
+        legend_y = kwargs.get('legend_y', 0.99)
+        xrange = kwargs.get('xrange', None)
+        #}}}
+        plotted_zeros = False
+        dictionaries = [patterns, bkgsub_data, chebychev_data]
+        # loop through dicts: {{{
+        for i, working_dict in enumerate(dictionaries):
+            if type(working_dict) == dict:
+                # handle the differences for the dictionaries: {{{
+                if i == 0: # Patterns
+                    working_dict = working_dict['data'] # This gives access to the 2theta and yobs data
+                    color  = 'black'
+                    name = f'Orignal pattern # {idx}'
+                elif i == 1: # Bkg sub
+                    color = 'blue'
+                    name = 'bkgsub_data'
+                elif i == 2: # Chebychev
+                    color = 'green'
+                    name = 'chebychev_data'
+                #}}}
+                tth = working_dict[idx]['tth']
+                yobs = working_dict[idx]['yobs']
+                # plot make the first plot: {{{
+                if not plotted_zeros:
+                    self.plot_data(
+                        tth,
+                        np.zeros(len(tth)),
+                        mode = 'lines',
+                        dash = 'dash',
+                        title_text = 'BKG sub comparison',
+                        xaxis_title = f'2{self._theta}',
+                        yaxis_title = 'Intensity',
+                        color = 'blue',
+                        name = 'zeros',
+                        show_in_legend = False,
+                    )
+                    plotted_zeros = True
+                #}}}
+                self.add_data_to_plot(
+                    tth,
+                    yobs,
+                    color = color,
+                    name = name,
+                    mode = 'lines',
+                    legend_x = legend_x,
+                    legend_y = legend_y,
+                    xrange = xrange,
+                )
+        #}}}
+        self.show_figure()
+    #}}}
 #}}}
