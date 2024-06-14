@@ -118,9 +118,8 @@ class BkgsubUtils:
         ''' 
         scale_factor = (data_peak/reference_peak) * scale_modifier
 
-        scaled = reference_data.copy()
-        if scale_modifier != 1:
-            scaled[:,1] = reference_data[:,1] * scale_factor # This scales the data by the scale factor
+        scaled = reference_data.copy() 
+        scaled[:,1] = reference_data[:,1] * scale_factor # This scales the data by the scale factor
         # make output dict: {{{
         scaled_ref = {
                 'data': scaled,
