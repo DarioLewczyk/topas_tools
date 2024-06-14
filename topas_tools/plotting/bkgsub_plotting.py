@@ -332,6 +332,7 @@ class BkgSubPlotter(GenericPlotter):
         #}}}
         # Loop to generate plots: {{{
         data = [pos_i, neg_i] 
+        initial_plot = False
         for i, v in enumerate(data):  
             # Negative plot parameters: {{{
             if i == 1: 
@@ -344,27 +345,45 @@ class BkgSubPlotter(GenericPlotter):
                 name = 'only_positive'
             #}}}
             # initial plot definition: {{{ 
+            
             if i == 0:
-                self.plot_data(
-                    v,
-                    v,
-                    color = color,
-                    title_text = 'Negative BKG sub patterns',
-                    xaxis_title='Pattern IDX',
-                    yaxis_title = 'Pattern_IDX', 
-                    name = name,
-                )
+                try:
+                    self.plot_data(
+                        v,
+                        v,
+                        color = color,
+                        title_text = 'Negative BKG sub patterns',
+                        xaxis_title='Pattern IDX',
+                        yaxis_title = 'Pattern_IDX', 
+                        name = name,
+                    )
+                    initial_plot = True
+                except:
+                    pass
             #}}}
             # add additional data: {{{ 
             else:
-                self.add_data_to_plot(
+                if initial_plot:
+                    self.add_data_to_plot(
+                            v,
+                            v,
+                            color = color, 
+                            name = name, 
+                            legend_xanchor='left',
+                            legend_x = 0.2,
+                    )
+                else:
+                    self.plot_data(
                         v,
                         v,
-                        color = color, 
-                        name = name, 
+                        color = color,
+                        title_text = 'Negative BKG sub patterns',
+                        xaxis_title='Pattern IDX',
+                        yaxis_title = 'Pattern_IDX', 
+                        name = name,
                         legend_xanchor='left',
                         legend_x = 0.2,
-                )
+                    )
             #}}}
         #}}} 
         self.show_figure()
