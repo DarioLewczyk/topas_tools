@@ -13,6 +13,7 @@ Purpose:
 import os, sys
 import numpy as np
 import re
+import copy
 from tqdm import tqdm
 from scipy.signal import find_peaks
 
@@ -183,7 +184,8 @@ class BkgsubUtils:
     def find_peak_positions(self,
             x,
             y, 
-            ignore_below = 1,
+            ignore_below:float = 1,
+            ignore_above:float = None,
             height=[950, 1800], 
             threshold = None, 
             distance = None, 
@@ -203,8 +205,12 @@ class BkgsubUtils:
         it may be necessary to play with the parameters to ensure that you get the glass peak
         only or at least, that the glass peak is listed first. 
         '''
-        # ignore below: {{{
-        passing_x = np.where(x>ignore_below) # Gives the indices above the set threshold
+        # define the range: {{{
+        if ignore_below == None:
+            ignore_below = min(x)
+        if ignore_above == None:
+            ignore_above = max(x)
+        passing_x = np.where((x >= ignore_below) & (x<= ignore_above))  
         x = x[passing_x] # Redefine the array of x values
         y = y[passing_x] # Redefine the array of y values
         #}}}
@@ -234,6 +240,7 @@ class BkgsubUtils:
             order:int = 8,
             height_offset = 40,
             bkg_offset = 10, 
+            regions_to_eval:list = [(1, None)],
             **kwargs
             ):
         '''
@@ -247,28 +254,51 @@ class BkgsubUtils:
         order: Chebychev polynomial order
         height_offset: tolerance below max intensity of the inverted pattern.
         bkg_offset: This is the amount that the background points will be moved to not over-subtract background
+        multiple_regions: Use if you want to combine multiple chebychev backgrounds to one
         '''
-        
+        output = {} 
         x = bkgsub_data[idx]['tth']
         y = bkgsub_data[idx]['yobs']
+        self._cheb_ranges = self._premap_data_for_chebychev_fitting(tth=x, yobs=y, regions_to_eval=regions_to_eval)
         fn = bkgsub_data[idx]['fn']
-        yinv = y * -1 # Invert the data so peak finding gets baseline peaks
-        # Defaults: {{{
-        height = kwargs.get('height',max(yinv) - height_offset)
+        
+        # Defaults: {{{ 
         threshold = kwargs.get('threshold',None)
         distance = kwargs.get('distance',None)
         prominence =kwargs.get('prominence',None)
         width = kwargs.get('width',[0,400])
         wlen = kwargs.get('wlen', None)
         rel_height = kwargs.get('rel_height', 1.5)
-        plateau_size = kwargs.get('plateau_size',None)
-        ignore_below = kwargs.get('ignore_below', 1)
+        plateau_size = kwargs.get('plateau_size',None) 
         #}}}
         # Map the baselinge with peaks: {{{
-        peaks = self.find_peak_positions(
-                x, 
+        bkgsub = [] 
+        for i, entry in self._cheb_ranges.items():
+            tth_rng = entry['tth'] # 2theta values within the specified range
+            yobs_rng = entry['yobs']
+            fit_bkg = entry['fit'] # Tells whether or not to chebychev fit
+            yinv = yobs_rng * -1 # invert the data so the peak finding gets the baseline peaks
+            
+            try:
+                cur_height_offset = height_offset[i]
+            except:
+                cur_height_offset = height_offset
+            try:
+                cur_bkg_offset = bkg_offset[i]
+            except:
+                cur_bkg_offset = bkg_offset
+            try:
+                cur_order = order[i]
+            except:
+                cur_order = order
+
+
+            height = kwargs.get('height',max(yinv) - cur_height_offset) # Get the current height 
+            peaks = self.find_peak_positions( 
+                tth_rng,
                 yinv, 
-                ignore_below=ignore_below,
+                ignore_below=None,
+                ignore_above=None,
                 height=height, 
                 threshold = threshold, 
                 prominence=prominence, 
@@ -277,44 +307,153 @@ class BkgsubUtils:
                 wlen = wlen,
                 rel_height = rel_height,
                 plateau_size = plateau_size,
-                )
-        peak_x = peaks['tth']
-        peak_y = peaks['yobs']
-        #}}}
-        # Modify Peak Y Positions: {{{
-        mod_peak_y = []
-        for i, curr_y in enumerate(peak_y):
-            mod_peak_y.append(curr_y + bkg_offset)
-        mod_peak_y = np.array(mod_peak_y) # convert to an array
-        #}}}
-        # Fit the background using the modified peak positions: {{{
-        if ignore_below:
-            new_x = []
-            for tth in x:
-                if tth < ignore_below:
-                    new_x.append(max(x))
-                else:
-                    new_x.append(tth)
-        else:
-            new_x = x
-        new_x = np.array(new_x)
+            ) 
+            peak_x = peaks['tth']
+            peak_y = peaks['yobs']
 
-        fit = np.polynomial.chebyshev.chebfit(peak_x, mod_peak_y, deg = order, full = False) 
-        bkg_curve = np.polynomial.chebyshev.chebval(new_x, fit) * -1 # This re-inverts the fit so it can be subtracted from the positive curve
-        bkgsub = y - bkg_curve # Give the background subtracted curve
-        #}}}
-        data = np.array(list(zip(x,bkgsub )))
-        output = {
-                'data': data,
-                'tth': x,
+            # Modify Peak Y Positions: {{{
+            mod_peak_y = []
+            for curr_y in peak_y:
+                mod_peak_y.append(curr_y + cur_bkg_offset)
+            mod_peak_y = np.array(mod_peak_y) # convert to an array
+            #}}}
+            # If the range is to be fit, fit it: {{{
+            if fit_bkg:
+                fit = np.polynomial.chebyshev.chebfit(peak_x, mod_peak_y, deg = cur_order, full = False)  
+                bkg_curve = np.polynomial.chebyshev.chebval(tth_rng, fit) * -1 # This re-inverts the fit so it can be subtracted from the positive curve  
+                tmp_bkg = yobs_rng - bkg_curve # Give the background subtracted curve 
+                for v in tmp_bkg:
+                    bkgsub.append(v) # Add the background subtracted area to the data.
+            #}}}
+            # If the range is ignored: {{{
+            else:
+                tmp_bkg = []
+                bkg_curve = []
+                for v in yobs_rng:
+                    tmp_bkg.append(0) # We arent subtracting anything. so make this go to zero
+                    bkg_curve.append(0) # We arent subtracting anything. so make this go to zero
+                    bkgsub.append(v)
+                tmp_bkg = np.array(tmp_bkg)
+                bkg_curve = np.array(bkg_curve)
+            #}}}
+            #}}}
+            # update the output: {{{ 
+            data = np.array(list(zip(tth_rng,tmp_bkg)))
+            output.update({
+                f'intermediate_{i}':
+                    {
+                        'data':data, 
+                        'tth':tth_rng,
+                        'yobs':tmp_bkg,
+                        'fn':fn,
+                        'peak_x':peak_x,
+                        'peak_y':peak_y, 
+                        'orig_y':yobs_rng,
+                        'yinv':yinv,
+                        'bkg_curve':bkg_curve,
+                        'lower_lim':min(tth_rng),
+                        'upper_lim':max(tth_rng),
+                    }
+            })
+            #}}}
+        #}}}  
+        data = np.array(list(zip(x, bkgsub)))
+        composite_bkg_curve = []
+        composite_peak_x = []
+        composite_peak_y = []
+        for i, v in enumerate(regions_to_eval):
+            entry = output[f'intermediate_{i}']
+            composite_bkg_curve.extend(list(entry['bkg_curve']))
+            composite_peak_x.extend(list(entry['peak_x']))
+            composite_peak_y.extend(list(entry['peak_y']))
+        composite_bkg_curve = np.array(composite_bkg_curve)
+        composite_peak_x = np.array(composite_peak_x)
+        composite_peak_y = np.array(composite_peak_y)
+        output .update( {
+                'data': data, 
+                'tth':x,
                 'yobs':bkgsub,
                 'fn':fn,
-                'peak_x':peak_x,
-                'peak_y':peak_y,
-                'orig_y':y,
-                'yinv':yinv, 
-                'bkg_curve':bkg_curve,
-        }
+                'peak_x':composite_peak_x,
+                'peak_y':composite_peak_y,  
+                'orig_y':y, 
+                'yinv':y*-1,
+                'bkg_curve':composite_bkg_curve,
+        })
+        self.chebychev_output = output
+        return output
+    #}}}
+    # _premap_data_for_chebychev_fitting: {{{ 
+    def _premap_data_for_chebychev_fitting(self,tth = None,yobs = None, regions_to_eval:list = None):
+        '''
+        This function will map out the regions in your data to tag regions for fitting or exclusion. 
+
+        regions_to_eval: list of tuples with form: (min, max)
+
+        returns a dictionary with entries: 
+        region_{i}: {
+                'tth': 2theta positions within the region,
+                'fit': bool (True if fitting should happen, False if ignore) 
+                    }
+        '''
+        output = {}
+        output_idx = 0
+        # Loop through the regions to evaluate: {{{
+        for i, (curr_region_min, curr_region_max) in enumerate(regions_to_eval):
+            if curr_region_max == None:
+                curr_region_max = max(tth)
+            # Check if there are previous regions to test for gaps: {{{
+            try:
+                prev_region_min, prev_region_max = regions_to_eval[i-1]
+            except:
+                prev_region_min, prev_region_max = (None, None)
+            #}}}
+            # first iteration: {{{
+            if i == 0:
+                first_rng = np.where(tth<curr_region_min) # Get the indices below the first minimum
+                second_rng = np.where((tth>curr_region_min) & (tth <= curr_region_max)) # Get indices between start and end
+                if len(first_rng[0]) != 0:
+                    output[output_idx] = {'tth':tth[first_rng], 'yobs':yobs[first_rng], 'fit': False}
+                    output_idx += 1
+                output[output_idx] = {'tth':tth[second_rng], 'yobs':yobs[second_rng], 'fit':True}
+                output_idx += 1
+            #}}}
+            # other iterations: {{{
+            else:
+                # If we are continuing where we left off: {{{
+                if curr_region_min == prev_region_max:
+                    # This means that we havent skipped a region
+                    rng = np.where((tth>curr_region_min)&(tth<=curr_region_max))
+                    output[output_idx] = {'tth':tth[rng],'yobs':yobs[rng],'fit':True}
+                    output_idx+=1
+                #}}}
+                # If there is a gap:{{{ 
+                else: 
+                    first_rng = np.where((tth>prev_region_max) & (tth<curr_region_min)) # Get indices below the first minimum
+                    second_rng = np.where((tth>curr_region_min)&(tth<=curr_region_max))
+             
+                    output[output_idx] = {'tth':tth[first_rng],'yobs':yobs[first_rng],'fit':False}
+                    output_idx+=1
+                    output[output_idx] = {'tth':tth[second_rng],'yobs':yobs[second_rng],'fit':True}
+                    output_idx+=1
+                #}}} 
+
+            #}}}
+            # If the user doesn't give something covering the maximum of the range
+            end_rng = np.where(tth>curr_region_max) # Get indices to the end of tth range
+            if len(end_rng[0]) !=0 and i == len(regions_to_eval) -1:
+                output[output_idx] = {'tth':tth[end_rng],'yobs':yobs[end_rng],'fit':False}
+
+        #}}}
+        # test if the code succeeded: {{{
+        test_tth = []
+        for i, entry in output.items():
+            test_tth.extend(list(entry['tth']))
+        if list(test_tth) != list(tth):
+            print(f'Generated tth:\n\t{test_tth}')
+            print(f'Original tth: \n\t{tth}') 
+            raise(Exception('Generated 2theta list not the same as input'))
+        #}}}
         return output
     #}}}
     # print_bkgsub_results: {{{

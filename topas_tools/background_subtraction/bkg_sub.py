@@ -581,15 +581,20 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             order:int = 8,
             height_offset = 40,
             bkg_offset = 10,
-            ignore_below = 1.0,
+            regions_to_eval:list = [(1,None)],
+            #ignore_below:float = 1.0,
+            #ignore_above:float = None,
             **kwargs,
         ):
         '''
         This allows you to clean up the background 
         subtraction automatically done with 
         finding the data glass peak. 
-        
+
+        if you give more than one value for height offset or ignore_above/below
+        the code will do multiple chebychev fits to subtract
         '''
+        
         # Defaults: {{{ 
         threshold = kwargs.get('threshold',None)
         distance = kwargs.get('distance',None)
@@ -597,14 +602,15 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         width = kwargs.get('width',[0,400])
         wlen = kwargs.get('wlen', None)
         rel_height = kwargs.get('rel_height', 1.5)
-        plateau_size = kwargs.get('plateau_size',None)
-        ignore_below = kwargs.get('ignore_below', 1)
+        plateau_size = kwargs.get('plateau_size',None) 
         marker_size = kwargs.get('marker_size', 3)
         legend_x = kwargs.get('legend_x',0.99)
         legend_y = kwargs.get('legend_y',0.99) 
+        plot_width= kwargs.get('plot_width', 1200)
+        plot_height= kwargs.get('plot_height',800)
         #}}}
         # run_in_loop:{{{ 
-        if idx:
+        if idx != None:
             run_in_loop = False
         #}}}
         # if NOT in a loop: {{{
@@ -622,9 +628,9 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                 wlen = wlen,
                 rel_height = rel_height,
                 plateau_size = plateau_size,
-                ignore_below = ignore_below,
+                regions_to_eval=regions_to_eval,
             )
-            self.plot_chebychev_bkgsub(chebychev_data={0:tst}, marker_size=marker_size,legend_x=legend_x,legend_y=legend_y)
+            self.plot_chebychev_bkgsub(chebychev_data={0:tst}, marker_size=marker_size,legend_x=legend_x,legend_y=legend_y, width =plot_width, height =plot_height)
         #}}}
         # if run in a loop: {{{
         else:

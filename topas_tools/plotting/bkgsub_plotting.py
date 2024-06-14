@@ -213,7 +213,7 @@ class BkgSubPlotter(GenericPlotter):
         #}}}
         self.show_figure()
     #}}}
-    # plot_inverted_bkgsub: {{{
+    # plot_chebychev_bkgsub: {{{
     def plot_chebychev_bkgsub(self,idx:int = 0, chebychev_data:dict = None, **kwargs):
         '''
         This function enables the visualization of background 
@@ -222,8 +222,10 @@ class BkgSubPlotter(GenericPlotter):
         '''
         # kwargs: {{{
         marker_size = kwargs.get('marker_size', 3)
-        legend_x = kwargs.get('legend_x',0.99)
+        legend_x = kwargs.get('legend_x',1.50)
         legend_y = kwargs.get('legend_y',0.99) 
+        width = kwargs.get('width', 1400)
+        height = kwargs.get('height',800)
         #}}}
         # collect the data: {{{
         entry = chebychev_data[idx]
@@ -243,12 +245,25 @@ class BkgSubPlotter(GenericPlotter):
         self.plot_data(
             x = x,
             y = y,
+            height = height,
+            width = width,
             color = 'black',
             mode = 'lines',
             xaxis_title = xaxis_title,
             yaxis_title = yaxis_title,
             name = 'Original bkg sub data',
             title_text= 'Background finding',
+        )
+        #}}}
+        # Plot the zero line: {{{
+        self.add_data_to_plot(
+            x = x,
+            y = np.zeros(len(y)),
+            color = 'black',
+            dash = 'dash',
+            mode = 'lines',
+            name = 'Zero',
+            show_in_legend = False,
         )
         #}}}
         # inverted bkgsub: {{{
@@ -291,6 +306,48 @@ class BkgSubPlotter(GenericPlotter):
             legend_x = legend_x,
             legend_y = legend_y,
         )
+        #}}}
+        # Plot the deconvoluted fits: {{{
+        for i, key in enumerate(entry):
+            if 'intermediate' in key:
+                # Define values: {{{
+                entryb = entry[key]
+                x = entryb['tth']
+                y = entryb['yobs']
+                bkg_curve = entryb['bkg_curve']
+                peak_x = entryb['peak_x']
+                peak_y = entryb['peak_y']
+                lower_lim = entryb['lower_lim']
+                upper_lim = entryb['upper_lim']
+                basename = f'Region {i}: ({lower_lim}, {upper_lim})'
+                #}}}
+                # Plot bkg sub data: {{{
+                self.add_data_to_plot(
+                    x = x,
+                    y = y,
+                    name = f'{basename}, BKGSUB',
+                    mode = 'lines',
+                )
+                #}}} 
+                # Plot the background curve: {{{
+                self.add_data_to_plot(
+                    x = x,
+                    y = bkg_curve,
+                    name = f'{basename}, BKG',
+                    mode = 'lines',
+                    dash = 'dash',
+                )
+                #}}}
+                # Peaks: {{{
+                self.add_data_to_plot(
+                    x = peak_x,
+                    y = np.array(peak_y)*-1,
+                    name = f'{basename}, Base Peaks',
+                    legend_x=legend_x,
+                    legend_y=legend_y,
+                )
+                #}}}
+
         #}}}
         self.show_figure()
         #}}}
