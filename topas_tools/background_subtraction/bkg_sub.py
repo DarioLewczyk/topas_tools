@@ -546,7 +546,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             #}}} 
         #}}}
         # Print information about the data peaks: {{{
-        if print_results or plot_result:
+        if print_results:
             dp = res # This gives the index you selected
         if print_results:      
             print(f'{res["peak_info"]}\n')

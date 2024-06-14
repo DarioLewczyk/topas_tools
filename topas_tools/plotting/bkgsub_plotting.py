@@ -320,51 +320,48 @@ class BkgSubPlotter(GenericPlotter):
             chebychev_data
         This should only be run after you have evaluated negative values in the range. 
         '''
-        shown_pos_legend = False
-        shown_neg_legend = False
-        # Loop to generate plots: {{{
-        for i, entry in working_dict.items(): 
+        # collect data into a single list.{{{ 
+        pos_i = []
+        neg_i = []
+        for i, entry in working_dict.items():
             neg_obs_above_min_tth = entry['negative_above_min_tth'] # Boolean, defines coloring
-            xrange = [0, len(working_dict)-1] # Define the 2theta range.
-            show_in_legend = False # Default behavior so legend does not go crazy
-            # Negative plot parameters: {{{
             if neg_obs_above_min_tth:
+                neg_i.append(i)
+            else:
+                pos_i.append(i)
+        #}}}
+        # Loop to generate plots: {{{
+        data = [pos_i, neg_i] 
+        for i, v in enumerate(data):  
+            # Negative plot parameters: {{{
+            if i == 1: 
                 color = 'red'
                 name = 'contains_negative'
-                if not shown_neg_legend:
-                    shown_neg_legend = True
-                    show_in_legend = True
             #}}}
             # Positive plot prms: {{{ 
-            else:
+            if i == 0:
                 color = 'black'
                 name = 'only_positive'
-                if not shown_pos_legend:
-                    shown_pos_legend = True
-                    show_in_legend = True
             #}}}
             # initial plot definition: {{{ 
             if i == 0:
                 self.plot_data(
-                    [i],
-                    [i],
+                    v,
+                    v,
                     color = color,
                     title_text = 'Negative BKG sub patterns',
                     xaxis_title='Pattern IDX',
-                    yaxis_title = 'Pattern_IDX',
-                    show_in_legend=show_in_legend,
+                    yaxis_title = 'Pattern_IDX', 
                     name = name,
                 )
             #}}}
             # add additional data: {{{ 
             else:
                 self.add_data_to_plot(
-                        [i],
-                        [i],
-                        color = color,
-                        show_in_legend=show_in_legend,
-                        name = name,
-                        xrange = xrange,
+                        v,
+                        v,
+                        color = color, 
+                        name = name, 
                         legend_xanchor='left',
                         legend_x = 0.2,
                 )
