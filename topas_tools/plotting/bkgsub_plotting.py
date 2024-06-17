@@ -352,6 +352,8 @@ class BkgSubPlotter(GenericPlotter):
         self.show_figure()
         #}}}
         # Plot the new bkgsub: {{{
+        x =entry['tth']
+        bkgsub =entry['yobs']
         self.plot_data(
             x, bkgsub,
             color = 'black',

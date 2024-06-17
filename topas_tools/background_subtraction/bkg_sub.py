@@ -653,12 +653,12 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                         wlen = wlen,
                         rel_height = rel_height,
                         plateau_size = plateau_size,
-                        ignore_below = ignore_below,
+                        regions_to_eval=regions_to_eval,
                     )
                 )
             #}}}
             # check for negative peaks: {{{ 
-            self.check_for_negative_peaks(mode = 1, ignore_below=ignore_below)
+            self.check_for_negative_peaks(mode = 1, ignore_below=regions_to_eval[0][0]) # The minimum value for tth that you use.
             self._plot_neg_check(working_dict=self.chebychev_data)
             #}}}
 
