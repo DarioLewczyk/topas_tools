@@ -48,6 +48,8 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             len_of_time = 6,  
             skiprows = 1,  
             tolerance = 0.001,
+            mode = 0,
+            initial_subtraction:bool = True,
         ):
         '''
         glass_dir: directory where your reference glass is
@@ -60,6 +62,8 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         len_of_time: refer to DataCollector
         skiprows: refer to DataCollector
         tolerance: refers to the maximum difference for pattern file spacing to be equivalent
+        mode: this tells DataCollector whether or not to look for timestamps.
+        initial_subtraction: tells the program whether or not to do initial background subtraction
         
         Peak finding parameters (SiO2)
             height
@@ -92,45 +96,47 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         # Configuration: {{{ 
         # Get Glass Data: {{{
         # If NO Glass Dir: {{{
-        if not glass_dir:
+        if not glass_dir and initial_subtraction:
             print('Please navigate to your GLASS reference folder.')
             glass_dir = self.navigate_filesystem()
         #}}}
         # If the glass dir is not valid: {{{
-        if not os.path.isdir(glass_dir):
-            print(f'{glass_dir} is invalid!')
-            print('Please navigate to your GLASS reference folder.')
-            glass_dir = self.navigate_filesystem()
+        if  initial_subtraction:
+            if not os.path.isdir(glass_dir):
+                print(f'{glass_dir} is invalid!')
+                print('Please navigate to your GLASS reference folder.')
+                glass_dir = self.navigate_filesystem()
         #}}}
         # Normal operation: {{{
-        os.chdir(glass_dir)
-        glass_files = DataCollector(
-                fileextension = fileextension,
-                position_of_time = position_of_time,
-                len_of_time = len_of_time,
-                skiprows = skiprows,
-            )
-        glass_files.scrape_files()
-        glass_files = list(glass_files.file_dict.values())
-        if len(glass_files) > 1:
-            print('Please select the index of the GLASS file')
-            glass_file = self.prompt_user(glass_files) # Show the user all the files found
-        elif len(glass_files) == 1:
-            glass_file = glass_files[0]
-        else:
-            raise(ValueError('There were no files in this directory!'))
+        if initial_subtraction:
+            os.chdir(glass_dir)
+            glass_files = DataCollector(
+                    fileextension = fileextension,
+                    position_of_time = position_of_time,
+                    len_of_time = len_of_time,
+                    skiprows = skiprows,
+                )
+            glass_files.scrape_files()
+            glass_files = list(glass_files.file_dict.values())
+            if len(glass_files) > 1:
+                print('Please select the index of the GLASS file')
+                glass_file = self.prompt_user(glass_files) # Show the user all the files found
+            elif len(glass_files) == 1:
+                glass_file = glass_files[0]
+            else:
+                raise(ValueError('There were no files in this directory!'))
         #}}}
         #}}}
         # Handle the Air Case: {{{
         # Get air Data: {{{
-        if not air_dir:
+        if not air_dir and initial_subtraction:
             response = self.prompt_user(['yes'])
             if response:
                 print('Please navigate to your air scatter reference folder.')
                 air_dir =  self.navigate_filesystem()
         #}}}
         # IF You want to do air sub: {{{
-        if air_dir:
+        if air_dir and initial_subtraction:
             # Handle the case where the air directory is invalid: {{{ 
             if not os.path.isdir(air_dir):
                 print(f'{air_dir} is invalid!')
@@ -174,6 +180,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                 position_of_time = position_of_time,
                 len_of_time = len_of_time,
                 skiprows = skiprows,
+                mode=mode,
             )
         data_files.scrape_files()
         data_files= data_files.file_dict # Make this one the full data dict
@@ -218,10 +225,11 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         #}}} 
         #}}}
         # Import data: {{{
+        #if initial_subtraction:
         self.patterns = self._import_bkgsub_data(skiprows=skiprows, len_of_time = len_of_time) 
         #}}}
         # If an air file was loaded, subtract it from the glass pattern: {{{
-        if air_file:
+        if air_file and initial_subtraction:
             subtraction_output = self.subtract_patterns(self.patterns['glass']['data'], self.patterns['air']['data'], tolerance = tolerance)
             air_sub_data = subtraction_output['bkgsub_interpolated'] # Only interpolated if necessary
             uninterpolated_air_sub_data = subtraction_output['bkgsub'] # non-interpolated
@@ -236,12 +244,15 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                     'uninterpolated':uninterpolated_air_sub_data,
                     }
                 })
-        else:
+        elif not air_file and initial_subtraction:
             self.patterns.update({
                 'air_sub_glass':None
                 })
         #}}}
-
+        # if not using glass or air subtraction: {{{
+        if not initial_subtraction:
+            self.bkgsub_data = self._get_default_bkgsub_data( data_entries = self.patterns['data'])
+        #}}}
     #}}} 
     # get_glass_ref_peak: {{{
     def get_glass_ref_peak(self, 
@@ -560,7 +571,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             self.plot_pattern_with_peaks(
                 pattern_tth = x,
                 pattern_yobs = y,
-                pattern_name = name,
+         pattern_name = name,
                 peaks_tth= res['tth'],
                 peaks_yobs= res['yobs'],
                 peaks_name = f'Data Peaks (idx: {idx})',
@@ -747,10 +758,13 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             #}}}
         # copy the metadata folder and everything in it to the destination: {{{
         if not os.path.exists(md_dest):
-            shutil.copytree(
-                md_srce,
-                md_dest,
-            )
+            try:
+                shutil.copytree(
+                    md_srce,
+                    md_dest,
+                )
+            except:
+                print(f'No metadata folders were copied')
         #}}}
             
         #}}} 

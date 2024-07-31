@@ -43,6 +43,31 @@ class BkgsubUtils:
         self.data_files = data_files
         #}}}
     #}}}
+    # _get_default_bkgsub_data:{{{
+    def _get_default_bkgsub_data(self, data_entries):
+        '''
+        This function simply serves to allow the user to 
+        do chebychev subtraction without having subtracted 
+        glass or air or another reference first.
+        '''
+        bkgsub_data = {}
+        for i, entry in data_entries.items():
+            data = entry['data'] # This is the originally loaded np data
+            fn = entry['fn']
+            bkgsub_data[i] = {
+                'data': data,
+                'tth': data[:,0],
+                'yobs': data[:,1],
+                'fn':fn,
+                'scale_factor': 0,
+                'tth_offset': 0,
+                'ref_peak': 0,
+                'data_peak': 0,
+                'interpolated': False,
+                'uninterpolated':data,
+            }
+        return bkgsub_data
+    #}}}
     # _import_bkgsub_data: {{{
     def _import_bkgsub_data(self,skiprows:int = 1,len_of_time:int = 6):
         '''
@@ -55,7 +80,11 @@ class BkgsubUtils:
         files = [self.glass_file, self.air_file, self.data_files] # File names
         entries = ['glass', 'air', 'data'] # Entry categories
         for i, path in enumerate(dirs):
-            os.chdir(path) # Go to the path where the data are first
+            if type(path) == str:
+                os.chdir(path) # Go to the path where the data are first
+                skip_iter = False
+            else:
+                skip_iter = True
             entry = entries[i]
             fn = files[i] # Will either be a singular file or a list of files.
             data_dict[entry] = {} # Initialize the entry
@@ -66,7 +95,7 @@ class BkgsubUtils:
                     
             #}}}
             #  Get the data: {{{
-            elif type(fn) != str:
+            elif type(fn) != str and type(fn) != type(None):
                 for j, (time,f) in enumerate(fn.items()):
                     try:
                         data = np.loadtxt(f, skiprows= skiprows)
@@ -79,7 +108,7 @@ class BkgsubUtils:
                                 cols = re.findall(r'\w+\.?\w*', line)
                                 if len(cols) >=2:
                                     new_f.append(line)
-                        data = np.loadtxt(new_f,skiprows=1) 
+                        data = np.loadtxt(new_f,skiprows=skiprows) 
                     tth = data[:,0]
                     yobs = data[:,1]
                     data_dict[entry][j] = {
@@ -93,15 +122,16 @@ class BkgsubUtils:
             #}}}
             # Get background data: {{{
             else:
-                data = np.loadtxt(fn, skiprows=skiprows)
-                tth = data[:,0]
-                yobs = data[:,1]
-                data_dict[entry].update({
-                    'data':data,
-                    'tth':tth,
-                    'yobs':yobs,
-                    'fn':fn,
-                })
+                if not skip_iter:
+                    data = np.loadtxt(fn, skiprows=skiprows)
+                    tth = data[:,0]
+                    yobs = data[:,1]
+                    data_dict[entry].update({
+                        'data':data,
+                        'tth':tth,
+                        'yobs':yobs,
+                        'fn':fn,
+                    })
             #}}}
         #}}}
         return data_dict
@@ -259,7 +289,14 @@ class BkgsubUtils:
         output = {} 
         x = bkgsub_data[idx]['tth']
         y = bkgsub_data[idx]['yobs']
-        self._cheb_ranges = self._premap_data_for_chebychev_fitting(tth=x, yobs=y, regions_to_eval=regions_to_eval)
+        self._cheb_ranges = self._premap_data_for_chebychev_fitting(
+                tth=x, 
+                yobs=y, 
+                regions_to_eval=regions_to_eval,
+                height_offset = height_offset,
+                bkg_offset = bkg_offset,
+                order = order,
+        )
         fn = bkgsub_data[idx]['fn']
         
         # Defaults: {{{ 
@@ -271,28 +308,17 @@ class BkgsubUtils:
         rel_height = kwargs.get('rel_height', 1.5)
         plateau_size = kwargs.get('plateau_size',None) 
         #}}}
-        # Map the baselinge with peaks: {{{
-        bkgsub = [] 
-        for i, entry in self._cheb_ranges.items():
+        # Map the baseline with peaks: {{{
+        bkgsub = []  
+        for i, entry in self._cheb_ranges.items(): 
             tth_rng = entry['tth'] # 2theta values within the specified range
             yobs_rng = entry['yobs']
             fit_bkg = entry['fit'] # Tells whether or not to chebychev fit
             yinv = yobs_rng * -1 # invert the data so the peak finding gets the baseline peaks
+            cur_height_offset = entry['height_offset']
+            cur_bkg_offset = entry['bkg_offset']
+            cur_order = entry['order']
             
-            try:
-                cur_height_offset = height_offset[i]
-            except:
-                cur_height_offset = height_offset
-            try:
-                cur_bkg_offset = bkg_offset[i]
-            except:
-                cur_bkg_offset = bkg_offset
-            try:
-                cur_order = order[i]
-            except:
-                cur_order = order
-
-
             height = kwargs.get('height',max(yinv) - cur_height_offset) # Get the current height 
             peaks = self.find_peak_positions( 
                 tth_rng,
@@ -356,7 +382,7 @@ class BkgsubUtils:
                     }
             })
             #}}}
-        #}}}  
+        
         data = np.array(list(zip(x, bkgsub)))
         composite_bkg_curve = []
         composite_peak_x = []
@@ -384,7 +410,7 @@ class BkgsubUtils:
         return output
     #}}}
     # _premap_data_for_chebychev_fitting: {{{ 
-    def _premap_data_for_chebychev_fitting(self,tth = None,yobs = None, regions_to_eval:list = None):
+    def _premap_data_for_chebychev_fitting(self,tth = None,yobs = None, regions_to_eval:list = None, height_offset:list = None, bkg_offset:list = None, order:list = None):
         '''
         This function will map out the regions in your data to tag regions for fitting or exclusion. 
 
@@ -400,6 +426,20 @@ class BkgsubUtils:
         output_idx = 0
         # Loop through the regions to evaluate: {{{
         for i, (curr_region_min, curr_region_max) in enumerate(regions_to_eval):
+            # Get current offsets and order: {{{
+            try:
+                curr_height_offset = height_offset[i] # Should get the current height offset
+            except: 
+                curr_height_offset = height_offset
+            try: 
+                curr_bkg_offset = bkg_offset[i]
+            except:
+                curr_bkg_offset = bkg_offset
+            try: 
+                curr_order = order[i]
+            except:
+                curr_order = order
+            #}}}
             if curr_region_max == None:
                 curr_region_max = max(tth)
             # Check if there are previous regions to test for gaps: {{{
@@ -413,9 +453,9 @@ class BkgsubUtils:
                 first_rng = np.where(tth<curr_region_min) # Get the indices below the first minimum
                 second_rng = np.where((tth>curr_region_min) & (tth <= curr_region_max)) # Get indices between start and end
                 if len(first_rng[0]) != 0:
-                    output[output_idx] = {'tth':tth[first_rng], 'yobs':yobs[first_rng], 'fit': False}
+                    output[output_idx] = {'tth':tth[first_rng], 'yobs':yobs[first_rng], 'fit': False, 'height_offset': 0, 'bkg_offset': 0, 'order': 0}
                     output_idx += 1
-                output[output_idx] = {'tth':tth[second_rng], 'yobs':yobs[second_rng], 'fit':True}
+                output[output_idx] = {'tth':tth[second_rng], 'yobs':yobs[second_rng], 'fit':True, 'height_offset':curr_height_offset, 'bkg_offset':curr_bkg_offset, 'order':curr_order}
                 output_idx += 1
             #}}}
             # other iterations: {{{
@@ -424,7 +464,7 @@ class BkgsubUtils:
                 if curr_region_min == prev_region_max:
                     # This means that we havent skipped a region
                     rng = np.where((tth>curr_region_min)&(tth<=curr_region_max))
-                    output[output_idx] = {'tth':tth[rng],'yobs':yobs[rng],'fit':True}
+                    output[output_idx] = {'tth':tth[rng],'yobs':yobs[rng],'fit':True, 'height_offset': curr_height_offset, 'bkg_offset': curr_bkg_offset, 'order': curr_order}
                     output_idx+=1
                 #}}}
                 # If there is a gap:{{{ 
@@ -434,7 +474,7 @@ class BkgsubUtils:
              
                     output[output_idx] = {'tth':tth[first_rng],'yobs':yobs[first_rng],'fit':False}
                     output_idx+=1
-                    output[output_idx] = {'tth':tth[second_rng],'yobs':yobs[second_rng],'fit':True}
+                    output[output_idx] = {'tth':tth[second_rng],'yobs':yobs[second_rng],'fit':True, 'height_offset': curr_height_offset, 'bkg_offset': curr_bkg_offset, 'order': curr_order}
                     output_idx+=1
                 #}}} 
 
@@ -442,7 +482,7 @@ class BkgsubUtils:
             # If the user doesn't give something covering the maximum of the range
             end_rng = np.where(tth>curr_region_max) # Get indices to the end of tth range
             if len(end_rng[0]) !=0 and i == len(regions_to_eval) -1:
-                output[output_idx] = {'tth':tth[end_rng],'yobs':yobs[end_rng],'fit':False}
+                output[output_idx] = {'tth':tth[end_rng],'yobs':yobs[end_rng],'fit':False, 'height_offset':0, 'bkg_offset':0, 'order': 0}
 
         #}}}
         # test if the code succeeded: {{{
@@ -494,5 +534,55 @@ class BkgsubUtils:
                 qty = data_labels[j] # Defines what v is
                 print(f'\t{qty}: {np.around(v,4)}')
         #}}}
+    #}}}
+    #print_kwargs_for_peak_finding: {{{ 
+    def print_kwargs_for_peak_finding(self):
+        '''
+        This function is made to allow you to quickly and easily recall what the 
+        keyword arguments are for peak finding. 
+        '''
+        print(
+            'Peak finding kwargs: \n'+
+            '\tthreshold: None\n'+
+            '\tdistance: None\n'+
+            '\tprominence: None\n'+
+            '\twidth: [0,400]\n'+
+            '\twlen: None\n'+
+            '\trel_height: 1.5\n'+
+            '\tplateau_size: None\n'
+        )
+    #}}}
+    # print_chebychev_manual: {{{
+    def print_chebychev_manual(self):
+        '''
+        This function prints out a description for how to use chebychev subtration
+        If you are confused about how to implement multiple region fitting, this will help
+        '''
+        print('To perform chebychev subtraction, you need to run "self.chebychev_subtraction"\n'+
+            'This function can be run either one at a time or in an automated fashion.'+
+            'If you want to run only one pattern at a time, give an index. This is useful for testing how the algorithm is working.'
+                )
+        print(
+            'Several kewyord arguments may be used including:\n'+
+            '\tlegend_x = 0.99\n'+
+            '\tlegend_y = 0.99\n'+
+            '\tplot_width = 1200\n'+
+            '\tplot_height = 800\n'
+        )
+        self.print_kwargs_for_peak_finding()
+
+        print(
+            'For defining multiple regions, you can make the height_offset, bkg_offset, order, and regions_to_eval as lists.'+
+            'An example is given: \n'+
+            'height_offset = [90, 70]\n'+
+            '\tThis means that the peak finding algorithm will have a range 90 counts below the inverted maximum to find the baseline for the first region and 70 for the second'+
+            'bkg_offset = [10, 25]\n'+
+            '\tThis means that the first region background curve is offset from the pattern by 10 before subtraction and the second region by 25.\n'+
+            'order = [5, 8]\n'+
+            '\tThis means that the first region uses a 5 term Chebychev polynomial and the second uses an 8 term polynomial.\n'+
+            'regions_to_eval = [(0, 2.3), (2.3, None)]\n'+
+            '\tThis means that the first region spans from 0 to 2.3 degrees. The second region extends from 2.3 degrees to the maximum observed angle. If you want to, you can also leave gaps e.g. [(0, 2.3), 4, None)] where the middle is not subtracted.\n'
+            
+        )
     #}}}
 #}}}

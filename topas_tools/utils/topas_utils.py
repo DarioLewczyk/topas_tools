@@ -8,7 +8,8 @@ import re
 import glob
 import numpy as np
 import texttable
-from PIL import Image
+#from PIL import Image
+import fabio
 #}}}
 # Utils: {{{
 class Utils: 
@@ -143,6 +144,56 @@ class Utils:
         #}}}
         return os.getcwd() #Final directory is returned
         
+    #}}}
+    # find_a_file: {{{
+    def find_a_file(self, dirname:str = None, fileextension:str = None):
+        '''
+        This function is built to simplify the process of finding a file 
+        given a filetype. 
+
+        If called without an explicit directory name (dirname) the function will 
+        start by searching the current directory. If no files matching the descriptor exist
+        it will prompt the user to search for another directory 
+
+        returns: (file, directory)
+        '''
+        home = os.getcwd()
+        files = None
+        # no dirname specified: {{{
+        if not dirname:
+            files = glob.glob(f'*.{fileextension}')
+            if len(files) == 0:
+                print(f'No files matching the fileextension: "{fileextension}" were found')
+            else:
+                dirname = home
+
+        #}}}
+        # dirname specified: {{{
+        else:
+            if os.path.isdir(dirname):
+                os.chdir(dirname)
+                files = glob.glob(f'*.{fileextension}')
+                if len(files) == 0:
+                    print(f'No files matching the fileextension: "{fileextension}" were found')
+            else:
+                print(f'The directory: {dirname} does not exist, navigate to the right directory:')
+        #}}}
+        # if need to navigate filesystem: {{{
+        if not files:
+            while not files:
+                dirname = self.navigate_filesystem()
+                files = glob.glob('*.{fileextension}')
+                if not files: 
+                    print(f'No files matching extension: "{fileextension}"')
+        #}}}
+        # with files, determine if user needs to select a file from a list: {{{
+        if len(files) == 1:
+            file = files[0]
+        else:
+            file = self.prompt_user(files, f'{fileextension} files')
+        #}}}
+        return (file, dirname)
+
     #}}}
     # get_min_max: {{{
     def get_min_max (
@@ -522,6 +573,40 @@ class DataCollector:
         #}}}
         
     #}}}
+    # _parse_imarr: {{{
+    def _parse_imarr(self,im_arr = None):
+        '''
+        The goal of this function is to lighten up the get_imarr function  
+        It will just parse an image array regardless of where its origin 
+        The function will then return a tuple of: 
+
+        (xs, ys, zs, max_z)
+        '''
+        # Define vars: {{{
+        xs = []
+        ys = []
+        zs = [] 
+        max_z = 0
+        #}}}
+        # Parse the image: {{{
+        for y, zarr in enumerate(im_arr):
+            inner_z = [] # This holds the zs for each row of the array
+            ys.append(y)
+            for x, z in enumerate(zarr): 
+                if y == 0:
+                    xs.append(x) # This only needs to happen once since the number should not change. 
+                inner_z.append(z) 
+                if z > max_z:
+                    max_z = z
+            zs.append(inner_z)
+        #}}}
+        # convert lists to arrays: {{{
+        xs = np.array(xs)
+        ys = np.array(ys)
+        zs = np.array(zs)
+        #}}}
+        return (xs, ys, zs, max_z)
+    #}}}
     # get_imarr: {{{
     def get_imarr(self,fileindex:int = 0):
         # Get X, Y, Z Data (IF Image): {{{        
@@ -532,35 +617,72 @@ class DataCollector:
         Xs are represented by each of the indices in the arrays in the primary array
         Ys are represented by each of the indices of arrays in the primary array
         Zs are stored as values in each of the arrays within the primary array.
-        '''
-        xs = []
-        ys = []
-        zs = []
-        self.max_im_z = 0
+        ''' 
+        # Load information: {{{ 
         keys = list(self.file_dict.keys())
         image_time_key = keys[fileindex] # This is the time in seconds
         file = self.file_dict[image_time_key] # Get the filename you wanted
         self.image_time = image_time_key - keys[0] # Get relative from the first time.
         self.image_time_min = np.around(self.image_time/60,2)
         self.image_time_h = np.around(self.image_time/(60**2),2)
-        
-        image = Image.open(file) # In this step, we load the image into memory. Then we can get the array out.
-        data  = np.array(image) # This is an array of arrays. (len = Y), len(array[i]) = X, values in array[i] = z
-        for y, zarr in enumerate(data):
-            inner_z = [] # This holds the 
-            ys.append(y)
-            for x, z in enumerate(zarr): 
-                if y == 0:
-                    xs.append(x) # This only needs to happen once since the number should not change. 
-                inner_z.append(z) 
-                if z > self.max_im_z:
-                    self.max_im_z = z
-            zs.append(inner_z)
-        self.im_x = np.array(xs)
-        self.im_y = np.array(ys)
-        self.im_z = np.array(zs)
-
         #}}}
+        # Handle the image: {{{
+        self.im_arr = fabio.open(file).data # Using fabio instead of PIL.Image, we can get the exact same array in one line
+        self.im_x, self.im_y, self.im_z, self.max_im_z = self._parse_imarr(self.im_arr)
+        #}}} 
+        #}}}
+    #}}}
+    # find_closest: {{{
+    def find_closest(self,sorted_array, target, mode:int = 0):
+        '''
+        sorted_array: 
+            an array where the values are sorted and not randomly distributed
+        target: 
+            the value you are looking for.
+        mode: 
+            0: returns the element from the list
+            1: returns the index of the element in the list
+        '''
+        # Simple cases where you want the first or last element: {{{
+        if target <= sorted_array[0]:
+            if mode == 0:
+                return sorted_array[0]
+            elif mode == 1:
+                return 0
+        if target >= sorted_array[-1]:
+            if mode == 0:
+                return sorted_array[-1]
+            elif mode == 1:
+                return -1
+        #}}}
+        # Finding an exact match: {{{
+        start, end = 0, len(sorted_array) - 1
+        while start <= end:
+            mid = (start + end) // 2
+            if sorted_array[mid] == target:
+                if mode== 0:
+                    return sorted_array[mid]
+                elif mode == 1:
+                    return mid
+            elif sorted_array[mid] < target:
+                start = mid + 1
+            else:
+                end = mid - 1
+        #}}} 
+        #  Approximate matches: {{{
+        # At this point, start is the smallest number greater than target
+        # and end is the largest number less than target.
+        # Return the closest of the two
+        if start < len(sorted_array) and sorted_array[start] - target < target - sorted_array[end]:
+            if mode == 0:
+                return sorted_array[start]
+            elif mode == 1:
+                return start
+        if mode == 0:
+            return sorted_array[end]
+        elif mode == 1:
+            return end
+        #}}}  
     #}}}
     # check_order_against_time: {{{
     def check_order_against_time(self,tmp_rng:list = None,data_dict_keys:list = None,  metadata_data:dict = None, mode:int= 0 ):
