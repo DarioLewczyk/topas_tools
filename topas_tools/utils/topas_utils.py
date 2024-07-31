@@ -298,6 +298,26 @@ class Utils:
             #}}}
         return (start,end)
     #}}}
+    # convert_to_q: {{{
+    def convert_to_q(self, tth, lambda_angstrom:float = None, mode = 0):
+        '''
+        This function serves to convert 2theta to q space
+        
+        mode = 0: gives q in angstrom
+        mode = 1: gives q in nm
+        '''
+        lambda_nm = lambda_angstrom * 10
+
+        # unit selection: {{{
+        if mode == 0:
+            lam = lambda_angstrom
+        elif mode == 1:
+            lam = lambda_nm
+        #}}}
+        tth_rad = tth * np.pi / 180
+        q = 4*np.pi/lam * np.sin(tth_rad/2)
+        return q
+    #}}}
 #}}}
 # UsefulUnicode: {{{
 class UsefulUnicode: 
