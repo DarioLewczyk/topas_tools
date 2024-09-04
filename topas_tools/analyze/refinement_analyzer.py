@@ -72,7 +72,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             flag_search:str = 'CHECK', 
             sort_hkli:bool = False,
             
-        ):
+        ): 
         # Categorize the Refined Data: {{{
         csvs = tqdm(self.sorted_csvs, desc = "Reading Files")
         # import and process CSV, XY, OUT, HKLI:     

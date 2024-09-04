@@ -361,7 +361,8 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             run_in_loop:bool = False,
             glass_peak_idx:int = 0,
             tolerance_for_bkgsub:float = 0.001,
-            scale_modifer:float = 1.0,
+            scale_modifier:float = 1.0,
+            subtract_air:bool = True,
             plot_result:bool = True,
             print_results:bool = False, 
             verbose_prints:bool = False,
@@ -373,7 +374,8 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         run_in_loop: if true, this creates a dictionary of all glass peak positions
         glass_peak_idx: this is the index of the peak used to align your ref pattern
         tolerance_for_bkgsub: This is the tolerance for 2theta positions to be equal.
-        scale_modifer: Use this if you want to increase or decrease the scale factor. By default, it uses the full scale factor.
+        scale_modifier: Use this if you want to increase or decrease the scale factor. By default, it uses the full scale factor.
+        subtract_air: This asks if you want to subtract the air contribution from the original data file
         '''
         # defaults/kwargs: {{{
         height = kwargs.get('height', self._height)
@@ -394,8 +396,16 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         # If not run in loop: {{{
         if not run_in_loop:
             data = data[idx] 
-            x = data['tth']
-            y = data['yobs']
+            air_sub = self.patterns['air_sub_glass'] 
+
+            if air_sub and subtract_air:
+                air_sub_pattern = self.subtract_patterns(d1 =data['data'],d2 = self.patterns['air']['data'],tolerance=tolerance_for_bkgsub)
+                air_sub_data = air_sub_pattern['bkgsub_interpolated'] # Set the new d1 as the air subtracted version 
+                x = air_sub_data[:,0]
+                y = air_sub_data[:,1]
+            else:
+                x = data['tth']
+                y = data['yobs']
             name = data['fn'] # Used in the plots if you show them
             # Find peak positions and update dict: {{{
             res = self.find_peak_positions(
@@ -426,8 +436,15 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
             d = tqdm(data) # Make a progress bar for the peak finding.
             for i, idx in enumerate(d): 
                 entry = data[idx] # Get the current entry
-                x = entry['tth']
-                y = entry['yobs']
+                air_sub = self.patterns['air_sub_glass']
+                if air_sub and subtract_air:
+                    air_sub_pattern = self.subtract_patterns(d1 =entry['data'],d2 = self.patterns['air']['data'],tolerance=tolerance_for_bkgsub)
+                    air_sub_data = air_sub_pattern['bkgsub_interpolated'] # Set the new d1 as the air subtracted version 
+                    x = air_sub_data[:,0]
+                    y = air_sub_data[:,1]
+                else:
+                    x = entry['tth']
+                    y = entry['yobs']
                 # Find the peak positions & Update dict: {{{
                 self.data_peaks[idx] = self.find_peak_positions(
                     x = x,
@@ -519,11 +536,14 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                     ref_peak = self.shifted_glass_ref[idx]['peak_info']['yobs'][0] # Shifted glass peak
                     data_peak = self.data_peaks[idx]['yobs'][glass_peak_idx] # Data glass peak
 
-                    scaled_glass = self.scale_reference(shifted_glass, ref_peak, data_peak, scale_modifer)
+                    scaled_glass = self.scale_reference(shifted_glass, ref_peak, data_peak, scale_modifier)
                     self.shifted_glass_ref[idx].update({'scaled_glass': scaled_glass}) # Update the dictionary
                     #}}}
                     # Then background subtract/interpolate if necessary: {{{
-                    d1 = data[idx]['data'] # This is the dataset for the current pattern
+                    d1 = data[idx]['data'] # This is the dataset for the current pattern      
+                    if air_sub and subtract_air:
+                        air_sub_pattern = self.subtract_patterns(d1 =d1,d2 = self.patterns['air']['data'],tolerance=tolerance_for_bkgsub)
+                        d1 = air_sub_pattern['bkgsub_interpolated'] # Set the new d1 as the air subtracted version 
                     d2 = scaled_glass['data'] # This is the dataset for the current scaled glass
 
                     scale_factor = scaled_glass['scale_factor'] # Get the scale factor
@@ -568,12 +588,39 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         #}}}
         # Plot the result: {{{
         if plot_result:
+            # plot the glass reference: {{{
+            tth_offset = res['tth'][glass_peak_idx] - self.glass_ref_peaks['tth'][0]
+            # Get a copy of the glass reference data: {{{
+            air_sub = self.patterns['air_sub_glass']
+            glass = self.patterns['glass']
+            if air_sub:
+                shifted_glass = air_sub['data'].copy()
+                fn = air_sub['fn']
+            else:
+                shifted_glass = glass['data'].copy()
+                fn = glass['fn']
+            #}}}
+           
+            shifted_x1 = [x+tth_offset for x in shifted_glass[:,0]]
+            shifted_glass[:,0] = shifted_x1 # Update the 2 theta with the shift
+           
+            # First Scale Background: {{{ 
+            ref_peak = self.glass_ref_peaks['peak_info']['peak_heights'][0]
+            data_peak = res['peak_info']['peak_heights'][glass_peak_idx]
+            scaled_glass = self.scale_reference(shifted_glass, ref_peak, data_peak, scale_modifier)
+            
+            #}}}
+
+            #}}} 
             self.plot_pattern_with_peaks(
                 pattern_tth = x,
                 pattern_yobs = y,
-         pattern_name = name,
+                pattern_name = name,
                 peaks_tth= res['tth'],
                 peaks_yobs= res['yobs'],
+                scaled_glass_tth = scaled_glass['tth'],
+                scaled_glass_yobs = scaled_glass['yobs'],
+                scale_modifier = scale_modifier,
                 peaks_name = f'Data Peaks (idx: {idx})',
                 height = plot_height,
                 width = plot_width,

@@ -22,6 +22,9 @@ class BkgSubPlotter(GenericPlotter):
             pattern_name:str = 'pattern',
             peaks_tth = None,
             peaks_yobs = None, 
+            scaled_glass_tth = None,
+            scaled_glass_yobs = None,
+            scale_modifier = None,
             peaks_name:str = 'peaks',
             title_text:str = 'Pattern + Peaks',
             **kwargs
@@ -51,7 +54,18 @@ class BkgSubPlotter(GenericPlotter):
             width = width,
         )
         #}}}
-        # Plot the peaks: {{{
+        # plot the scaled glass: {{{
+        if type(scaled_glass_tth) != type(None):
+            self.add_data_to_plot(
+                scaled_glass_tth,
+                scaled_glass_yobs,
+                name = f'scaled_glass: ({scale_modifier}x)',
+                mode = 'lines',
+                dash = 'dash',
+                color = 'red',
+            )
+        #}}}
+        # Plot the peaks: {{{ 
         self.add_data_to_plot(
             peaks_tth,
             peaks_yobs,

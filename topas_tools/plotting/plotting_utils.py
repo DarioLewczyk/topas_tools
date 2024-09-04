@@ -40,7 +40,7 @@ class GenericPlotter(UsefulUnicode):
         width = 1000, 
         show_legend:bool = True,
         font_size:int = 16,
-        marker_size:int = 5,
+        marker_size:int = 5, 
         dash:str = None,
         color:str = None,
         show_figure:bool = False,
@@ -51,10 +51,19 @@ class GenericPlotter(UsefulUnicode):
         ticks:str = 'inside',
         mirror_x = 'allticks', 
         mirror_y = 'allticks',
+        **kwargs
         ):
         '''
         This allows you to plot a dataset
+        kwargs:
+            hovertemplate: if you have one, you can use it. 
+            symbol: marker symbol if you choose
         '''
+        # default kwargs: {{{
+
+        hovertemplate = kwargs.get('hovertemplate', None)
+        symbol = kwargs.get('symbol', 'circle')
+        #}}}
         self._fig = go.Figure()
         # Plot Data: {{{
         if not color:
@@ -64,6 +73,7 @@ class GenericPlotter(UsefulUnicode):
                 y = y,
                 mode = mode,
                 marker = dict(
+                    symbol = symbol,
                     color = color,
                     size = marker_size,
                 ),
@@ -74,6 +84,7 @@ class GenericPlotter(UsefulUnicode):
                 name = name,
                 yaxis = 'y1',
                 showlegend = show_in_legend,
+                hovertemplate = hovertemplate,
         )
         #}}}
         # Update Layout: {{{
@@ -139,13 +150,21 @@ class GenericPlotter(UsefulUnicode):
             legend_x:float = 0.99,
             legend_y:float = 0.99,  
             ticks:str = 'inside',
+            **kwargs
             ):
         '''
         Allows you to add data to the existing plot 
         either on the same y axis or add a new one. 
 
         use "lines+markers" if you want to have a solid line connecting points
+        kwargs: 
+            hovertemplate
+            symbol: marker symbol if you choose to change it
         '''
+        # kwargs: {{{
+        hovertemplate = kwargs.get('hovertemplate',None)
+        symbol = kwargs.get('symbol','circle')
+        #}}}
         # Determine the Yaxis to plot on: {{{: 
         if y2:
             yaxis = 'y2'
@@ -163,6 +182,11 @@ class GenericPlotter(UsefulUnicode):
             name = name,
             mode = mode,
             marker = dict(
+                symbol = symbol,
+                line = dict(
+                width = 2,
+                color =color,
+                ),
                 color = color,
                 size = marker_size,
             ),
@@ -172,6 +196,7 @@ class GenericPlotter(UsefulUnicode):
             ),
             yaxis = yaxis,
             showlegend = show_in_legend,
+            hovertemplate = hovertemplate
         )
         #}}}
         # Update Layout: {{{
