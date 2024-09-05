@@ -474,6 +474,7 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
                         f'\n\trel_height: {rel_height}\n\tplateau_size: {plateau_size}'
                         )
                 else:
+                    print(f'The following indices failed to obtain a glass peak: \n\t{loop_failures}')
                     print(f'{len(loop_failures)} patterns found more than one glass peak for your data. may want to re-parameterize')
             #}}}
             # Printout for warnings: {{{
