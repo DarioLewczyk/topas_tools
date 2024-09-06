@@ -84,12 +84,14 @@ class BkgSubPlotter(GenericPlotter):
         '''
         Plot the background subtracted data.
         input the background subtracted data and an index
+
         '''
         # Defaults:  {{{ 
         height = kwargs.get('height', 800)
         width= kwargs.get('width', 1000)
         legend_x = kwargs.get('legend_x', 0.99)
         legend_y = kwargs.get('legend_y', 0.99)
+        mode = kwargs.get('mode','lines+markers')
         #}}}
         # Get data arrays: {{{
         x = bkg_sub_data[idx]['tth']
@@ -106,7 +108,7 @@ class BkgSubPlotter(GenericPlotter):
             y = y, 
             name = f'bkgsub_{idx}',
             color = 'black',
-            mode = 'lines+markers',
+            mode = mode,
             title_text = fn,
             xaxis_title=f'2{self._theta}{self._degree}',
             yaxis_title = 'Intensity',
@@ -240,6 +242,8 @@ class BkgSubPlotter(GenericPlotter):
         legend_y = kwargs.get('legend_y',0.99) 
         width = kwargs.get('width', 1400)
         height = kwargs.get('height',800)
+        yrange = kwargs.get('yrange',None)
+        xrange = kwargs.get('xrange',None)
         #}}}
         # collect the data: {{{
         entry = chebychev_data[idx]
@@ -376,6 +380,8 @@ class BkgSubPlotter(GenericPlotter):
             xaxis_title = xaxis_title,
             yaxis_title = yaxis_title,
             title_text= 'Chebychev subtracted',
+            xrange=xrange,
+            yrange = yrange,
         )
         self.add_data_to_plot(
             x, np.zeros(len(x)),

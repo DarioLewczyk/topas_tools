@@ -214,7 +214,7 @@ class BkgsubUtils:
     def find_peak_positions(self,
             x,
             y, 
-            ignore_below:float = 1,
+            ignore_below:float = 1, 
             ignore_above:float = None,
             height=[950, 1800], 
             threshold = None, 
@@ -229,6 +229,7 @@ class BkgsubUtils:
         x is the 2theta degrees positions
         y is the intensities
         ignore_below: tells the program to ignore peaks at 2theta below this value
+        ignore_above: optional, but can set an upper limit beyond which the program wont find peaks
 
         This algorithm uses the scipy peak finding algorithm
         The default values should be restrictive enough to isolate the glass peak but 
