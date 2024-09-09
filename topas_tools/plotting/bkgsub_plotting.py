@@ -380,6 +380,8 @@ class BkgSubPlotter(GenericPlotter):
             xaxis_title = xaxis_title,
             yaxis_title = yaxis_title,
             title_text= 'Chebychev subtracted',
+            height = height,
+            width = width,
             xrange=xrange,
             yrange = yrange,
         )
