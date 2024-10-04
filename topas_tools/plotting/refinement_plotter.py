@@ -841,27 +841,31 @@ class RefinementPlotter(PlottingUtils):
              
         for index, i in enumerate(indices):
             # Get the data for current index: {{{ 
-            tth, yobs, ycalc, ydiff, hovertemplate, title_text, xaxis_title, yaxis_title = self.plot_pattern(
-                index= i, 
-                template= template,
-                time_units= time_units, 
-                tth_range=tth_range,
-                use_calc_temp=use_calc_temp,
-                height =height,
-                width =width,
-                font_size=font_size,
-                rwp_decimals= rwp_decimals,
-                temp_decimals= temp_decimals,
-                printouts=False,
-                run_in_loop=True,
-                specific_substance = specific_substance,
-            )
-            if not specific_substance:
-                if max(yobs) > self._max_i:
-                    self._max_i = max(yobs)
-            else:
-                if max(ycalc) > self._max_i:
-                    self._max_i = max(ycalc)
+            try:
+            
+                tth, yobs, ycalc, ydiff, hovertemplate, title_text, xaxis_title, yaxis_title = self.plot_pattern(
+                    index= i, 
+                    template= template,
+                    time_units= time_units, 
+                    tth_range=tth_range,
+                    use_calc_temp=use_calc_temp,
+                    height =height,
+                    width =width,
+                    font_size=font_size,
+                    rwp_decimals= rwp_decimals,
+                    temp_decimals= temp_decimals,
+                    printouts=False,
+                    run_in_loop=True,
+                    specific_substance = specific_substance,
+                )
+                if not specific_substance:
+                    if max(yobs) > self._max_i:
+                        self._max_i = max(yobs)
+                else:
+                    if max(ycalc) > self._max_i:
+                        self._max_i = max(ycalc)
+            except:
+                print(f'failed to plot: {i}')
             #}}}
             # If You Want a Waterfall: {{{
             if waterfall:  

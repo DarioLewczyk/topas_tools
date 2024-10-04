@@ -1598,7 +1598,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
         This function also creates an input file with only background terms and instrumental profile stuff
         By default, the program removes all background terms from the phase outputs. 
         '''
-        # Parse the OUT file: {{{
+        # Parse the OUT file: {{{ 
         with open(out) as f: 
             inp_dict = {'phases': {}} # This will hold all of the relevant information for the inp.
             phase_lines = [] # This will hold the lines needed to reconstruct the phase pattern
@@ -1642,7 +1642,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
                     })
                 #}}}
                 # Handle Output: {{{
-                if 'Out_X_Yobs_Ycalc_Ydiff' in line:
+                if 'Out_X_Yobs_Ycalc_Ydiff' in line: 
                     inp_dict['out'] = {'start':i,'line':line} # This tells the program which line the xy output is on.
                 #}}}
             inp_dict['header'] = header_lines
@@ -1653,7 +1653,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode,OUT_Parser,GenericPlotter):
             entry = inp_dict['phases'][phase]
             substance = entry['symbol'] 
             phase_lines = entry['phase_lines']
-            header = inp_dict['header']
+            header = inp_dict['header'] 
             output = inp_dict['out']['line'].replace('result',substance)
             output_line = inp_dict['out']['start']
             for line in header:

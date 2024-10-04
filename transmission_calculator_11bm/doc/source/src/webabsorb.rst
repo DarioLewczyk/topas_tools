@@ -1,0 +1,10 @@
+.. $Id: webabsorb.rst 93 2011-08-20 17:30:31Z vondreele $
+
+--------------------------
+pyFprime.webabsorb
+--------------------------
+
+.. automodule:: pyFprime.webabsorb
+    :members: 
+    :synopsis: Web absorption computation
+

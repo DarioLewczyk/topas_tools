@@ -425,11 +425,13 @@ class DataCollector:
         self.file_dict = {} # This will be initialized as empty 
     #}}}
     # scrape_files: {{{
-    def scrape_files(self):
+    def scrape_files(self, fileextension:str = None):
         '''
         This function finds all files with the extension selected
         and sorts them based on the timecode embedded in their filenames.
         '''
+        if fileextension:
+            self._fileextension = fileextension
         self.files = glob.glob(f'*.{self._fileextension}')
         tmp = {}
         for i, f in enumerate(self.files):

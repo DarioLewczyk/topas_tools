@@ -1,0 +1,290 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyFprime.Element &mdash; pyFprime documentation</title>
+    <link rel="stylesheet" href="../_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '2009',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <link rel="top" title="pyFprime documentation" href="../index.html" />
+    <link rel="up" title="More information" href="../toc.html" />
+    <link rel="next" title="pyFprime.fprime" href="fprime.html" />
+    <link rel="prev" title="pyFprime.Absorb" href="Absorb.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="fprime.html" title="pyFprime.fprime"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="Absorb.html" title="pyFprime.Absorb"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../index.html">pyFprime documentation</a> &raquo;</li>
+          <li><a href="../toc.html" accesskey="U">More information</a> &raquo;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="Absorb.html"
+                        title="previous chapter">pyFprime.Absorb</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="fprime.html"
+                        title="next chapter">pyFprime.fprime</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="../_sources/src/Element.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-pyFprime.Element">
+<span id="pyfprime-element"></span><h1>pyFprime.Element<a class="headerlink" href="#module-pyFprime.Element" title="Permalink to this headline">¶</a></h1>
+<p>Element: functions for element types</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">copyright:</th><td class="field-body">2008, Robert B. Von Dreele (Argonne National Laboratory)</td>
+</tr>
+</tbody>
+</table>
+<dl class="class">
+<dt id="pyFprime.Element.DeleteElement">
+<em class="property">class </em><tt class="descclassname">pyFprime.Element.</tt><tt class="descname">DeleteElement</tt><big>(</big><em>parent</em><big>)</big><a class="reference internal" href="../_modules/pyFprime/Element.html#DeleteElement"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyFprime.Element.DeleteElement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete element from selected set widget</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyFprime.Element.FPcalc">
+<tt class="descclassname">pyFprime.Element.</tt><tt class="descname">FPcalc</tt><big>(</big><em>Orbs</em>, <em>KEv</em><big>)</big><a class="reference internal" href="../_modules/pyFprime/Element.html#FPcalc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyFprime.Element.FPcalc" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute real &amp; imaginary resonant X-ray scattering factors</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>Orbs</strong> (<em>list</em>) &#8211; list of orbital dictionaries as defined in GetXsectionCoeff</li>
+<li><strong>KEv</strong> (<em>float</em>) &#8211; x-ray energy in keV</li>
+</ul>
+</td>
+</tr>
+<tr class="field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">C: (f&#8217;,f&#8221;,mu): real, imaginary parts of resonant scattering &amp; atomic absorption coeff.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyFprime.Element.GetAtomInfo">
+<tt class="descclassname">pyFprime.Element.</tt><tt class="descname">GetAtomInfo</tt><big>(</big><em>El</em><big>)</big><a class="reference internal" href="../_modules/pyFprime/Element.html#GetAtomInfo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyFprime.Element.GetAtomInfo" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><strong>El</strong> (<em>str</em>) &#8211; 2 character element symbol</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyFprime.Element.GetFormFactorCoeff">
+<tt class="descclassname">pyFprime.Element.</tt><tt class="descname">GetFormFactorCoeff</tt><big>(</big><em>El</em><big>)</big><a class="reference internal" href="../_modules/pyFprime/Element.html#GetFormFactorCoeff"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyFprime.Element.GetFormFactorCoeff" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read form factor coefficients from <tt class="docutils literal"><span class="pre">atmdata.dat</span></tt> file</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><strong>El</strong> &#8211; element 1-2 character symbol case irrevelant</td>
+</tr>
+<tr class="field"><th class="field-name">Returns:</th><td class="field-body">FormFactors: list of form factor dictionaries</td>
+</tr>
+</tbody>
+</table>
+<p>each dictionary is:</p>
+<div class="highlight-python"><pre>'Symbol':4 character element symbol with valence (e.g. 'NI+2')
+'Z': atomic number
+'fa': 4 A coefficients
+'fb': 4 B coefficients
+'fc': C coefficient </pre>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyFprime.Element.GetMagFormFacCoeff">
+<tt class="descclassname">pyFprime.Element.</tt><tt class="descname">GetMagFormFacCoeff</tt><big>(</big><em>El</em><big>)</big><a class="reference internal" href="../_modules/pyFprime/Element.html#GetMagFormFacCoeff"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyFprime.Element.GetMagFormFacCoeff" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read magnetic form factor data from atmdata.dat file</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><strong>El</strong> (<em>str</em>) &#8211; 2 character element symbol</td>
+</tr>
+<tr class="field"><th class="field-name">Returns:</th><td class="field-body">MagFormFactors: list of all magnetic form factors dictionaries for element El.</td>
+</tr>
+</tbody>
+</table>
+<p>each dictionary contains:</p>
+<div class="highlight-python"><pre>'Symbol':Symbol
+'Z':Z
+'mfa': 4 MA coefficients
+'nfa': 4 NA coefficients
+'mfb': 4 MB coefficients
+'nfb': 4 NB coefficients
+'mfc': MC coefficient
+'nfc': NC coefficient</pre>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyFprime.Element.GetXsectionCoeff">
+<tt class="descclassname">pyFprime.Element.</tt><tt class="descname">GetXsectionCoeff</tt><big>(</big><em>El</em><big>)</big><a class="reference internal" href="../_modules/pyFprime/Element.html#GetXsectionCoeff"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyFprime.Element.GetXsectionCoeff" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read atom orbital scattering cross sections for fprime calculations via Cromer-Lieberman algorithm</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><strong>El</strong> &#8211; 2 character element symbol</td>
+</tr>
+<tr class="field"><th class="field-name">Returns:</th><td class="field-body">Orbs: list of orbitals each a dictionary with detailed orbital information used by FPcalc</td>
+</tr>
+</tbody>
+</table>
+<p>each dictionary is:</p>
+<div class="highlight-python"><pre>'OrbName': Orbital name read from file
+'IfBe' 0/2 depending on orbital
+'BindEn': binding energy
+'BB': BindEn/0.02721
+'XSectIP': 5 cross section inflection points
+'ElEterm': energy correction term
+'SEdge': absorption edge for orbital
+'Nval': 10/11 depending on IfBe
+'LEner': 10/11 values of log(energy)
+'LXSect': 10/11 values of log(cross section)</pre>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyFprime.Element.PickElement">
+<em class="property">class </em><tt class="descclassname">pyFprime.Element.</tt><tt class="descname">PickElement</tt><big>(</big><em>parent</em>, <em>list</em><big>)</big><a class="reference internal" href="../_modules/pyFprime/Element.html#PickElement"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyFprime.Element.PickElement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Makes periodic table widget for picking element - caller maintains element list</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyFprime.Element.ScatFac">
+<tt class="descclassname">pyFprime.Element.</tt><tt class="descname">ScatFac</tt><big>(</big><em>FormFac</em>, <em>SThL</em><big>)</big><a class="reference internal" href="../_modules/pyFprime/Element.html#ScatFac"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyFprime.Element.ScatFac" title="Permalink to this definition">¶</a></dt>
+<dd><p>compute value of form factor</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>FormFac</strong> (<em>dict</em>) &#8211; dictionary  defined in <a class="reference internal" href="#pyFprime.Element.GetFormFactorCoeff" title="pyFprime.Element.GetFormFactorCoeff"><tt class="xref py py-meth docutils literal"><span class="pre">GetFormFactorCoeff()</span></tt></a></li>
+<li><strong>SThL</strong> (<em>float</em>) &#8211; sin-theta/lambda</li>
+</ul>
+</td>
+</tr>
+<tr class="field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">f: real part of form factor</p>
+</td>
+</tr>
+<tr class="field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">float</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyFprime.Element.locate_distribution_file">
+<tt class="descclassname">pyFprime.Element.</tt><tt class="descname">locate_distribution_file</tt><big>(</big><em>name</em><big>)</big><a class="reference internal" href="../_modules/pyFprime/Element.html#locate_distribution_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pyFprime.Element.locate_distribution_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>locate a standard data file supplied in the distribution directory</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field"><th class="field-name">Returns:</th><td class="field-body">full, absolute path to file, in this directory or None</td>
+</tr>
+<tr class="field"><th class="field-name">Return type:</th><td class="field-body">str or None</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="fprime.html" title="pyFprime.fprime"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="Absorb.html" title="pyFprime.Absorb"
+             >previous</a> |</li>
+        <li><a href="../index.html">pyFprime documentation</a> &raquo;</li>
+          <li><a href="../toc.html" >More information</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2011, Robert B. Von Dreele (Argonne National Laboratory).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.7.
+    </div>
+  </body>
+</html>

@@ -22,16 +22,41 @@ class ResultParser:
     def __init__(self,):
         pass
     #}}}
+    # _replace_nan_with_previous: {{{
+    def _replace_nan_with_previous(self,):
+        '''
+        This function is designed to replace the 1.QNAN0 values
+        with the last valid value for parse_xy
+        '''
+        last_valid = [None]*4 # Assumes 4 column data are being imported
+        def converter(val, col):
+            nonlocal last_valid
+            try:
+                float_val = float(val)
+                last_valid[col] = float_val
+                return float_val
+            except ValueError:
+                return last_valid[col] if last_valid[col] is not None else 0
+        return converter
+    #}}}
     # _parse_xy: {{{
     def _parse_xy(self,xy_file:str = None,delimiter:str = ','):
         '''
         This function returns a tuple of all of the information your xy file should have
+
+        Sometimes TOPAS may output a string called "1.#QNAN0" which will essentially break this function. 
+        By default, this function will replace it with the last valid value.
         '''
-        xy_data = np.loadtxt(xy_file, delimiter=delimiter) # imports the xy data to an array
+        try:
+            xy_data = np.loadtxt(xy_file, delimiter=delimiter) # imports the xy data to an array 
+        except:
+            converters = {i: lambda val, col=i: self._replace_nan_with_previous()(val,col) for i in range(4)}
+            xy_data = np.genfromtxt(xy_file, delimiter=delimiter, converters=converters, autostrip=True, invalid_raise=False) # imports the xy data to an array 
         tth = xy_data[:,0]
         yobs = xy_data[:,1]
         ycalc = xy_data[:,2]
         ydiff = xy_data[:,3]
+           
         return (tth, yobs, ycalc, ydiff)
 
     #}}}

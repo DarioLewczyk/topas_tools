@@ -1,0 +1,336 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyFprime.webabsorb &mdash; pyFprime documentation</title>
+    <link rel="stylesheet" href="../../_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '2009',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="pyFprime documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pyFprime documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyFprime.webabsorb</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;Web absorption computation</span>
+<span class="sd">   Copyright: 2009, Robert B. Von Dreele (Argonne National Laboratory)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib</span> <span class="kn">as</span> <span class="nn">mpl</span>
+<span class="n">mpl</span><span class="o">.</span><span class="n">use</span><span class="p">(</span> <span class="s">&#39;Agg&#39;</span> <span class="p">)</span>
+<span class="kn">import</span> <span class="nn">pylab</span>
+
+<span class="kn">import</span> <span class="nn">webElement</span> <span class="kn">as</span> <span class="nn">Element</span>
+
+<div class="viewcode-block" id="Absorb"><a class="viewcode-back" href="../../src/webabsorb.html#pyFprime.webabsorb.Absorb">[docs]</a><span class="k">class</span> <span class="nc">Absorb</span><span class="p">():</span>
+    <span class="sd">&#39;&#39;&#39; &#39;&#39;&#39;</span>
+    <span class="n">Wave</span> <span class="o">=</span> <span class="mf">1.5405</span>      <span class="c">#CuKa default</span>
+    <span class="n">Kev</span> <span class="o">=</span> <span class="mf">12.397639</span>    <span class="c">#keV for 1A x-rays</span>
+    <span class="n">Wmin</span> <span class="o">=</span> <span class="mf">0.05</span>        <span class="c">#wavelength range</span>
+    <span class="n">Wmax</span> <span class="o">=</span> <span class="mf">3.0</span>
+    <span class="n">Wres</span> <span class="o">=</span> <span class="mf">0.004094</span>    <span class="c">#plot resolution step size as const delta-lam/lam - gives 1000 steps for Wmin to Wmax</span>
+    <span class="n">Eres</span> <span class="o">=</span> <span class="mf">1.5e-4</span>      <span class="c">#typical energy resolution for synchrotron x-ray sources</span>
+    <span class="n">Energy</span> <span class="o">=</span> <span class="n">Kev</span><span class="o">/</span><span class="n">Wave</span>
+    <span class="c">#ifWave = False   # broken</span>
+    <span class="n">Volume</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">ifVol</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">Zcell</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">Pack</span> <span class="o">=</span> <span class="mf">0.50</span>
+    <span class="n">Radius</span> <span class="o">=</span> <span class="mf">0.4</span>
+    
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Radius</span><span class="p">,</span> <span class="n">Wave</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">Energy</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">InputDensity</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">Packing</span><span class="o">=</span><span class="mf">0.0</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">Wave</span> <span class="ow">and</span> <span class="n">Energy</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span><span class="s">&quot;Energy and wavelength cannot both be set&quot;</span>
+        <span class="k">if</span> <span class="n">Wave</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ifWave</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Wave</span> <span class="o">=</span> <span class="n">Wave</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Energy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Kev</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">Wave</span>
+        <span class="k">elif</span> <span class="n">Energy</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">ifWave</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Energy</span> <span class="o">=</span> <span class="n">Energy</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Wave</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Kev</span><span class="o">/</span><span class="n">Energy</span> 
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span><span class="s">&quot;Either energy or wavelength must be set&quot;</span>
+        <span class="k">if</span> <span class="n">InputDensity</span> <span class="ow">and</span> <span class="n">Packing</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span><span class="s">&quot;InputDensity and Packing cannot both be set&quot;</span>
+        <span class="k">if</span> <span class="n">InputDensity</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">InputDensity</span> <span class="o">=</span> <span class="n">InputDensity</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Pack</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">elif</span> <span class="n">Packing</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">InputDensity</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Pack</span> <span class="o">=</span> <span class="n">Packing</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span><span class="s">&quot;Either InputDensity or Packing must be set&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Radius</span> <span class="o">=</span> <span class="n">Radius</span>
+
+    <span class="k">def</span> <span class="nf">SetElems</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">ElementString</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Elems</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c"># are there any invalid characters</span>
+        <span class="n">invalid</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s">&#39;[^A-Za-z0-9.\s]&#39;</span><span class="p">,</span> <span class="n">ElementString</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">invalid</span><span class="p">):</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="s">&quot;&quot;</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">invalid</span><span class="p">:</span> <span class="n">s</span><span class="o">+=</span><span class="n">i</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span><span class="s">&#39;Invalid characters (&quot;</span><span class="si">%s</span><span class="s">&quot;) in chemical formula&#39;</span> <span class="o">%</span> <span class="n">s</span>
+        <span class="k">for</span> <span class="n">El</span><span class="p">,</span><span class="n">N</span> <span class="ow">in</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s">&#39;\s*([A-Z][a-z]?)\s*([0-9]*</span><span class="se">\\</span><span class="s">.?[0-9]*)\s*&#39;</span><span class="p">,</span>
+                               <span class="n">ElementString</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">N</span><span class="p">:</span>
+                <span class="n">N</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="n">ElemSym</span> <span class="o">=</span> <span class="n">El</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">atomData</span> <span class="o">=</span> <span class="n">Element</span><span class="o">.</span><span class="n">GetAtomInfo</span><span class="p">(</span><span class="n">ElemSym</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">UnboundLocalError</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span> <span class="s">&#39;Element &quot;</span><span class="si">%s</span><span class="s">&quot; not found&#39;</span> <span class="o">%</span> <span class="n">ElemSym</span>
+            <span class="n">FormFactors</span> <span class="o">=</span> <span class="n">Element</span><span class="o">.</span><span class="n">GetFormFactorCoeff</span><span class="p">(</span><span class="n">ElemSym</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">FormFac</span> <span class="ow">in</span> <span class="n">FormFactors</span><span class="p">:</span>
+                <span class="n">FormSym</span> <span class="o">=</span> <span class="n">FormFac</span><span class="p">[</span><span class="s">&#39;Symbol&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">FormSym</span> <span class="o">==</span> <span class="n">ElemSym</span><span class="p">:</span>
+                    <span class="n">Z</span> <span class="o">=</span> <span class="n">FormFac</span><span class="p">[</span><span class="s">&#39;Z&#39;</span><span class="p">]</span>                <span class="c">#At. No.</span>
+                    <span class="c">#N =                           #no atoms / formula unit</span>
+                    <span class="n">Orbs</span> <span class="o">=</span> <span class="n">Element</span><span class="o">.</span><span class="n">GetXsectionCoeff</span><span class="p">(</span><span class="n">ElemSym</span><span class="p">)</span>
+                    <span class="n">Elem</span> <span class="o">=</span> <span class="p">[</span><span class="n">ElemSym</span><span class="p">,</span><span class="n">Z</span><span class="p">,</span><span class="nb">float</span><span class="p">(</span><span class="n">N</span><span class="p">),</span><span class="n">FormFac</span><span class="p">,</span><span class="n">Orbs</span><span class="p">,</span><span class="n">atomData</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Elems</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Elem</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">Elems</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">,</span><span class="s">&quot;No valid elements found in chemical formula&quot;</span>
+
+    <span class="k">def</span> <span class="nf">ComputeMu</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c">#Gkmu = unichr(0x3bc)</span>
+        <span class="n">Gkmu</span> <span class="o">=</span> <span class="s">&#39;mu&#39;</span>
+        <span class="c">#Pwr3 = unichr(0x0b3)</span>
+        <span class="n">Pwr3</span> <span class="o">=</span> <span class="s">&quot;&lt;sup&gt;3&lt;/sup&gt;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Energy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Kev</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">Wave</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Energy</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Energy</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+        <span class="n">E</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Energy</span>
+        <span class="n">DE</span> <span class="o">=</span> <span class="n">E</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Eres</span>                         <span class="c">#smear by defined source resolution</span>
+        <span class="n">Text</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Volume</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">Elem</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Elems</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Volume</span> <span class="o">+=</span> <span class="mf">10.</span><span class="o">*</span><span class="n">Elem</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="n">muT</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">Mass</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;Wavelength = </span><span class="si">%.4f</span><span class="s"> Angstrom&lt;BR&gt;</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Wave</span><span class="p">)</span>
+        <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;Energy     = </span><span class="si">%.4f</span><span class="s"> KeV&lt;BR&gt;</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Energy</span><span class="p">)</span>
+        <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;Sample Radius = </span><span class="si">%.2f</span><span class="s"> mm (diameter=</span><span class="si">%.2f</span><span class="s"> mm)&lt;BR&gt;</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Radius</span><span class="p">,</span>
+                                                                  <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Radius</span><span class="p">,)</span>
+        <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;&lt;PRE&gt;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="k">for</span> <span class="n">Elem</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Elems</span><span class="p">:</span>
+            <span class="n">Mass</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Zcell</span><span class="o">*</span><span class="n">Elem</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">Elem</span><span class="p">[</span><span class="mi">5</span><span class="p">][</span><span class="s">&#39;Mass&#39;</span><span class="p">]</span>
+            <span class="n">r1</span> <span class="o">=</span> <span class="n">Element</span><span class="o">.</span><span class="n">FPcalc</span><span class="p">(</span><span class="n">Elem</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span><span class="n">E</span><span class="o">+</span><span class="n">DE</span><span class="p">)</span>
+            <span class="n">r2</span> <span class="o">=</span> <span class="n">Element</span><span class="o">.</span><span class="n">FPcalc</span><span class="p">(</span><span class="n">Elem</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span><span class="n">E</span><span class="o">-</span><span class="n">DE</span><span class="p">)</span>
+            <span class="n">Els</span> <span class="o">=</span> <span class="n">Elem</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">Els</span> <span class="o">=</span> <span class="n">Els</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()</span>
+            <span class="n">mu</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="n">Elem</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">78</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">Energy</span><span class="o">+</span><span class="n">DE</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">Kev</span><span class="o">/</span><span class="mf">0.16</span><span class="p">:</span>
+                <span class="n">mu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Zcell</span><span class="o">*</span><span class="n">Elem</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">r1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="n">r2</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="o">/</span><span class="mf">2.0</span>
+                <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="se">\t</span><span class="si">%s%8.2f</span><span class="s">  </span><span class="si">%s%6s</span><span class="s">  </span><span class="si">%s%6.3f</span><span class="s">  </span><span class="si">%s%10.2f</span><span class="s"> </span><span class="si">%s</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span>    <span class="p">(</span>
+                    <span class="s">&#39;Element= &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">Els</span><span class="p">),</span><span class="s">&quot;N = &quot;</span><span class="p">,</span><span class="n">Elem</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="s">&quot; f&#39;=&quot;</span><span class="p">,</span><span class="s">&#39;not valid&#39;</span><span class="p">,</span>
+                    <span class="s">&#39; f&quot;=&#39;</span><span class="p">,(</span><span class="n">r1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">r2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">/</span><span class="mf">2.0</span><span class="p">,</span><span class="s">&#39; &#39;</span><span class="o">+</span><span class="n">Gkmu</span><span class="o">+</span><span class="s">&#39;=&#39;</span><span class="p">,</span><span class="n">mu</span><span class="p">,</span><span class="s">&#39;barns&#39;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">Elem</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">94</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">Energy</span><span class="o">-</span><span class="n">DE</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">Kev</span><span class="o">/</span><span class="mf">2.67</span><span class="p">:</span>
+                <span class="n">mu</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="se">\t</span><span class="si">%s%8.2f</span><span class="s">  </span><span class="si">%s%6s</span><span class="s">  </span><span class="si">%s%6s</span><span class="s">  </span><span class="si">%s%10s%s</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span>    <span class="p">(</span>
+                    <span class="s">&#39;Element= &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">Els</span><span class="p">),</span><span class="s">&quot;N = &quot;</span><span class="p">,</span><span class="n">Elem</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="s">&quot; f&#39;=&quot;</span><span class="p">,</span><span class="s">&#39;not valid&#39;</span><span class="p">,</span>
+                    <span class="s">&#39; f&quot;=&#39;</span><span class="p">,</span><span class="s">&#39;not valid&#39;</span><span class="p">,</span><span class="s">&#39; &#39;</span><span class="o">+</span><span class="n">Gkmu</span><span class="o">+</span><span class="s">&#39;=&#39;</span><span class="p">,</span><span class="s">&#39;not valid&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">mu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Zcell</span><span class="o">*</span><span class="n">Elem</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">r1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="n">r2</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="o">/</span><span class="mf">2.0</span>
+                <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="se">\t</span><span class="si">%s%8.2f</span><span class="s">  </span><span class="si">%s%6.3f</span><span class="s">  </span><span class="si">%s%6.3f</span><span class="s">  </span><span class="si">%s%10.2f</span><span class="s"> </span><span class="si">%s</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span>    <span class="p">(</span>
+                    <span class="s">&#39;Element= &#39;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">Els</span><span class="p">),</span><span class="s">&quot;N = &quot;</span><span class="p">,</span><span class="n">Elem</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span><span class="s">&quot; f&#39;=&quot;</span><span class="p">,(</span><span class="n">r1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">r2</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">/</span><span class="mf">2.0</span><span class="p">,</span>
+                    <span class="s">&#39; f&quot;=&#39;</span><span class="p">,(</span><span class="n">r1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">r2</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">/</span><span class="mf">2.0</span><span class="p">,</span><span class="s">&#39; &#39;</span><span class="o">+</span><span class="n">Gkmu</span><span class="o">+</span><span class="s">&#39;=&#39;</span><span class="p">,</span><span class="n">mu</span><span class="p">,</span><span class="s">&#39;barns&#39;</span><span class="p">)</span>
+            <span class="n">muT</span> <span class="o">+=</span> <span class="n">mu</span>
+        
+        <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;&lt;/PRE&gt;</span><span class="se">\n</span><span class="s">&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">Volume</span><span class="p">:</span>
+            <span class="n">den</span> <span class="o">=</span> <span class="n">Mass</span><span class="o">/</span><span class="p">(</span><span class="mf">0.602</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Volume</span><span class="p">)</span>                
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">InputDensity</span><span class="p">:</span> 
+                <span class="bp">self</span><span class="o">.</span><span class="n">Pack</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">InputDensity</span><span class="o">/</span><span class="n">den</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="s">&#39;Input&#39;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">label</span> <span class="o">=</span> <span class="s">&#39;Packed&#39;</span>
+            <span class="n">Text</span> <span class="o">+=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="s">&#39;Est. density=&#39;</span><span class="p">)</span>
+            <span class="n">Text</span> <span class="o">+=</span> <span class="s">&#39;</span><span class="si">%6.3f</span><span class="s"> </span><span class="si">%s%.3f</span><span class="s"> </span><span class="si">%s</span><span class="s">&lt;BR&gt;</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">den</span><span class="p">,</span><span class="s">&#39;g/cm&#39;</span><span class="o">+</span><span class="n">Pwr3</span><span class="o">+</span>
+                                           <span class="s">&#39;, </span><span class="si">%s</span><span class="s"> density=&#39;</span> <span class="o">%</span> <span class="n">label</span><span class="p">,</span>
+                                           <span class="bp">self</span><span class="o">.</span><span class="n">Pack</span><span class="o">*</span><span class="n">den</span><span class="p">,</span><span class="s">&#39;g/cm&#39;</span><span class="o">+</span><span class="n">Pwr3</span><span class="p">)</span>
+            <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="si">%s</span><span class="s"> </span><span class="si">%s%10.2f</span><span class="s"> </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="s">&quot;Total&quot;</span><span class="p">,</span><span class="s">&#39; &#39;</span><span class="o">+</span><span class="n">Gkmu</span><span class="o">+</span><span class="s">&#39;=&#39;</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">Pack</span><span class="o">*</span><span class="n">muT</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">Volume</span><span class="p">,</span><span class="s">&#39;cm&lt;sup&gt;-1&lt;/sup&gt;, &#39;</span><span class="p">)</span>
+            <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="si">%s%10.2f%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="s">&#39;Total &#39;</span><span class="o">+</span><span class="n">Gkmu</span><span class="o">+</span><span class="s">&#39;R=&#39;</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">Radius</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Pack</span><span class="o">*</span><span class="n">muT</span><span class="o">/</span><span class="p">(</span><span class="mf">10.0</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Volume</span><span class="p">),</span><span class="s">&#39;, &#39;</span><span class="p">)</span>
+            <span class="n">Text</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="si">%s%10.4f%s</span><span class="s">&lt;BR&gt;</span><span class="se">\n</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="s">&#39;Transmission exp(-2*&#39;</span><span class="o">+</span><span class="n">Gkmu</span><span class="o">+</span><span class="s">&#39;R)=&#39;</span><span class="p">,</span> \
+                <span class="mf">100.0</span><span class="o">*</span><span class="n">math</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Radius</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Pack</span><span class="o">*</span><span class="n">muT</span><span class="o">/</span><span class="p">(</span><span class="mf">10.0</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Volume</span><span class="p">)),</span><span class="s">&#39;%&#39;</span><span class="p">)</span>
+            <span class="k">print</span> <span class="n">Text</span>
+        <span class="k">else</span><span class="p">:</span> 
+            <span class="k">print</span> <span class="s">&quot;error in Volume computation&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">CalcFPPS</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">UpDateAbsPlot</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Absorb.CalcFPPS"><a class="viewcode-back" href="../../src/webabsorb.html#pyFprime.webabsorb.Absorb.CalcFPPS">[docs]</a>    <span class="k">def</span> <span class="nf">CalcFPPS</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;generate f&quot; curves for selected elements</span>
+<span class="sd">           does constant delta-lambda/lambda steps over defined range</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">FPPS</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">Elems</span><span class="p">:</span>
+            <span class="c">#wx.BeginBusyCursor()</span>
+            <span class="n">Corr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Zcell</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Radius</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Pack</span><span class="o">/</span><span class="p">(</span><span class="mf">10.0</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Volume</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">muT</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">iE</span><span class="p">,</span><span class="n">Elem</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Elems</span><span class="p">):</span>
+                    <span class="n">Els</span> <span class="o">=</span> <span class="n">Elem</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="n">Els</span> <span class="o">=</span> <span class="n">Els</span> <span class="o">=</span> <span class="n">Els</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">capitalize</span><span class="p">()</span>
+                    <span class="n">Wmin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Wmin</span>
+                    <span class="n">Wmax</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Wmax</span>
+                    <span class="n">Z</span> <span class="o">=</span> <span class="n">Elem</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="n">lWmin</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Wmin</span><span class="p">)</span>
+                    <span class="n">N</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Wmax</span><span class="o">/</span><span class="n">Wmin</span><span class="p">)</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">Wres</span><span class="p">))</span>    <span class="c">#number of constant delta-lam/lam steps</span>
+                    <span class="n">I</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="n">Ws</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">I</span><span class="p">:</span> <span class="n">Ws</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">i</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Wres</span><span class="o">+</span><span class="n">lWmin</span><span class="p">))</span>
+                    <span class="n">mus</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="n">Es</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="k">for</span> <span class="n">j</span><span class="p">,</span><span class="n">W</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">Ws</span><span class="p">):</span>
+                        <span class="n">E</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Kev</span><span class="o">/</span><span class="n">W</span>
+                        <span class="n">DE</span> <span class="o">=</span> <span class="n">E</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">Eres</span>                         <span class="c">#smear by defined source resolution</span>
+                        <span class="n">res1</span> <span class="o">=</span> <span class="n">Element</span><span class="o">.</span><span class="n">FPcalc</span><span class="p">(</span><span class="n">Elem</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span><span class="n">E</span><span class="o">+</span><span class="n">DE</span><span class="p">)</span>
+                        <span class="n">res2</span> <span class="o">=</span> <span class="n">Element</span><span class="o">.</span><span class="n">FPcalc</span><span class="p">(</span><span class="n">Elem</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span><span class="n">E</span><span class="o">-</span><span class="n">DE</span><span class="p">)</span>
+                        <span class="n">muR</span> <span class="o">=</span> <span class="n">Corr</span><span class="o">*</span><span class="n">Elem</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">res1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">+</span><span class="n">res2</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="o">/</span><span class="mf">2.0</span>
+                        <span class="n">mus</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">muR</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">iE</span><span class="p">:</span>
+                            <span class="n">muT</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">+=</span> <span class="n">muR</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">muT</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">muR</span><span class="p">)</span>
+                        <span class="n">Es</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">E</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ifWave</span><span class="p">:</span>
+                        <span class="n">Fpps</span> <span class="o">=</span> <span class="p">(</span><span class="n">Els</span><span class="p">,</span><span class="n">Ws</span><span class="p">,</span><span class="n">mus</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">Fpps</span> <span class="o">=</span> <span class="p">(</span><span class="n">Els</span><span class="p">,</span><span class="n">Es</span><span class="p">,</span><span class="n">mus</span><span class="p">)</span>
+                    <span class="n">FPPS</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Fpps</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ifWave</span><span class="p">:</span>
+                    <span class="n">Fpps</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;Total&#39;</span><span class="p">,</span><span class="n">Ws</span><span class="p">,</span><span class="n">muT</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">Fpps</span> <span class="o">=</span> <span class="p">(</span><span class="s">&#39;Total&#39;</span><span class="p">,</span><span class="n">Es</span><span class="p">,</span><span class="n">muT</span><span class="p">)</span>
+                <span class="n">FPPS</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Fpps</span><span class="p">)</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="k">pass</span>
+<span class="c">#                wx.EndBusyCursor()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">FPPS</span> <span class="o">=</span> <span class="n">FPPS</span>
+</div>
+<div class="viewcode-block" id="Absorb.UpDateAbsPlot"><a class="viewcode-back" href="../../src/webabsorb.html#pyFprime.webabsorb.Absorb.UpDateAbsPlot">[docs]</a>    <span class="k">def</span> <span class="nf">UpDateAbsPlot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Plot mu vs wavelength 0.05-3.0A&quot;&quot;&quot;</span>
+        <span class="n">Wave</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Wave</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fplot</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">set_window_title</span><span class="p">(</span><span class="s">&#39;X-Ray Absorption&#39;</span><span class="p">)</span>
+            <span class="n">newPlot</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fplot</span> <span class="o">=</span> <span class="n">pylab</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">facecolor</span><span class="o">=</span><span class="s">&#39;white&#39;</span><span class="p">,</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="mi">6</span><span class="p">))</span>  <span class="c">#BTW: default figsize is (8,6)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fplot</span><span class="o">.</span><span class="n">canvas</span><span class="o">.</span><span class="n">set_window_title</span><span class="p">(</span><span class="s">&#39;X-Ray Absorption&#39;</span><span class="p">)</span>
+            <span class="n">newPlot</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fplot</span><span class="o">.</span><span class="n">add_subplot</span><span class="p">(</span><span class="mi">111</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s">&#39;X-Ray Absorption&#39;</span><span class="p">,</span><span class="n">x</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">ha</span><span class="o">=</span><span class="s">&#39;left&#39;</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s">r&quot;$\mu R$&quot;</span><span class="p">,</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">14</span><span class="p">)</span>
+        <span class="n">Ymin</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">Ymax</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">FPPS</span><span class="p">:</span> 
+            <span class="k">for</span> <span class="n">Fpps</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">FPPS</span><span class="p">:</span>
+                <span class="n">Ymin</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">Ymin</span><span class="p">,</span><span class="nb">min</span><span class="p">(</span><span class="n">Fpps</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+                <span class="n">Ymax</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">Ymax</span><span class="p">,</span><span class="nb">max</span><span class="p">(</span><span class="n">Fpps</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+                <span class="n">fppsP1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">Fpps</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                <span class="n">fppsP2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">Fpps</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+                <span class="n">ax</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">fppsP1</span><span class="p">,</span><span class="n">fppsP2</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s">r&#39;$\mu R$ &#39;</span><span class="o">+</span><span class="n">Fpps</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ifWave</span><span class="p">:</span> 
+            <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s">r&#39;$\mathsf{\lambda, \AA}$&#39;</span><span class="p">,</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">14</span><span class="p">)</span>
+            <span class="n">ax</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="n">Wave</span><span class="p">,</span><span class="n">picker</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s">&#39;black&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="s">r&#39;$\mathsf{E, keV}$&#39;</span><span class="p">,</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">14</span><span class="p">)</span>
+            <span class="n">ax</span><span class="o">.</span><span class="n">set_xscale</span><span class="p">(</span><span class="s">&#39;log&#39;</span><span class="p">)</span>
+            <span class="n">ax</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">Kev</span><span class="o">/</span><span class="n">Wave</span><span class="p">,</span><span class="n">picker</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s">&#39;black&#39;</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="n">y</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s">&#39;b&#39;</span><span class="p">,</span><span class="n">linestyle</span><span class="o">=</span><span class="s">&quot;:&quot;</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="n">y</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span><span class="n">color</span><span class="o">=</span><span class="s">&#39;r&#39;</span><span class="p">,</span><span class="n">linestyle</span><span class="o">=</span><span class="s">&quot;:&quot;</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="n">Ymin</span><span class="p">,</span><span class="n">Ymax</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">FPPS</span><span class="p">:</span>
+            <span class="n">legend</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s">&#39;best&#39;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">newPlot</span><span class="p">:</span>
+            <span class="n">newPlot</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="n">pylab</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">pylab</span><span class="o">.</span><span class="n">draw</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">SaveFig</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">filename</span><span class="p">,</span> <span class="n">format</span><span class="o">=</span><span class="s">&#39;png&#39;</span><span class="p">):</span>
+        <span class="n">pylab</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span> <span class="n">filename</span><span class="p">,</span> <span class="n">format</span><span class="o">=</span><span class="n">format</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pyFprime documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2011, Robert B. Von Dreele (Argonne National Laboratory).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.7.
+    </div>
+  </body>
+</html>

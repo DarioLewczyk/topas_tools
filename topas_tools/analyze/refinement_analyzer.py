@@ -84,6 +84,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                 #csvs.set_description_str(f'Reading {self.sorted_xy[i]}: ')
                 ttheta, yobs,ycalc,ydiff = self._parse_xy(self.sorted_xy[i])
             except:
+                print(f'The xy file: {self.sorted_xy[i]} had an error.')
                 ttheta, yobs,ycalc,ydiff = (0,0,0,0)
             #}}}
             # Handle the OUT files: {{{  

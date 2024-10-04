@@ -1,0 +1,391 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyFprime.webElement &mdash; pyFprime documentation</title>
+    <link rel="stylesheet" href="../../_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '2009',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="pyFprime documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pyFprime documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pyFprime.webElement</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;Element: functions for element types</span>
+<span class="sd">   Copyright: 2008, Robert B. Von Dreele (Argonne National Laboratory)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c">#import wx</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">os.path</span>
+<span class="c">#import  wx.lib.colourselect as wscs</span>
+<span class="c">#import wx.lib.buttons as wlb</span>
+
+<div class="viewcode-block" id="GetFormFactorCoeff"><a class="viewcode-back" href="../../src/webElement.html#pyFprime.webElement.GetFormFactorCoeff">[docs]</a><span class="k">def</span> <span class="nf">GetFormFactorCoeff</span><span class="p">(</span><span class="n">El</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Read form factor coefficients from atomdata.asc file</span>
+<span class="sd">    @param El: element 1-2 character symbol case irrevelant</span>
+<span class="sd">    @return: FormFactors: list of form factor dictionaries</span>
+<span class="sd">    each dictionary is:</span>
+<span class="sd">    &#39;Symbol&#39;:4 character element symbol with valence (e.g. &#39;NI+2&#39;)</span>
+<span class="sd">    &#39;Z&#39;: atomic number</span>
+<span class="sd">    &#39;fa&#39;: 4 A coefficients</span>
+<span class="sd">    &#39;fb&#39;: 4 B coefficients</span>
+<span class="sd">    &#39;fc&#39;: C coefficient </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ElS</span> <span class="o">=</span> <span class="n">El</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="n">ElS</span> <span class="o">=</span> <span class="n">ElS</span><span class="o">.</span><span class="n">rjust</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="s">&#39;atmdata.dat&#39;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">FFdata</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s">&#39;Ur&#39;</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;File atmdata.dat not found in directory </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="c">#        wx.MessageBox(message=&quot;File atmdata.dat not found in directory %s&quot; % sys.path[0],</span>
+<span class="c">#            caption=&quot;No atmdata.dat file&quot;,style=wx.OK | wx.ICON_EXCLAMATION | wx.STAY_ON_TOP)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">()</span>
+    <span class="n">S</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+    <span class="n">FormFactors</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">while</span> <span class="n">S</span><span class="p">:</span>
+        <span class="n">S</span> <span class="o">=</span> <span class="n">FFdata</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">S</span><span class="p">[</span><span class="mi">3</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span> <span class="o">==</span> <span class="n">ElS</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">S</span><span class="p">[</span><span class="mi">5</span><span class="p">:</span><span class="mi">6</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&#39;_&#39;</span> <span class="ow">and</span> <span class="n">S</span><span class="p">[</span><span class="mi">8</span><span class="p">:</span><span class="mi">9</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39; &#39;</span><span class="p">:</span>
+                <span class="n">Z</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">S</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
+                <span class="n">Symbol</span> <span class="o">=</span> <span class="n">S</span><span class="p">[</span><span class="mi">3</span><span class="p">:</span><span class="mi">7</span><span class="p">]</span>
+                <span class="n">S</span> <span class="o">=</span> <span class="n">S</span><span class="p">[</span><span class="mi">12</span><span class="p">:]</span>
+                <span class="n">fa</span> <span class="o">=</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[:</span><span class="mi">7</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">14</span><span class="p">:</span><span class="mi">21</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">28</span><span class="p">:</span><span class="mi">35</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">42</span><span class="p">:</span><span class="mi">49</span><span class="p">]))</span>
+                <span class="n">fb</span> <span class="o">=</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">7</span><span class="p">:</span><span class="mi">14</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">21</span><span class="p">:</span><span class="mi">28</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">35</span><span class="p">:</span><span class="mi">42</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">49</span><span class="p">:</span><span class="mi">56</span><span class="p">]))</span>
+                <span class="n">FormFac</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;Symbol&#39;</span><span class="p">:</span><span class="n">Symbol</span><span class="p">,</span><span class="s">&#39;Z&#39;</span><span class="p">:</span><span class="n">Z</span><span class="p">,</span><span class="s">&#39;fa&#39;</span><span class="p">:</span><span class="n">fa</span><span class="p">,</span><span class="s">&#39;fb&#39;</span><span class="p">:</span><span class="n">fb</span><span class="p">,</span><span class="s">&#39;fc&#39;</span><span class="p">:</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">56</span><span class="p">:</span><span class="mi">63</span><span class="p">])}</span>
+                <span class="n">FormFactors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">FormFac</span><span class="p">)</span>               
+    <span class="n">FFdata</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">FormFactors</span>
+        </div>
+<span class="k">def</span> <span class="nf">GetAtomInfo</span><span class="p">(</span><span class="n">El</span><span class="p">):</span>
+    <span class="n">ElS</span> <span class="o">=</span> <span class="n">El</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="o">.</span><span class="n">rjust</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="s">&#39;atmdata.dat&#39;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">FFdata</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s">&#39;Ur&#39;</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;File atmdata.dat not found in directory </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="c">#wx.MessageBox(message=&quot;File atmdata.dat not found in directory %s&quot; % sys.path[0],</span>
+        <span class="c">#    caption=&quot;No atmdata.dat file&quot;,style=wx.OK | wx.ICON_EXCLAMATION | wx.STAY_ON_TOP)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">()</span>
+    <span class="n">S</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+    <span class="n">AtomInfo</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">Mass</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">while</span> <span class="n">S</span><span class="p">:</span>
+        <span class="n">S</span> <span class="o">=</span> <span class="n">FFdata</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">S</span><span class="p">[</span><span class="mi">3</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span> <span class="o">==</span> <span class="n">ElS</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">S</span><span class="p">[</span><span class="mi">5</span><span class="p">:</span><span class="mi">6</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;_&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">Mass</span><span class="p">:</span>                                 <span class="c">#picks 1st one; natural abundance or 1st isotope</span>
+                    <span class="n">Mass</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">10</span><span class="p">:</span><span class="mi">19</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">S</span><span class="p">[</span><span class="mi">5</span><span class="p">:</span><span class="mi">9</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;_SIZ&#39;</span><span class="p">:</span>
+                    <span class="n">Z</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">S</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
+                    <span class="n">Symbol</span> <span class="o">=</span> <span class="n">S</span><span class="p">[</span><span class="mi">3</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="n">Drad</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">12</span><span class="p">:</span><span class="mi">22</span><span class="p">])</span>
+                    <span class="n">Arad</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">22</span><span class="p">:</span><span class="mi">32</span><span class="p">])</span>
+    <span class="n">FFdata</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">AtomInfo</span><span class="o">=</span><span class="p">{</span><span class="s">&#39;Symbol&#39;</span><span class="p">:</span><span class="n">Symbol</span><span class="p">,</span><span class="s">&#39;Mass&#39;</span><span class="p">:</span><span class="n">Mass</span><span class="p">,</span><span class="s">&#39;Z&#39;</span><span class="p">:</span><span class="n">Z</span><span class="p">,</span><span class="s">&#39;Drad&#39;</span><span class="p">:</span><span class="n">Drad</span><span class="p">,</span><span class="s">&#39;Arad&#39;</span><span class="p">:</span><span class="n">Arad</span><span class="p">}</span>    
+    <span class="k">return</span> <span class="n">AtomInfo</span>
+      
+<div class="viewcode-block" id="GetXsectionCoeff"><a class="viewcode-back" href="../../src/webElement.html#pyFprime.webElement.GetXsectionCoeff">[docs]</a><span class="k">def</span> <span class="nf">GetXsectionCoeff</span><span class="p">(</span><span class="n">El</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Read atom orbital scattering cross sections for fprime calculations via Cromer-Lieberman algorithm</span>
+<span class="sd">    @param El: 2 character element symbol</span>
+<span class="sd">    @return: Orbs: list of orbitals each a dictionary with detailed orbital information used by FPcalc</span>
+<span class="sd">    each dictionary is:</span>
+<span class="sd">    &#39;OrbName&#39;: Orbital name read from file</span>
+<span class="sd">    &#39;IfBe&#39; 0/2 depending on orbital</span>
+<span class="sd">    &#39;BindEn&#39;: binding energy</span>
+<span class="sd">    &#39;BB&#39;: BindEn/0.02721</span>
+<span class="sd">    &#39;XSectIP&#39;: 5 cross section inflection points</span>
+<span class="sd">    &#39;ElEterm&#39;: energy correction term</span>
+<span class="sd">    &#39;SEdge&#39;: absorption edge for orbital</span>
+<span class="sd">    &#39;Nval&#39;: 10/11 depending on IfBe</span>
+<span class="sd">    &#39;LEner&#39;: 10/11 values of log(energy)</span>
+<span class="sd">    &#39;LXSect&#39;: 10/11 values of log(cross section)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">AU</span> <span class="o">=</span> <span class="mf">2.80022e+7</span>
+    <span class="n">C1</span> <span class="o">=</span> <span class="mf">0.02721</span>
+    <span class="n">ElS</span> <span class="o">=</span> <span class="n">El</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="n">ElS</span> <span class="o">=</span> <span class="n">ElS</span><span class="o">.</span><span class="n">ljust</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="s">&#39;Xsect.dat&#39;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">xsec</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s">&#39;Ur&#39;</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;File Xsect.dat not found in directory </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="c">#wx.MessageBox(message=&quot;File Xsect.dat not found in directory %s&quot; % sys.path[0],</span>
+        <span class="c">#    caption=&quot;No Xsect.dat file&quot;,style=wx.OK | wx.ICON_EXCLAMATION |wx.STAY_ON_TOP)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">()</span>
+    <span class="n">S</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+    <span class="n">Orbs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">while</span> <span class="n">S</span><span class="p">:</span>
+        <span class="n">S</span> <span class="o">=</span> <span class="n">xsec</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">S</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="n">ElS</span><span class="p">:</span>
+            <span class="n">S</span> <span class="o">=</span> <span class="n">S</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">xsec</span><span class="o">.</span><span class="n">readline</span><span class="p">()[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">xsec</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+            <span class="n">OrbName</span> <span class="o">=</span> <span class="n">S</span><span class="p">[</span><span class="mi">9</span><span class="p">:</span><span class="mi">14</span><span class="p">]</span>
+            <span class="n">S</span> <span class="o">=</span> <span class="n">S</span><span class="p">[</span><span class="mi">14</span><span class="p">:]</span>
+            <span class="n">IfBe</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">S</span> <span class="o">=</span> <span class="n">S</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="n">BindEn</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">BB</span> <span class="o">=</span> <span class="n">BindEn</span><span class="o">/</span><span class="n">C1</span>
+            <span class="n">Orb</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;OrbName&#39;</span><span class="p">:</span><span class="n">OrbName</span><span class="p">,</span><span class="s">&#39;IfBe&#39;</span><span class="p">:</span><span class="n">IfBe</span><span class="p">,</span><span class="s">&#39;BindEn&#39;</span><span class="p">:</span><span class="n">BindEn</span><span class="p">,</span><span class="s">&#39;BB&#39;</span><span class="p">:</span><span class="n">BB</span><span class="p">}</span>
+            <span class="n">Energy</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">XSect</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">11</span><span class="p">):</span>
+                <span class="n">Energy</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">[</span><span class="mi">2</span><span class="o">*</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]))</span>
+                <span class="n">XSect</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">[</span><span class="mi">2</span><span class="o">*</span><span class="n">i</span><span class="o">+</span><span class="mi">2</span><span class="p">]))</span>
+            <span class="n">XSecIP</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span> <span class="n">XSecIP</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">XSect</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">5</span><span class="p">]</span><span class="o">/</span><span class="n">AU</span><span class="p">)</span>
+            <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;XSecIP&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">XSecIP</span>
+            <span class="k">if</span> <span class="n">IfBe</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;SEdge&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">XSect</span><span class="p">[</span><span class="mi">10</span><span class="p">]</span><span class="o">/</span><span class="n">AU</span>
+                <span class="n">Nval</span> <span class="o">=</span> <span class="mi">11</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;ElEterm&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">XSect</span><span class="p">[</span><span class="mi">10</span><span class="p">]</span>
+                <span class="k">del</span> <span class="n">Energy</span><span class="p">[</span><span class="mi">10</span><span class="p">]</span>
+                <span class="k">del</span> <span class="n">XSect</span><span class="p">[</span><span class="mi">10</span><span class="p">]</span>
+                <span class="n">Nval</span> <span class="o">=</span> <span class="mi">10</span>
+                <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;SEdge&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;Nval&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Nval</span>
+            <span class="n">D</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">Energy</span><span class="p">,</span><span class="n">XSect</span><span class="p">))</span>
+            <span class="n">Energy</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">Energy</span><span class="p">:</span>
+                <span class="n">X</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">D</span><span class="p">[</span><span class="n">key</span><span class="p">])</span>
+            <span class="n">XSect</span> <span class="o">=</span> <span class="n">X</span>
+            <span class="n">LEner</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">LXSect</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Nval</span><span class="p">):</span>
+                <span class="n">LEner</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Energy</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+                <span class="k">if</span> <span class="n">XSect</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+                    <span class="n">LXSect</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">XSect</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">LXSect</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+            <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;LEner&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">LEner</span>
+            <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;LXSect&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">LXSect</span>
+            <span class="n">Orbs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Orb</span><span class="p">)</span>
+    <span class="n">xsec</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">Orbs</span>
+    </div>
+<div class="viewcode-block" id="GetMagFormFacCoeff"><a class="viewcode-back" href="../../src/webElement.html#pyFprime.webElement.GetMagFormFacCoeff">[docs]</a><span class="k">def</span> <span class="nf">GetMagFormFacCoeff</span><span class="p">(</span><span class="n">El</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Read magnetic form factor data from atomdata.asc file</span>
+<span class="sd">    @param El: 2 character element symbol</span>
+<span class="sd">    @return: MagFormFactors: list of all magnetic form factors dictionaries for element El.</span>
+<span class="sd">    each dictionary contains:</span>
+<span class="sd">    &#39;Symbol&#39;:Symbol</span>
+<span class="sd">    &#39;Z&#39;:Z</span>
+<span class="sd">    &#39;mfa&#39;: 4 MA coefficients</span>
+<span class="sd">    &#39;nfa&#39;: 4 NA coefficients</span>
+<span class="sd">    &#39;mfb&#39;: 4 MB coefficients</span>
+<span class="sd">    &#39;nfb&#39;: 4 NB coefficients</span>
+<span class="sd">    &#39;mfc&#39;: MC coefficient</span>
+<span class="sd">    &#39;nfc&#39;: NC coefficient</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ElS</span> <span class="o">=</span> <span class="n">El</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="n">ElS</span> <span class="o">=</span> <span class="n">ElS</span><span class="o">.</span><span class="n">rjust</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="s">&#39;atmdata.dat&#39;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">FFdata</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s">&#39;Ur&#39;</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&quot;File atmdata.dat not found in directory </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="c">#wx.MessageBox(message=&quot;File atmdata.dat not found in directory %s&quot; % sys.path[0],</span>
+        <span class="c">#    caption=&quot;No atmdata.dat file&quot;,style=wx.OK | wx.ICON_EXCLAMATION |wx.STAY_ON_TOP)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">()</span>
+    <span class="n">S</span> <span class="o">=</span> <span class="s">&#39;1&#39;</span>
+    <span class="n">MagFormFactors</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">while</span> <span class="n">S</span><span class="p">:</span>
+        <span class="n">S</span> <span class="o">=</span> <span class="n">FFdata</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">S</span><span class="p">[</span><span class="mi">3</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span> <span class="o">==</span> <span class="n">ElS</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">S</span><span class="p">[</span><span class="mi">8</span><span class="p">:</span><span class="mi">9</span><span class="p">]</span> <span class="o">==</span> <span class="s">&#39;M&#39;</span><span class="p">:</span>
+                <span class="n">SN</span> <span class="o">=</span> <span class="n">FFdata</span><span class="o">.</span><span class="n">readline</span><span class="p">()</span>               <span class="c">#&#39;N&#39; is assumed to follow &#39;M&#39; in Atomdata.asc</span>
+                <span class="n">Z</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">S</span><span class="p">[:</span><span class="mi">2</span><span class="p">])</span>
+                <span class="n">Symbol</span> <span class="o">=</span> <span class="n">S</span><span class="p">[</span><span class="mi">3</span><span class="p">:</span><span class="mi">7</span><span class="p">]</span>
+                <span class="n">S</span> <span class="o">=</span> <span class="n">S</span><span class="p">[</span><span class="mi">12</span><span class="p">:]</span>
+                <span class="n">SN</span> <span class="o">=</span> <span class="n">SN</span><span class="p">[</span><span class="mi">12</span><span class="p">:]</span>
+                <span class="n">mfa</span> <span class="o">=</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[:</span><span class="mi">7</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">14</span><span class="p">:</span><span class="mi">21</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">28</span><span class="p">:</span><span class="mi">35</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">42</span><span class="p">:</span><span class="mi">49</span><span class="p">]))</span>
+                <span class="n">mfb</span> <span class="o">=</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">7</span><span class="p">:</span><span class="mi">14</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">21</span><span class="p">:</span><span class="mi">28</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">35</span><span class="p">:</span><span class="mi">42</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">49</span><span class="p">:</span><span class="mi">56</span><span class="p">]))</span>
+                <span class="n">nfa</span> <span class="o">=</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">SN</span><span class="p">[:</span><span class="mi">7</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">SN</span><span class="p">[</span><span class="mi">14</span><span class="p">:</span><span class="mi">21</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">SN</span><span class="p">[</span><span class="mi">28</span><span class="p">:</span><span class="mi">35</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">SN</span><span class="p">[</span><span class="mi">42</span><span class="p">:</span><span class="mi">49</span><span class="p">]))</span>
+                <span class="n">nfb</span> <span class="o">=</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">SN</span><span class="p">[</span><span class="mi">7</span><span class="p">:</span><span class="mi">14</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">SN</span><span class="p">[</span><span class="mi">21</span><span class="p">:</span><span class="mi">28</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">SN</span><span class="p">[</span><span class="mi">35</span><span class="p">:</span><span class="mi">42</span><span class="p">]),</span><span class="nb">float</span><span class="p">(</span><span class="n">SN</span><span class="p">[</span><span class="mi">49</span><span class="p">:</span><span class="mi">56</span><span class="p">]))</span>
+                <span class="n">FormFac</span> <span class="o">=</span> <span class="p">{</span><span class="s">&#39;Symbol&#39;</span><span class="p">:</span><span class="n">Symbol</span><span class="p">,</span><span class="s">&#39;Z&#39;</span><span class="p">:</span><span class="n">Z</span><span class="p">,</span><span class="s">&#39;mfa&#39;</span><span class="p">:</span><span class="n">mfa</span><span class="p">,</span><span class="s">&#39;nfa&#39;</span><span class="p">:</span><span class="n">nfa</span><span class="p">,</span><span class="s">&#39;mfb&#39;</span><span class="p">:</span><span class="n">mfb</span><span class="p">,</span><span class="s">&#39;nfb&#39;</span><span class="p">:</span><span class="n">nfb</span><span class="p">,</span>
+                    <span class="s">&#39;mfc&#39;</span><span class="p">:</span><span class="nb">float</span><span class="p">(</span><span class="n">S</span><span class="p">[</span><span class="mi">56</span><span class="p">:</span><span class="mi">63</span><span class="p">]),</span><span class="s">&#39;nfc&#39;</span><span class="p">:</span><span class="nb">float</span><span class="p">(</span><span class="n">SN</span><span class="p">[</span><span class="mi">56</span><span class="p">:</span><span class="mi">63</span><span class="p">])}</span>
+                <span class="n">MagFormFactors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">FormFac</span><span class="p">)</span>
+    <span class="n">FFdata</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">MagFormFactors</span>
+</div>
+<div class="viewcode-block" id="ScatFac"><a class="viewcode-back" href="../../src/webElement.html#pyFprime.webElement.ScatFac">[docs]</a><span class="k">def</span> <span class="nf">ScatFac</span><span class="p">(</span><span class="n">FormFac</span><span class="p">,</span> <span class="n">SThL</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;compute value of form factor</span>
+<span class="sd">    @param FormFac: dictionary  defined in GetFormFactorCoeff </span>
+<span class="sd">    @param SThL: sin-theta/lambda</span>
+<span class="sd">    @return: f: real part of form factor</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">f</span> <span class="o">=</span> <span class="n">FormFac</span><span class="p">[</span><span class="s">&#39;fc&#39;</span><span class="p">]</span>
+    <span class="n">fa</span> <span class="o">=</span> <span class="n">FormFac</span><span class="p">[</span><span class="s">&#39;fa&#39;</span><span class="p">]</span>
+    <span class="n">fb</span> <span class="o">=</span> <span class="n">FormFac</span><span class="p">[</span><span class="s">&#39;fb&#39;</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">):</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="o">-</span><span class="n">fb</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">SThL</span><span class="o">*</span><span class="n">SThL</span>
+        <span class="k">if</span> <span class="n">t</span> <span class="o">&gt;</span> <span class="o">-</span><span class="mf">35.0</span><span class="p">:</span> <span class="n">f</span> <span class="o">+=</span> <span class="n">fa</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">math</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">f</span>
+            </div>
+<div class="viewcode-block" id="FPcalc"><a class="viewcode-back" href="../../src/webElement.html#pyFprime.webElement.FPcalc">[docs]</a><span class="k">def</span> <span class="nf">FPcalc</span><span class="p">(</span><span class="n">Orbs</span><span class="p">,</span> <span class="n">KEv</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Compute real &amp; imaginary resonant X-ray scattering factors</span>
+<span class="sd">    @param Orbs: list of orbital dictionaries as defined in GetXsectionCoeff</span>
+<span class="sd">    @param KEv: x-ray energy in keV</span>
+<span class="sd">    @return: C: (f&#39;,f&quot;,mu): real, imaginary parts of resonant scattering &amp; atomic absorption coeff.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">Aitken</span><span class="p">(</span><span class="n">Orb</span><span class="p">,</span> <span class="n">LKev</span><span class="p">):</span>
+        <span class="n">Nval</span> <span class="o">=</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;Nval&#39;</span><span class="p">]</span>
+        <span class="n">j</span> <span class="o">=</span> <span class="n">Nval</span><span class="o">-</span><span class="mi">1</span>
+        <span class="n">LEner</span> <span class="o">=</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;LEner&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">Nval</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">LEner</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">LKev</span><span class="p">:</span> <span class="n">j</span> <span class="o">=</span> <span class="n">i</span>
+        <span class="k">if</span> <span class="n">j</span> <span class="o">&gt;</span> <span class="n">Nval</span><span class="o">-</span><span class="mi">3</span><span class="p">:</span> <span class="n">j</span><span class="o">=</span> <span class="n">Nval</span><span class="o">-</span><span class="mi">3</span>
+        <span class="n">T</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">LXSect</span> <span class="o">=</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;LXSect&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+           <span class="n">T</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">LXSect</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="n">j</span><span class="p">]</span>
+           <span class="n">T</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">LEner</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="n">j</span><span class="p">]</span><span class="o">-</span><span class="n">LKev</span>
+        <span class="n">T</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">T</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">T</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">-</span><span class="n">T</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">T</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span><span class="o">/</span><span class="p">(</span><span class="n">LEner</span><span class="p">[</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="n">LEner</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+        <span class="n">T</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">T</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="n">T</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span><span class="o">-</span><span class="n">T</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">T</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span><span class="o">/</span><span class="p">(</span><span class="n">LEner</span><span class="p">[</span><span class="n">j</span><span class="o">+</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">LEner</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+        <span class="n">T</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">T</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">T</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span><span class="o">-</span><span class="n">T</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">T</span><span class="p">[</span><span class="mi">4</span><span class="p">])</span><span class="o">/</span><span class="p">(</span><span class="n">LEner</span><span class="p">[</span><span class="n">j</span><span class="o">+</span><span class="mi">2</span><span class="p">]</span><span class="o">-</span><span class="n">LEner</span><span class="p">[</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">C</span> <span class="o">=</span> <span class="n">T</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">C</span>
+    
+    <span class="k">def</span> <span class="nf">DGauss</span><span class="p">(</span><span class="n">Orb</span><span class="p">,</span><span class="n">CX</span><span class="p">,</span><span class="n">RX</span><span class="p">,</span><span class="n">ISig</span><span class="p">):</span>
+        <span class="n">ALG</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.11846344252810</span><span class="p">,</span><span class="mf">0.23931433524968</span><span class="p">,</span><span class="mf">0.284444444444</span><span class="p">,</span>
+        <span class="mf">0.23931433524968</span><span class="p">,</span><span class="mf">0.11846344252810</span><span class="p">)</span>
+        <span class="n">XLG</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.04691007703067</span><span class="p">,</span><span class="mf">0.23076534494716</span><span class="p">,</span><span class="mf">0.5</span><span class="p">,</span>
+        <span class="mf">0.76923465505284</span><span class="p">,</span><span class="mf">0.95308992296933</span><span class="p">)</span>
+        
+        <span class="n">D</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">B2</span> <span class="o">=</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;BB&#39;</span><span class="p">]</span><span class="o">**</span><span class="mi">2</span>
+        <span class="n">R2</span> <span class="o">=</span> <span class="n">RX</span><span class="o">**</span><span class="mi">2</span>
+        <span class="n">XSecIP</span> <span class="o">=</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;XSecIP&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="n">XLG</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">X2</span> <span class="o">=</span> <span class="n">X</span><span class="o">**</span><span class="mi">2</span>
+            <span class="n">XS</span> <span class="o">=</span> <span class="n">XSecIP</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">ISig</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">S</span> <span class="o">=</span> <span class="n">BB</span><span class="o">*</span><span class="p">(</span><span class="n">XS</span><span class="o">*</span><span class="p">(</span><span class="n">B2</span><span class="o">/</span><span class="n">X2</span><span class="p">)</span><span class="o">-</span><span class="n">CX</span><span class="o">*</span><span class="n">R2</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">R2</span><span class="o">*</span><span class="n">X2</span><span class="o">-</span><span class="n">B2</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">ISig</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">S</span> <span class="o">=</span> <span class="mf">0.5</span><span class="o">*</span><span class="n">BB</span><span class="o">*</span><span class="n">B2</span><span class="o">*</span><span class="n">XS</span><span class="o">/</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">X</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">R2</span><span class="o">*</span><span class="n">X2</span><span class="o">-</span><span class="n">X</span><span class="o">*</span><span class="n">B2</span><span class="p">))</span>
+            <span class="k">elif</span> <span class="n">ISig</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">T</span> <span class="o">=</span> <span class="n">X</span><span class="o">*</span><span class="n">X2</span><span class="o">*</span><span class="n">R2</span><span class="o">-</span><span class="n">B2</span><span class="o">/</span><span class="n">X</span>
+                <span class="n">S</span> <span class="o">=</span> <span class="mf">2.0</span><span class="o">*</span><span class="n">BB</span><span class="o">*</span><span class="p">(</span><span class="n">XS</span><span class="o">*</span><span class="n">B2</span><span class="o">/</span><span class="p">(</span><span class="n">T</span><span class="o">*</span><span class="n">X2</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span><span class="o">-</span><span class="p">(</span><span class="n">CX</span><span class="o">*</span><span class="n">R2</span><span class="o">/</span><span class="n">T</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">S</span> <span class="o">=</span> <span class="n">BB</span><span class="o">*</span><span class="n">B2</span><span class="o">*</span><span class="p">(</span><span class="n">XS</span><span class="o">-</span><span class="n">Orb</span><span class="p">[</span><span class="s">&#39;SEdge&#39;</span><span class="p">]</span><span class="o">*</span><span class="n">X2</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">R2</span><span class="o">*</span><span class="n">X2</span><span class="o">**</span><span class="mi">2</span><span class="o">-</span><span class="n">X2</span><span class="o">*</span><span class="n">B2</span><span class="p">)</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="n">ALG</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">D</span> <span class="o">+=</span> <span class="n">A</span><span class="o">*</span><span class="n">S</span>
+        <span class="k">return</span> <span class="n">D</span> 
+    
+    <span class="n">AU</span> <span class="o">=</span> <span class="mf">2.80022e+7</span>
+    <span class="n">C1</span> <span class="o">=</span> <span class="mf">0.02721</span>
+    <span class="n">C</span> <span class="o">=</span> <span class="mf">137.0367</span>
+    <span class="n">FP</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">FPP</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">Mu</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">LKev</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">KEv</span><span class="p">)</span>
+    <span class="n">RX</span> <span class="o">=</span> <span class="n">KEv</span><span class="o">/</span><span class="n">C1</span>
+    <span class="k">if</span> <span class="n">Orbs</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">Orb</span> <span class="ow">in</span> <span class="n">Orbs</span><span class="p">:</span>
+            <span class="n">CX</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="n">BB</span> <span class="o">=</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;BB&#39;</span><span class="p">]</span>
+            <span class="n">BindEn</span> <span class="o">=</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;BindEn&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;IfBe&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span> <span class="n">ElEterm</span> <span class="o">=</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;ElEterm&#39;</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">BindEn</span> <span class="o">&lt;=</span> <span class="n">KEv</span><span class="p">:</span>
+                <span class="n">CX</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">Aitken</span><span class="p">(</span><span class="n">Orb</span><span class="p">,</span><span class="n">LKev</span><span class="p">))</span>
+                <span class="n">Mu</span> <span class="o">+=</span> <span class="n">CX</span>
+                <span class="n">CX</span> <span class="o">/=</span> <span class="n">AU</span>
+            <span class="n">Corr</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="k">if</span> <span class="n">Orb</span><span class="p">[</span><span class="s">&#39;IfBe&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">BindEn</span> <span class="o">&gt;=</span> <span class="n">KEv</span><span class="p">:</span>
+                <span class="n">CX</span> <span class="o">=</span> <span class="mf">0.0</span>
+                <span class="n">FPI</span> <span class="o">=</span> <span class="n">DGauss</span><span class="p">(</span><span class="n">Orb</span><span class="p">,</span><span class="n">CX</span><span class="p">,</span><span class="n">RX</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+                <span class="n">Corr</span> <span class="o">=</span> <span class="mf">0.5</span><span class="o">*</span><span class="n">Orb</span><span class="p">[</span><span class="s">&#39;SEdge&#39;</span><span class="p">]</span><span class="o">*</span><span class="n">BB</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">((</span><span class="n">RX</span><span class="o">-</span><span class="n">BB</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="o">-</span><span class="n">RX</span><span class="o">-</span><span class="n">BB</span><span class="p">))</span><span class="o">/</span><span class="n">RX</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">FPI</span> <span class="o">=</span> <span class="n">DGauss</span><span class="p">(</span><span class="n">Orb</span><span class="p">,</span><span class="n">CX</span><span class="p">,</span><span class="n">RX</span><span class="p">,</span><span class="n">Orb</span><span class="p">[</span><span class="s">&#39;IfBe&#39;</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">CX</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span> <span class="n">Corr</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.5</span><span class="o">*</span><span class="n">CX</span><span class="o">*</span><span class="n">RX</span><span class="o">*</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">((</span><span class="n">RX</span><span class="o">+</span><span class="n">BB</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">RX</span><span class="o">-</span><span class="n">BB</span><span class="p">))</span>
+            <span class="n">FPI</span> <span class="o">=</span> <span class="p">(</span><span class="n">FPI</span><span class="o">+</span><span class="n">Corr</span><span class="p">)</span><span class="o">*</span><span class="n">C</span><span class="o">/</span><span class="p">(</span><span class="mf">2.0</span><span class="o">*</span><span class="n">math</span><span class="o">.</span><span class="n">pi</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">FPPI</span> <span class="o">=</span> <span class="n">C</span><span class="o">*</span><span class="n">CX</span><span class="o">*</span><span class="n">RX</span><span class="o">/</span><span class="p">(</span><span class="mf">4.0</span><span class="o">*</span><span class="n">math</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+            <span class="n">FP</span> <span class="o">+=</span> <span class="n">FPI</span>
+            <span class="n">FPP</span> <span class="o">+=</span> <span class="n">FPPI</span>
+        <span class="n">FP</span> <span class="o">-=</span> <span class="n">ElEterm</span>
+    
+    <span class="k">return</span> <span class="p">(</span><span class="n">FP</span><span class="p">,</span> <span class="n">FPP</span><span class="p">,</span> <span class="n">Mu</span><span class="p">)</span>
+    
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">pyFprime documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2011, Robert B. Von Dreele (Argonne National Laboratory).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.7.
+    </div>
+  </body>
+</html>

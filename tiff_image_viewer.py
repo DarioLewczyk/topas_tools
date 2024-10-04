@@ -73,12 +73,25 @@ class TiffPlotter(ud.DataCollector):
             fileindex:int = 0, 
             title_prefix:str = None, 
             title_time_units:str = 'min',
+            **kwargs
             ):
         '''
         This will plot the tiff image using plotly and the function 
         "get_imarr" from DataCollector to get the data.
+
+        kwargs:
+        height
+        width
+       
+        button_y
         '''
         self.get_imarr(fileindex=fileindex) # Gets the data for the current file
+        # kwargs: {{{
+        height = kwargs.get('height',self._height)
+        width = kwargs.get('width',self._width)
+        
+        button_y = kwargs.get('button_y',1.2)
+        #}}}
         # Get Plot Params: {{{
         # IF METADATA: {{{
         if self.metadata:
@@ -142,12 +155,12 @@ class TiffPlotter(ud.DataCollector):
         ]   
         #}}}
         # Update Layout: {{{
-        button_layer_1_height = 1.1
-        button_layer_2_height = 1.05
+        button_layer_1_height = button_y
+        button_layer_2_height = button_y - 0.05
 
         self.fig.update_layout(
-            height = self._height,
-            width = self._width,
+            height = height,
+            width = width,
             margin = dict(t=200,b=0,l=0,r=0),
             autosize=False,
             title_text = f'{title_prefix} {time} {title_time_units} 2D Image, {current_temp}{self._deg_c}',

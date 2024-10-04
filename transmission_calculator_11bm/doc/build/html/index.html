@@ -1,0 +1,144 @@
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyFPRIME and ABSORB &mdash; pyFprime documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '',
+        VERSION:     '2009',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="pyFprime documentation" href="#" />
+    <link rel="next" title="More information" href="toc.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="toc.html" title="More information"
+             accesskey="N">next</a> |</li>
+        <li><a href="#">pyFprime documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Next topic</h4>
+  <p class="topless"><a href="toc.html"
+                        title="next chapter">More information</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/index.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" size="18" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="pyfprime-and-absorb">
+<h1>pyFPRIME and ABSORB<a class="headerlink" href="#pyfprime-and-absorb" title="Permalink to this headline">¶</a></h1>
+<p>This project contains two python GUI programs used for computing
+approximate x-ray scattering cross sections (f, f&#8217; and f&#8221;) for individual
+elements using the Cromer &amp; Liberman algorithm
+(reference: <a class="reference external" href="http://dx.doi.org/10.1107/S0567739481000600">Acta Cryst. 1981 v.A37, p.267</a>).</p>
+<ul>
+<li><p class="first">pyFPRIME computes and plots elemental scattering factors.</p>
+</li>
+<li><dl class="first docutils">
+<dt>ABSORB computes scattering and absorption for a given</dt>
+<dd><p class="first last">composition and makes an attempt to estimate density as well.
+ABSORB can be also accessed as a web utility
+(see <a class="reference external" href="http://11bm.xor.aps.anl.gov/absorb/absorb.php">http://11bm.xor.aps.anl.gov/absorb/absorb.php</a>).</p>
+</dd>
+</dl>
+</li>
+</ul>
+<p>Note that these computations are performed for elements between
+Li - Cf and in the X-ray wavelength range 0.05 - 3.0 <img src="_images\mathmpl/math-7ffb7d798c.png" style="position: relative; bottom: -3px"/> (4.13-248 keV)
+using the Cromer &amp; Liberman algorithm and orbital cross-section tables.
+Note that the Cromer - Liberman algorithm fails in computing f&#8217; for
+wavelengths &lt; 0.16 <img src="_images\mathmpl/math-7ffb7d798c.png" style="position: relative; bottom: -3px"/> (&gt; 77.48 keV) for the heaviest elements (Au-Cf)
+and fails to correctly compute f&#8217;, f&#8221; and mu for
+wavelengths &gt; 2.67 <img src="_images\mathmpl/math-7ffb7d798c.png" style="position: relative; bottom: -3px"/> (&lt; 4.64 keV) for very heavy elements (Am-Cf).</p>
+<p>To obtain a copy of the files see the trunk directory in Trac or use
+subversion to download from
+<a class="reference external" href="https://subversion.xor.aps.anl.gov/pyFprime/trunk/">https://subversion.xor.aps.anl.gov/pyFprime/trunk/</a>.
+This software runs in Windows, Linux and Mac OS X, provided a working
+python interpreter with WxPython and Matplotlib is installed.
+We have used the Enthought Python Distribution.</p>
+<p>Contact: <a class="reference external" href="mailto:vondreele&#37;&#52;&#48;anl&#46;gov">Robert B<span>&#46;</span> Von Dreele</a></p>
+<p>Table of Contents:</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="toc.html">More information</a></li>
+<li class="toctree-l1"><a class="reference internal" href="toc.html#readme">Readme</a></li>
+<li class="toctree-l1"><a class="reference internal" href="toc.html#source-code-documentation">Source Code Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="toc.html#indices-and-tables">Indices and tables</a></li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="toc.html" title="More information"
+             >next</a> |</li>
+        <li><a href="#">pyFprime documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2011, Robert B. Von Dreele (Argonne National Laboratory).
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.7.
+    </div>
+  </body>
+</html>

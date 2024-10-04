@@ -384,6 +384,7 @@ Overview:
             b. Process the files with pyFAI
             c. change the ".dat" file to ".xy"
             d. Move the processed files to the daughter directory
+            e. Copy the meta folder if it is present to the new directory.
         
 '''
 t0 = time.time()
@@ -412,7 +413,7 @@ for f in os.listdir():
     if os.path.isdir(f):
         if f not in bypass_paths: 
             os.chdir(f)#This changes our path to check for tifs 
-            tifs = glob.glob(f'*{file_ext}') #makes a list if tifs exist.
+            tifs = glob.glob(f'*{file_ext}') #makes a list if tifs exist. 
             if tifs: 
                 folders[folder_count] = f
                 folder_count+=1
@@ -437,11 +438,14 @@ for i, path in enumerate(pbar1):
         integrated_folder = '{}/{}_integrated_{}'.format(home_directory,path,get_time())#This makes a folder in the home directory for the integrated files. It gives the time too so it never overwrites.
         integrated_folders.append(integrated_folder) #This saves the folder to our list.
         #Make the integrated_folder{{{ 
+        new_meta_folder = os.path.join(integrated_folder,'meta')
         if os.path.exists(integrated_folder):
             shutil.rmtree(integrated_folder)
             os.mkdir(integrated_folder)
         else:
             os.mkdir(integrated_folder)
+            os.mkdir(new_meta_folder) # make a metadata folder for the metadata.
+
         #}}} 
         #Make a dask array of the tiff files first.{{{
         '''
@@ -488,7 +492,7 @@ for i, path in enumerate(pbar1):
                     correctSolidAngle= False,
                     method = method,
                     filename = f.replace(file_ext,'.dat')
-                    )
+            )
             #clear()
             integrate_end = time.time() 
             avg_int_time.append(integrate_end-integrate_start) #This logs the time that the first integration took
@@ -501,7 +505,13 @@ for i, path in enumerate(pbar1):
             #move_end = time.time()
             #print('Time to integrate: {}\nTime to convert: {}\nTime to move: {}\n'.format(integrate_end-integrate_start,convert_end-convert_start,move_end-move_start))
             #time.sleep(1)
-   
+        base_int_directory = os.path.join(home_directory, path) # This should be the base directory for the files
+        meta_dir = os.path.join(base_int_directory, 'meta')
+        if os.path.exists(meta_dir):
+            os.chdir(meta_dir)
+            yaml_files = glob.glob('*.yaml')
+            for f in yaml_files:
+                shutil.copyfile(f,os.path.join(new_meta_folder, f)) 
     os.chdir(home_directory)           
 #Moving all of the folders to a "final_destination"{{{
 final_destination = '/'.join(home_directory.split('/')[0:-1])+'/Integrated_Files_{}'.format(get_time()) #Creates a unique end point for all of the folders
