@@ -591,12 +591,15 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         #}}}  
         # Update the phase_xy data: {{{
         for idx, phase_dict in phase_xy.items():
-            substance = phase_dict['substance'] # This should accompany each entry recorded. 
-            ycalc = phase_dict['ycalc'] # This is the calculated intensity across the tth range for the phase. 
-            if log_scale:
-                self.pattern_dict[f'{substance}_ycalc_{time}_log'] = ycalc
-            else:
-                self.pattern_dict[f'{substance}_ycalc_{time}'] = ycalc
+            try:
+                substance = phase_dict['substance'] # This should accompany each entry recorded. 
+                ycalc = phase_dict['ycalc'] # This is the calculated intensity across the tth range for the phase. 
+                if log_scale:
+                    self.pattern_dict[f'{substance}_ycalc_{time}_log'] = ycalc
+                else:
+                    self.pattern_dict[f'{substance}_ycalc_{time}'] = ycalc
+            except:
+                pass
         #}}}
         # Update the background data: {{{
         self.pattern_dict[f'bkg_calc_{time}'] = bkg['ycalc']

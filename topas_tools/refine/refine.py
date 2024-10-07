@@ -186,16 +186,17 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         phase_hkli_out = []
         phase_hkli_line = []
         for i, line in enumerate(template):
-            if 'Out_X_Yobs_Ycalc_Ydiff' in line:
+            line = line.strip() # cleans line of unnecessary leading spaces
+            if line.startswith('Out_X_Yobs_Ycalc_Ydiff'):
                 xy_out_linenum = i 
-            if 'out_prm_vals_on_convergence' in line:
+            if line.startswith('out_prm_vals_on_convergence'):
                 txt_out_linenum = i
-            if 'out' in line:
+            if line.startswith('out'):
                 # Don't need to look for anything but out by itself. 
                 my_csv_line = i
-            if 'xdd' in line:
+            if line.startswith('xdd'):
                 pattern_linenum = i
-            if 'Create_hklm_d_Th2_Ip_file' in line:
+            if line.startswith('Create_hklm_d_Th2_Ip_file'):
                 phase_hkli_out.append(i)
                 phase_hkli_line.append(line) # We need to process this line to get the phase name 
         

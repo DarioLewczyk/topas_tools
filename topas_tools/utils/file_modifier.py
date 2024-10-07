@@ -122,7 +122,11 @@ class FileModifier():
 
                 max_value = max(values) # This gets us the largest value present.
                 current_value = current_entry['value'] # This gives the current value
-                norm_val = current_value/max_value # This gives us the normalized value relative to the max.
+                try:
+                    norm_val = current_value/max_value # This gives us the normalized value relative to the max.
+                except:
+                    print(f'Substance: {current_entry} has a max scale factor of: {max_value}.')
+                    norm_val = current_value/(1*10**(-100))
                 # Handle Phase ON Cases: {{{ 
                 if entry_type == 'on' and method == 'rwp':
                     try:

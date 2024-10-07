@@ -44,10 +44,8 @@ class JANA_Tools(Utils, JANA_Plot):
         self.jana_data['data_files'] = prf_files
         # collect and store the data: {{{
         for i, prf_fn in enumerate(prf_files):
-            self.prf_file_parser(prf_fn, i,  modulated, num_cols, lambda_angstrom)
+            self.prf_file_parser(prf_fn, i,  modulated, num_cols, lambda_angstrom) 
         #}}} 
-
-
     #}}}
     # get_pattern_data: {{{
     def get_pattern_data(self, 
@@ -204,10 +202,11 @@ class JANA_Tools(Utils, JANA_Plot):
 
                             }
                             intermediate_hklm_ht = hklm_ht.format('main', hklm, np.around(d,4), self._angstrom, fsq, fwhm)
+                            final_hklm_ht = intermediate_hklm_ht+f'<br>tth: {np.around(tth,4)}<br>q: {np.around(q,4)}'
                             main_peaks += 1
                             main_q.append(q)
                             main_tth.append(tth)
-                            main_ht.append(intermediate_hklm_ht)
+                            main_ht.append(final_hklm_ht)
                         #}}} 
                         # m != 0: {{{
                         elif np.abs(m) > 0: 
@@ -225,10 +224,11 @@ class JANA_Tools(Utils, JANA_Plot):
 
                             }
                             intermediate_hklm_ht = hklm_ht.format('satellite', hklm, np.around(d,4), self._angstrom, fsq, fwhm)
+                            final_hklm_ht = intermediate_hklm_ht+f'<br>tth: {np.around(tth,4)}<br>q: {np.around(q,4)}'
                             satellite_peaks+= 1
                             satellite_q.append(q)
                             satellite_tth.append(tth)
-                            satellite_ht.append(intermediate_hklm_ht)
+                            satellite_ht.append(final_hklm_ht)
                         #}}}
                         
                     #}}} 
@@ -246,6 +246,159 @@ class JANA_Tools(Utils, JANA_Plot):
                 self.jana_data[idx]['hklm_data']['satellite']['q'] = np.array(satellite_q)
                 self.jana_data[idx]['hklm_data']['satellite']['hovertemplate'] = satellite_ht
             #}}} 
+    #}}}
+    # categorize_composite_hklm: {{{ 
+    def categorize_composite_hklm(self,index:int = 0,  modulation_axis:str = 'b'):
+        '''
+        Use the modulation axis to tell the program 
+        which axis the modulation is along so that it can determine 
+        the primary, secondary, common, and satellite indices for you.
+
+        index: This is the index of the hklm dictionary data you want
+        '''
+        # Common axis setup: {{{
+        common_h, common_k, common_l = (None, None, None)
+        if modulation_axis == 'a':
+            common_h = 0
+        elif modulation_axis == 'b':
+            common_k = 0
+        elif modulation_axis == 'c':
+            common_l = 0
+        #}}}
+        # define 4 dictionaries: {{{
+        primary = {'tth':[], 'q':[]} # These are the hkl0 reflections
+        secondary = {'tth':[], 'q':[]} # These are hklm axes where one of h,k,l is zero
+        common = {'tth':[], 'q':[]} # These are m = 0 with a common h, k, or l = 0
+        satellites = {'tth':[], 'q':[]} # h,k,l,m reflections
+
+        primary_idx = 0
+        secondary_idx = 0
+        common_idx = 0
+        satellite_idx = 0
+        #}}}
+        # loop through hklm dictionary: {{{
+        for classification, peaks in self.jana_data[index]['hklm_data'].items():
+            peaks = peaks['peaks'] # Get the actual peaks entry
+            for i, peak in peaks.items():
+                h = peak['h']
+                k = peak['k']
+                l = peak['l']
+                m = peak['m']
+                tth = peak['tth']
+                q = peak['q']
+                
+                # Flags to categorize.
+                add_primary, add_secondary, add_common, add_satellite = (False, False, False, False)
+
+                # Common reflections: {{{
+                if common_h == h and m == 0:
+                    add_common = True
+                if common_k == k and m == 0:
+                    add_common = True
+                if common_l == l and m == 0:
+                    add_common = True
+                #}}}
+                # Primary reflections: {{{
+                if m == 0:
+                    add_primary = True
+                #}}}
+                # Secondary reflections: {{{
+                if common_h == h:
+                    add_secondary = True
+                if common_k == k:
+                    add_secondary = True
+                if common_l == l:
+                    add_secondary = True
+                #}}}
+                # Satellite reflections: {{{
+                if m!=0:
+                    add_satellite = True
+                #}}}
+                # Update the dictionaries: {{{
+                # primary: {{{
+                if add_primary:
+                    primary['tth'].append(tth)
+                    primary['q'].append(q)
+                    primary[primary_idx] = peak
+                    primary_idx += 1
+                #}}}
+                # secondary: {{{
+                if add_secondary:
+                    secondary['tth'].append(tth)
+                    secondary['q'].append(q)
+                    secondary[secondary_idx] = peak
+                    secondary_idx+= 1
+                #}}}
+                # common: {{{
+                if add_common:
+                    common['tth'].append(tth)
+                    common['q'].append(q)
+                    common[common_idx] = peak
+                    common_idx+= 1
+                #}}}
+                # satellite: {{{
+                if add_satellite:
+                    satellites['tth'].append(tth)
+                    satellites['q'].append(q)
+                    satellites[satellite_idx] = peak
+                    satellite_idx+= 1
+                #}}}
+                #}}}
+        #}}} 
+        # Get hovertemplates for plotting: {{{
+        primary_ht, secondary_ht, common_ht, satellite_ht = self._get_composite_hovertemplates(primary, secondary, common, satellites)
+        primary['ht'] = primary_ht
+        secondary['ht'] = secondary_ht
+        common['ht'] = common_ht
+        satellites['ht'] = satellite_ht
+        #}}}
+        # Update the jana_data dictionary: {{{
+        self.jana_data[index]['composite_hklm'] = {
+                'primary': primary,
+                'secondary': secondary,
+                'common': common,
+                'satellites': satellites,
+        }
+        #}}}
+    #}}}
+    # _get_composite_hovertemplates: {{{
+    def _get_composite_hovertemplates(self, primary:dict = None, secondary:dict = None, common:dict = None, satellites:dict = None):
+        '''
+        This function will go through each of the dictionaries and generate the text 
+        for informative hovering functionality with plots in plotly
+        '''
+        # initial definitions: {{{
+        labels = ['primary', 'secondary', 'common', 'satellites']
+        dicts = [primary, secondary, common, satellites]
+        base_ht = '2theta: {tth}<br>q: {q}<br>label: {label}<br>hklm: ({hklm})<br>d: {d}<br>f^2: {fsq}<br>fwhm: {fwhm}<br>'
+        primary_ht, secondary_ht, common_ht, satellite_ht = ([],[],[],[])
+        #}}}
+        # loop through the dictionaries: {{{ 
+        for i, entry in enumerate(dicts):
+            for j, reflection in entry.items():
+                try:
+                    label = labels[i]
+                    hklm = reflection['hklm']
+                    d = np.around(reflection['d-spacing'], 4)        
+                    fsq = np.around(reflection['fsq'], 4)        
+                    fwhm = np.around(reflection['fwhm'], 4)        
+                    tth = np.around(reflection['tth'], 4)        
+                    q = np.around(reflection['q'], 4)        
+                    ht = base_ht.format(tth = tth, q = q, label=label, hklm = hklm, d = d, fsq = fsq, fwhm = fwhm)
+                    # categorize the ht: {{{
+                    if i == 0:
+                        primary_ht.append(ht)
+                    if i == 1:
+                        secondary_ht.append(ht)   
+                    if i == 2:
+                        common_ht.append(ht)
+                    if i == 3:
+                        satellite_ht.append(ht)
+                    #}}}
+                except:
+                    pass
+        #}}} 
+        return (primary_ht, secondary_ht, common_ht, satellite_ht)
     #}}}
     # _clean_line{{{ 
     def _clean_line(self, line):

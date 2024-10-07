@@ -228,7 +228,11 @@ class RefinementPlotter(PlottingUtils):
                 # Get Data for Phase Plots: {{{
                 if self.sorted_phase_xy and plot_calc_patterns:
                     phase_data = data['phase_xy']
-                    phase_substance = phase_data[i]['substance']
+                    try:
+                        phase_substance = phase_data[i]['substance']
+                    except:
+                        print(f'Failed to get substance xy for pattern: {i}')
+                        phase_substance[phase_data[i-1]]['substance']
                     phase_tth= phase_data[i]['tth']
                     phase_ycalc= phase_data[i]['ycalc']
                     self.pattern_plot.add_scatter(
@@ -334,7 +338,7 @@ class RefinementPlotter(PlottingUtils):
             if specific_substance == None:
                 yobs = self.rietveld_data[index]['xy']['yobs']
                 ycalc = self.rietveld_data[index]['xy']['ycalc']
-                ydiff = self.rietveld_data[index]['xy']['ycalc']
+                ydiff = self.rietveld_data[index]['xy']['ydiff']
                 hovertemplate = f'{title_text}<br>Pattern Index: {index}<br>' + hovertemplate
                 #title = f'Time: {np.around(self._current_time,2)} {time_units}, ({temp_label}: {np.around(temp,temp_decimals)}{self._deg_c}) Rwp: {np.around(self._rwp,rwp_decimals)}',  
             else:
