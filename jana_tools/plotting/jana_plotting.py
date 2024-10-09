@@ -48,9 +48,11 @@ class JANA_Plot(GenericPlotter, UsefulUnicode):
         if plot_vs_q:
             pattern_x = pattern['q']
             hovertemplate = 'q: %{x}<br>Intensity: %{y}'
+            xaxis_title = 'q (Å^-1)'
         else:
             pattern_x = pattern['tth']
             hovertemplate = '2theta: %{x}<br>Intensity: %{y}'
+            xaxis_title = f'2{self._theta}{self._degree_symbol}'
         #}}}
         # dictionaries for hkls: {{{
         if composite:
@@ -72,7 +74,7 @@ class JANA_Plot(GenericPlotter, UsefulUnicode):
             name = 'Observed',
             color = 'black',
             mode = 'lines',
-            xaxis_title=f'2{self._theta}{self._degree_symbol}',
+            xaxis_title=xaxis_title,
             yaxis_title='Intensity',
             width=width,
             height = height,

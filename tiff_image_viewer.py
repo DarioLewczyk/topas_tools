@@ -82,14 +82,14 @@ class TiffPlotter(ud.DataCollector):
         kwargs:
         height
         width
-       
+        colorscale
         button_y
         '''
         self.get_imarr(fileindex=fileindex) # Gets the data for the current file
         # kwargs: {{{
         height = kwargs.get('height',self._height)
         width = kwargs.get('width',self._width)
-        
+        colorscale = kwargs.get('colorscale', 'Viridis')
         button_y = kwargs.get('button_y',1.2)
         #}}}
         # Get Plot Params: {{{
@@ -130,6 +130,7 @@ class TiffPlotter(ud.DataCollector):
             y = self.im_y,
             z = self.im_z,
             hovertemplate = self.hovertemplate,
+            colorscale = colorscale,
 
         )
         # Create Min Buttons: {{{

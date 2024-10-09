@@ -602,7 +602,11 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                 pass
         #}}}
         # Update the background data: {{{
-        self.pattern_dict[f'bkg_calc_{time}'] = bkg['ycalc']
+        try:
+            self.pattern_dict[f'bkg_calc_{time}'] = bkg['ycalc']
+        except: 
+            xy_keys = list(xy.keys())
+            self.pattern_dict[f'bkg_calc_{time}'] = np.zeros(len(xy[xy_keys[0]])) # make the background zero
         #}}}
         base_pattern_info = copy.deepcopy(self.pattern_dict)
         # Update the hkli data: {{{

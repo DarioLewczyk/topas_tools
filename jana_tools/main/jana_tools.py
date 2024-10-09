@@ -312,7 +312,13 @@ class JANA_Tools(Utils, JANA_Plot):
                 #}}}
                 # Satellite reflections: {{{
                 if m!=0:
-                    add_satellite = True
+                    if common_h != h and common_h != None:
+                        add_satellite = True
+                    elif common_k != k and common_k != None:
+                        add_satellite = True
+                    elif common_l != l and common_l != None:
+                        add_satellite = True
+                    
                 #}}}
                 # Update the dictionaries: {{{
                 # primary: {{{
