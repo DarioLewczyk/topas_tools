@@ -1,0 +1,4 @@
+pymatgen
+tqdm
+plotly
+texttable
