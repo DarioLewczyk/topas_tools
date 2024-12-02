@@ -745,8 +745,11 @@ class DataCollector:
                         fixed_range.append(idx)
         else: 
             #fixed_range = np.linspace(0, len(tmp_rng)-1, len(tmp_rng), dtype=int)
-            fixed_range = np.linspace(1, len(tmp_rng), len(tmp_rng), dtype=int) # I think this has to start at 1 because we subtract 1 elsewhere.
-
+            if mode == 0:
+                fixed_range = tmp_rng
+            elif mode == 1:
+                fixed_range = np.linspace(0, len(tmp_rng)-1, len(tmp_rng), dtype=int) # I think this has to start at 1 because we subtract 1 elsewhere.
+        
         #}}} 
         return fixed_range
     

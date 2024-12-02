@@ -80,6 +80,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             time_error:float = 1.1, 
             on_sf_value:float = 1.0e-5, 
             check_order:bool = False,
+            **kwargs
         ):
         '''
         Expansion of the code written by Adam A Corrao and Gerrard Mattei. 
@@ -104,7 +105,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         in different ways.
 
         '''
-        debug = False# Set this to True if you want to see debugging information. 
+        debug = kwargs.get('debug',False) # Set this to True if you want to see debugging information. 
+        
         off_sf_value = 1.0e-100 # This SF val ensures a phase will stop refining. 
         self.reverse_order = reverse_order  
         # if you input a string for either "phases_to_disable" or "phases_to_enable": {{{
@@ -167,7 +169,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             #}}}
             # get all of the metadata data: {{{ 
             self._md = MetadataParser() # initialize the parser 
-            self._md.get_metadata() # obtain all of the metadata we need
+            #self._md.get_metadata() # obtain all of the metadata we need
             self.metadata_data = self._md.metadata_data # Store the metadata.
             #}}}
             os.chdir(self.current_dir) # return to the starting directory.
@@ -204,29 +206,39 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         # Get the data: {{{
         os.chdir(data_dir) # Go to the directory with the scans
         data = DataCollector(fileextension=self.fileextension) # Initialize the DataCollector
-        data.scrape_files() # This collects and orders the files
+        data.scrape_files() # This collects and orders the files 
         data_dict_keys = list(data.file_dict.keys()) # Filename timecodes in order
         os.chdir(template_dir) # Return to the template directory 
         
         rng_start = 1 # This is the initial start for the range
         rng_end = len(data_dict_keys) # This is the initial end for the range.
         if time_range:
-            rng_start, rng_end = self._get_time_range(metadata_data=self.metadata_data, time_range= time_range, max_idx=rng_end) # Get new range
+            rng_start, rng_end = self._get_time_range(
+                    metadata_data=self.metadata_data, 
+                    time_range= time_range, 
+                    max_idx=rng_end
+            ) # Get new range
         tmp_rng = np.linspace(rng_start, rng_end, refinements) # Gives a range over the total number of scans that we want to refine. 
-
+        
         if self.reverse_order:
             tmp_rng = tmp_rng[::-1] # This reverses the order of the array by converting it to a list slice 
         #}}}
         # If user needs to use metadata to order the refinements...: {{{
         if check_order: 
-            tmp_rng = data.check_order_against_time(tmp_rng=tmp_rng,data_dict_keys=data_dict_keys, metadata_data=self.metadata_data)
+            tmp_rng = data.check_order_against_time(
+                    tmp_rng=tmp_rng,
+                    data_dict_keys=data_dict_keys, 
+                    metadata_data=self.metadata_data
+            )
         #}}}
         # Begin the Refinements: {{{
         '''
         This part uses a range made by the selection of the user. 
         Since we don't need to pair the data with the metadata, we should be able to simply reverse the order of the range. 
         ''' 
+        
         rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine. 
+        
         for index,number in enumerate(rng):
             file_time = data_dict_keys[number-1]
             xy_filename = data.file_dict[file_time]

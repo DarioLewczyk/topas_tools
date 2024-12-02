@@ -285,7 +285,6 @@ class RefinementPlotter(PlottingUtils):
         #Get Info for Updating Layout: {{{
         if tth_range == None:
             tth_range = [min(tth), max(tth)] # plot the whole range
-        
         title_text = f'Time: {np.around(self._current_time,2)} {time_units}, ({temp_label}: {np.around(temp,temp_decimals)}{self._deg_c}) Rwp: {np.around(self._rwp,rwp_decimals)}'
         xaxis_title = f'2{self._theta}{self._degree}'
         yaxis_title = 'Intensity'
@@ -868,8 +867,8 @@ class RefinementPlotter(PlottingUtils):
                 else:
                     if max(ycalc) > self._max_i:
                         self._max_i = max(ycalc)
-            except:
-                print(f'failed to plot: {i}')
+            except Exception as e: 
+                raise Exception(f'failed to plot: {i}')
             #}}}
             # If You Want a Waterfall: {{{
             if waterfall:  

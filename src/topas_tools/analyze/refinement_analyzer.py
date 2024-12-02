@@ -316,8 +316,12 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             #}}} 
             # Work with the metadata: {{{
             os.chdir(self.meta_dir) # Go into the metadata
-            self._md = MetadataParser(metadata_data=self.metadata_data)
-            self._md.get_metadata()
+            if mtf_version >= 3:
+                temp_key = 'thermocouple_c' 
+            else:
+                temp_key = 'element_temp'
+            self._md = MetadataParser(metadata_data=self.metadata_data,temp_key=temp_key) # Automatically calls self.get_metadata
+            
             #self.metadata_data = self._md.metadata_data
             #}}}
             os.chdir(self.current_dir) # Return to the original directory.
@@ -327,7 +331,11 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                 tmp_rng = np.linspace(1,len(self.file_dict_keys), num_scans_refined, dtype=int) # Get the original indices of each pattern. 
                 #dc = DataCollector(metadata_data=self.metadata_data) # Need to init this class to check the order.
                 self.corrected_range = self.check_order_against_time(
-                        tmp_rng=tmp_rng, data_dict_keys=self.file_dict_keys,metadata_data=self.metadata_data, mode=1) #Get a new order
+                        tmp_rng=tmp_rng, 
+                        data_dict_keys=self.file_dict_keys,
+                        metadata_data=self.metadata_data, 
+                        mode=1
+                ) #Get a new order 
                 # Correct the file lists: {{{
                 # Define temporary lists for data: {{{
                 tmp_csv = []
@@ -335,10 +343,14 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                 tmp_out = [] 
                 tmp_bkg_xy = [] 
                 #}}}
-                for rng_idx in self.corrected_range: 
-                    tmp_csv.append(self.sorted_csvs[rng_idx]) # Adds the correct csv in the correct order
-                    tmp_xy.append(self.sorted_xy[rng_idx])
-                    tmp_out.append(self.sorted_out[rng_idx])
+                for rng_idx in self.corrected_range:  
+                    try: 
+                        tmp_csv.append(self.sorted_csvs[rng_idx]) # Adds the correct csv in the correct order
+                        
+                        tmp_xy.append(self.sorted_xy[rng_idx])
+                        tmp_out.append(self.sorted_out[rng_idx])
+                    except Exception as e: 
+                        print(f'There was a problem with your corrected range index {rng_idx}: {e}')
                     try:
                         tmp_bkg_xy.append(self.sorted_bkg_xy[rng_idx])
                     except:
