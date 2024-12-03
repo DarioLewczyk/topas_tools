@@ -321,8 +321,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             else:
                 temp_key = 'element_temp'
             self._md = MetadataParser(metadata_data=self.metadata_data,temp_key=temp_key) # Automatically calls self.get_metadata
-            
-            #self.metadata_data = self._md.metadata_data
+            self.metadata_data = self._md.metadata_data # because we sort within self._md, we need to re set it outside of that class
             #}}}
             os.chdir(self.current_dir) # Return to the original directory.
             # If you need to check the order of patterns against metadata: {{{
@@ -371,8 +370,12 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                             original_hkli_file_list = self._hkli[xy_key]['files']
 
                             for i in self.corrected_range:
-                                tmp_xy_file_list.append(original_xy_file_list[i]) # Add in the position corrected file.
-                                tmp_hkli_file_list.append(original_hkli_file_list[i]) # Add the position corrected file
+                                try:
+                                    tmp_xy_file_list.append(original_xy_file_list[i]) # Add in the position corrected file.
+                                    tmp_hkli_file_list.append(original_hkli_file_list[i]) # Add the position corrected file
+                                except:
+                                    tmp_hkli_file_list.append(None)
+                                    tmp_hkli_file_list.append(None)
 
                             self._phase_xy[xy_key]['files'] = tmp_xy_file_list
                             self._hkli[xy_key]['files'] = tmp_hkli_file_list
@@ -464,16 +467,14 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         metadata_keys = list(self.metadata_data.keys()) #these are the "readable times" 0th index is the first pattern of the series. 
         t0_idx = 0 # This is the default but can change if the order is messed up. 
         t0 = None
+        
         if check_order:
+            epoch_times = [] # Store the epoch times
             for i, (key, entry) in enumerate(self.metadata_data.items()):
                 epoch = entry['epoch_time']
-                if i == 0:
-                    t0 = epoch
-                else:
-                    t = epoch - t0 # Elapsed time
-                    if t < 0:
-                        t0_idx = i # This is the index of the metadata keys which is the first time point. 
-                        break    
+                epoch_times.append(epoch)
+            t0_idx = epoch_times.index(min(epoch_times)) # Get the idx of the minimum time
+            
         t0 = self.metadata_data[metadata_keys[t0_idx]]['epoch_time'] # This gives us the epoch time for the first pattern. 
         t1 = self.rietveld_data[index]['epoch_time'] # This is the time of the current pattern. 
         # Determine the appropriate divisor: {{{

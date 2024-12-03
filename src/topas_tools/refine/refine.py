@@ -207,6 +207,11 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         os.chdir(data_dir) # Go to the directory with the scans
         data = DataCollector(fileextension=self.fileextension) # Initialize the DataCollector
         data.scrape_files() # This collects and orders the files 
+        # CHECK THE ORDER OF THE XYs: {{{
+        if check_order:
+            file_dict = data._resort_with_metadata(file_dict=data.file_dict, metadata_data=self.metadata_data)
+            data.file_dict = file_dict
+        #}}} 
         data_dict_keys = list(data.file_dict.keys()) # Filename timecodes in order
         os.chdir(template_dir) # Return to the template directory 
         
@@ -239,9 +244,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         
         rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine. 
         
-        for index,number in enumerate(rng):
+        for index,number in enumerate(rng):     
             file_time = data_dict_keys[number-1]
             xy_filename = data.file_dict[file_time]
+            if debug:
+                print(f'Number: {number} ')
+                print(f'file_time: {file_time}\nxy_filename: {xy_filename}')
             # Get the time (if needed): {{{
             try:
                 md_keys = list(self.metadata_data.keys())

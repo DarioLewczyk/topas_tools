@@ -445,6 +445,24 @@ class DataCollector:
             # We now sort the dictionary entries by their number (least to greatest.) 
         self.file_dict = dict(sorted(tmp.items())) 
     #}}}
+    # _resort_with_metadata: {{{
+    def _resort_with_metadata(self, file_dict:dict = None, metadata_data:dict = None, ):
+        '''
+        Sometimes, the readable times fail horribly and you need to fall back on metadata to determine the 
+        ordering of filenames. 
+
+        In these cases, you use this function which will reorder the file dictionary for you based off of 
+        a correctly sorted metadata dictionary.
+        ''' 
+        #print(len(file_dict), len(metadata_data))
+        #print(list(file_dict.keys()))
+        #print(list(metadata_data.keys()))
+        correctly_sorted_readable_times = list(metadata_data.keys()) # These are correctly sorted by epoch time
+        # Create a new dictionary with the sorted keys from the metadata dictionary:
+        sorted_file_dict = {key: file_dict[key] for key in correctly_sorted_readable_times if key in file_dict}
+ 
+        return sorted_file_dict
+    #}}}
     # set_time_range: {{{
     def set_time_range(self,):
         '''
@@ -501,7 +519,9 @@ class DataCollector:
         ys = []
         files = []
         temps = []
-        first_time = min(list(self.file_dict.keys()))
+        #first_time = min(list(self.file_dict.keys()))
+        first_time, idx_first_time, key_first_time, fn_first_time = self._get_first_time(metadata)
+        first_time = key_first_time # This uses the readable time which will be the key
         # if there is NOT metadata: {{{
         if not metadata:
             # Filter the data by time range: {{{
@@ -706,8 +726,27 @@ class DataCollector:
             return end
         #}}}  
     #}}}
+    # _get_first_time{{{ 
+    def _get_first_time(self,metadata_data:dict = None, debug = True):
+        md_keys = list(metadata_data.keys()) # These are the timecodes pulled from the filenames
+        epoch_times = [] # List of the epoch times for the dataset
+        for key, entry in metadata_data.items():
+            epoch = entry['epoch_time']
+            epoch_times.append(epoch) # Add each of the epoch times 
+        first_time = min(epoch_times) # Get the epoch time for the beginning of the run
+        idx_first_time = epoch_times.index(first_time) # Get the index of the first time 
+        key_first_time = md_keys[idx_first_time] # This gives us the timecode to look for
+        fn_first_time = metadata_data[key_first_time]['filename'] # Give the exact filename 
+        if idx_first_time != 0:
+            if debug:
+                print(f'Starting index is not zero! idx: {idx_first_time}')
+                print(f'Starting timecode: {key_first_time}\nFilename: {fn_first_time}')
+        return (first_time, idx_first_time, key_first_time, fn_first_time)
+            
+    #}}}
     # check_order_against_time: {{{
-    def check_order_against_time(self,tmp_rng:list = None,data_dict_keys:list = None,  metadata_data:dict = None, mode:int= 0 ):
+    def check_order_against_time(self,tmp_rng:list = None,data_dict_keys:list = None,  metadata_data:dict = None, mode:int= 0,
+            debug:bool = False):
         '''
         This function is designed to reorder the files you are analyzing 
         if you discover that the order is wrong after analysis.
@@ -718,19 +757,22 @@ class DataCollector:
             0: This is normal mode, returns a range of indices from the original dataset you pull from (for refinements)
             1: This is the alt mode, returns a range of indices from the refined dataset (after refinement, for analysis)
         '''
+        # First, figure out what the actual t0 time is: {{{
+        md_keys = list(metadata_data.keys()) # These are the timecodes pulled from the filenames
+        start_time, idx_first_time, md_key_for_zero, md_filename = self._get_first_time(metadata_data, debug)
+        #}}}
+        # Now, we need to check if the order is correct regarding the metadata: {{{   
         fixed_range = []
         negative_times = [] # indices of the patterns we need to reorient. 
-        # Now, we need to check if the order is correct regarding the metadata: {{{  
         for idx, number in enumerate(tmp_rng): 
-            file_time = data_dict_keys[int(number)-1] 
-            md_keys = list(metadata_data.keys()) 
+            file_time = data_dict_keys[int(number)-1]  
             md_entry = metadata_data[file_time] # Get the metadata for the current time
-            start_time = metadata_data[md_keys[0]]['epoch_time'] # This gives us the starting time
+            #start_time = metadata_data[md_keys[0]]['epoch_time'] # This gives us the starting time
             current_epoch_time = md_entry['epoch_time'] # This gives the current epoch time
             time = (current_epoch_time - start_time)/60 # This is in minutes 
             if time <0:
                 negative_times.append(idx)
- 
+
         if negative_times:  
             for idx in negative_times: 
                 if mode == 0:
@@ -751,6 +793,8 @@ class DataCollector:
                 fixed_range = np.linspace(0, len(tmp_rng)-1, len(tmp_rng), dtype=int) # I think this has to start at 1 because we subtract 1 elsewhere.
         
         #}}} 
+        if debug:
+            print(f'Final fixed range: {fixed_range}')
         return fixed_range
     
     #}}} 

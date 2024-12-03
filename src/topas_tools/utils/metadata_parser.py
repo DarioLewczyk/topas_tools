@@ -32,8 +32,8 @@ class MetadataParser:
         md = DataCollector(fileextension=fileextension, metadata_data = self.metadata_data)
         md.scrape_files() # This gives us the yaml files in order in data_dict
         self.metadata = md.file_dict # This is the dictionary with all of the files.
-        self.get_metadata(time_key=time_key, temp_key=temp_key)
-        
+        self.get_metadata(time_key=time_key, temp_key=temp_key) 
+        self._sort_metadata_by_epoch_time() # Sort the metadata 
         #os.chdir(self._data_dir) # Returns us to the original directory.
     #}}}
     # get_metadata: {{{
@@ -87,9 +87,16 @@ class MetadataParser:
                 'detector_z_pos': detector_pos,
                 'pattern_index': i,
                 'filename': filename,
-            }
-            
+            } 
             #}}}
+    #}}}
+    # _sort_metadata_by_epoch_time: {{{
+    def _sort_metadata_by_epoch_time(self,):
+        # sort the metadata dictionary by epoch time: {{{ 
+        sorted_metadata = sorted(self.metadata_data.items(), key = lambda item: item[1]['epoch_time']) 
+        # Convert the sorted list of tuples back to a dictionary 
+        self.metadata_data = {k: v for k,v in sorted_metadata}  
+        #}}}
     #}}}
 #}}}
 
