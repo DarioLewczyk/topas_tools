@@ -629,11 +629,18 @@ class RefinementPlotter(PlottingUtils):
                     for plot_key in entry_keys:
                         try:
                             # This will be done to see if there are any matches to a value that may have a number.
+                            if debug:
+                                print(plot_key)
+                            #numerical_check = re.findall(r'(\w+\d*)*.',plot_key)[0] # This will match to anything that represents a formula.
+                            #if debug:
+                            #    print(f'Numerical Check: {numerical_check}')
+                            #numerical_check = numerical_check.strip(f'{substance}_')
                             
-                            numerical_check = re.findall(r'(\w+\d*)*.',plot_key)[0] # This will match to anything that represents a formula.
-                            numerical_check = numerical_check.strip(f'{substance}_')
-                            if 'b_value' in numerical_check:
+                            #if 'b_value' in numerical_check:
+                            if 'b_value' in plot_key:
                                 numerical_check = 'b_value'
+                            else:
+                                numerical_check = plot_key
                         except:
                             numerical_check = ''
                         if plot_key.lower() in keys or plot_key.strip(f'{substance}_') in keys or numerical_check in keys: # Need to check if the keys we are searching for are present.

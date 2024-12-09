@@ -509,44 +509,30 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             conv_time = time*60**2 # Convert hours to seconds
 
         #}}}
-        closest_pattern_below = 0
-        closest_pattern_above = 0
-        pattern_above_idx = None
-        exact_pattern = None
-        # Go through the patterns and determine if the time given is greater than or less than the recorded time: {{{
+        min_time_diff = float('inf') # Start with an infinite time difference. 
+        closest_pattern = None
+
+        # go through the patterns to find the closest one: {{{
         for i, pattern in enumerate(self.rietveld_data):
-            p_time = self.rietveld_data[pattern]['corrected_time'] # This gives the time for the pattern
-            if p_time < conv_time:
-                closest_pattern_below = pattern
-            elif p_time > conv_time:
-                if not pattern_above_idx:
-                    closest_pattern_above = pattern
-                    pattern_above_idx = i
-            if p_time == conv_time:
-                exact_pattern = pattern
-                break
+            p_time = self.rietveld_data[pattern]['corrected_time']
+            time_diff = abs(p_time - conv_time) # Gives the absolute difference 
+            if time_diff < min_time_diff:
+                min_time_diff = time_diff
+                closest_pattern = pattern
         #}}} 
-        # Check for the exact pattern: {{{
-        if not exact_pattern:
-            if closest_pattern_above - 1 > closest_pattern_below:
-                exact_pattern = closest_pattern_above - 1 # This will be the pattern between 
-            else:
-                exact_pattern = f'Either: {closest_pattern_below} or {closest_pattern_above}'
+        # Create an output printout: {{{
+        if closest_pattern != None:
+            rr_data = self.rietveld_data[closest_pattern]
+            csv_name = rr_data['csv_name']
+            orig_name = rr_data['original_name']
+            p_time = rr_data['corrected_time'] 
+            if units == 'min':
+                p_time = p_time/60
+            if units == 'h':
+                p_time = p_time/(60**2)
+            final_printout = f'{closest_pattern} ({np.around(p_time,2)} {units})\n\t{csv_name}\n\t{orig_name}'
+            print(final_printout)
         #}}}
-        # Create the Output Printout: {{{ 
-        rr_data_below = self.rietveld_data[closest_pattern_below]
-        rr_data_above = self.rietveld_data[closest_pattern_above]
-        below_csv = rr_data_below['csv_name']
-        above_csv = rr_data_above['csv_name']
-        
-        below_orig = rr_data_below['original_name']
-        above_orig = rr_data_above['original_name']
-
-
-        final_printout = f'{exact_pattern}\nPoss Low IDX:\n\t{below_csv}\n\t{below_orig}\nPoss High IDX:\n\t{above_csv}\n\t{above_orig}'
-        #}}}
-        print(final_printout)
-
     #}}}
     # get_pattern_dict: {{{
     def get_pattern_dfs(self,
