@@ -11,6 +11,8 @@ setup(
         'tqdm',
         'plotly',
         'texttable',
+        'numpy',
+
     ],
     entry_points = {
         'console_scripts': [

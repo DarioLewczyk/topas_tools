@@ -200,14 +200,14 @@ class GenericPlotter(UsefulUnicode):
         )
         #}}}
         # Update Layout: {{{
-        if xrange != None:
+        if xrange != None and not y2 and not y3:
             self._fig.update_layout(
                     xaxis = dict(
                         range = xrange, 
                         ticks = ticks,
                     )
             )
-        if yrange != None:
+        if yrange != None and not y2 and not y3:
             self._fig.update_layout(
                     yaxis = dict(
                         range = yrange, 
@@ -234,6 +234,10 @@ class GenericPlotter(UsefulUnicode):
                         ticks = ticks,
                     ),
             )
+            if yrange != None:
+                self._fig.update_layout(
+                    yaxis2 = dict(range=yrange)
+                )
         #}}} 
         # Y3: {{{
         if y3:
@@ -246,6 +250,12 @@ class GenericPlotter(UsefulUnicode):
                         ticks = ticks,
                     )
             )
+            if yrange != None:
+                self._fig.update_layout(
+                    yaxis3 = dict(range=yrange)
+                )
+                        
+                
         #}}}
         #}}}
         if show_figure:
@@ -344,6 +354,36 @@ class GenericPlotter(UsefulUnicode):
                     )
                 #}}}
         #}}}
+    #}}}
+    # customize_axis: {{{
+    def customize_axis(self,fig:go.Figure = None, axis= 'y', scale = 'log', minor_ticks = True, minor_tick_interval = 0.1):
+        '''
+        Customize the axis of a plotly fig.
+
+        PRMS: 
+        - fig: Plotly Figure object
+        - axis: 'x' or 'y' to specify the axis
+        - scale: 'linear' or 'log' to set the axis scale
+        - minor_ticks: Bool to add minor ticks
+        - tick0: Starting point for the ticks
+        - dtick: Interval between ticks
+        '''
+        axis_key = f'{axis}axis'
+        fig.update_layout({
+            axis_key: dict(
+                type = scale, 
+            )
+        })
+        if minor_ticks:
+            fig.update_layout({
+                axis_key: dict(
+                    tickmode = 'linear',
+                    dtick = minor_tick_interval,
+                    showgrid = True,
+                    gridwidth = 0.5,
+                    gridcolor = 'LightGray'
+                )
+            })
     #}}}
 #}}}
 # PlottingUtils: {{{
@@ -566,37 +606,22 @@ class PlottingUtils(GenericPlotter):
     #}}}
     # _get_random_color: {{{
     def _get_random_color(self,):
-        contrasting_colors = [
-                (240,163,255),
-                (0,117,220),
-                (153,63,0),
-                (76,0,92),
-                (25,25,25),
-                (0,92,49),
-                (43,206,72),
-                (255,204,153),
-                (128,128,128),
-                (148,255,181),
-                (143,124,0),
-                (157,204,0),
-                (194,0,136),
-                (0,51,128),
-                (255,164,5),
-                (255,168,187),
-                (66,102,0),
-                (255,0,16),
-                (94,241,242),
-                (0,153,143),
-                (224,255,102),
-                (116,10,255),
-                (153,0,0),
-                (255,255,128),
-                (255,255,0),
-                (255,80,5),
+        high_contrast_colors = [
+            (0, 0, 0),       # Black
+            #(255, 0, 0),     # Red
+            (0, 0, 255),     # Blue
+            (0, 255, 0),     # Green
+            (255, 165, 0),   # Orange
+            (128, 0, 128),   # Purple
+            (255, 20, 147),  # Deep Pink
+            (139, 69, 19),   # Saddle Brown
+            (75, 0, 130),    # Indigo
+            (255, 69, 0)     # Red-Orange
         ]
-        if self.color_index == len(contrasting_colors)-1:
+
+        if self.color_index == len(high_contrast_colors)-1:
             self.color_index = 0 #Reset the color index
-        r,g,b = contrasting_colors[self.color_index]
+        r,g,b = high_contrast_colors[self.color_index]
         color = f'rgb({r},{g},{b})'
         self.color_index+=1 # This is advances through the contrasting colors
         return color

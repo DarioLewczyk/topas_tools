@@ -8,6 +8,7 @@ import re
 import glob
 import numpy as np
 import texttable
+from scipy.optimize import fsolve
 #from PIL import Image
 import fabio
 #}}}
@@ -305,6 +306,8 @@ class Utils:
         
         mode = 0: gives q in angstrom
         mode = 1: gives q in nm
+
+        Can work with either a single value or a list of tth values
         '''
         lambda_nm = lambda_angstrom * 10
 
@@ -314,9 +317,83 @@ class Utils:
         elif mode == 1:
             lam = lambda_nm
         #}}}
-        tth_rad = tth * np.pi / 180
-        q = 4*np.pi/lam * np.sin(tth_rad/2)
-        return q
+        # If a list of TTH values is passed: {{{
+        try:
+            qs = []
+            for tth_val in tth:
+                tth_rad = np.radians(tth_val)
+                q = 4*np.pi/lam * np.sin(tth_rad/2)
+                qs.append(q)
+            return qs
+        #}}} 
+        # If only one value passed: {{{
+        except:
+            tth_rad = np.radians(tth)
+            q = 4*np.pi/lam * np.sin(tth_rad/2)
+            return q
+        #}}}
+    #}}}
+    # convert_to_s: {{{
+    def convert_to_s(self, d): 
+        '''
+        Either do a single conversion of s to d or 
+        do a series of conversions
+        '''
+        s_vals = []
+        # If a list of values passed: {{{
+        try:
+            for dval in d:
+                s_vals.append(1/dval)
+            return s_vals
+        #}}}
+        # If only one passed: {{{
+        except:
+            return 1/d
+        #}}}
+    #}}}
+    # _tof_eqn: {{{
+    def _tof_eqn(self, d, tof, zero, difa, difb, difc):
+        return zero + difc * d + difa * d**2 + difb/d - tof*1000
+    #}}}
+    # calc_d_from_tof: {{{
+    def calc_d_from_tof(self,tof_list:list = None, zero:float = None, difa:float = None, difb:float = None, difc:float = None):
+        '''
+        Uses the calibration parameters obtained from the TOF diffractometer team to calculate the d-spacing of your data.
+        '''
+        ds = []
+        for tof in tof_list:
+            # Initial guess for d
+            d_guess = 0.5
+            #solve for d
+            d = fsolve(self._tof_eqn, d_guess, args = (tof, zero, difa, difb, difc)) # Solve the quadratic function for d
+            ds.append(d)
+        return ds
+    #}}}
+    # calc_tth_from_d: {{{
+    def calc_tth_from_d(self, lam:float = 0.1665, d:float = 0.1):
+        '''
+        Uses Bragg's law to convert from d spacing to 2theta
+        returns in degrees
+        '''
+        return np.degrees(2*np.arcsin(lam/(2*d)))
+    #}}}
+    # calculate_d_from_hklm: {{{
+    def calculate_d_from_miller_indices(self, miller_indices, a, b, c, qa:float = 0, qb:float = 0, qc:float = 0):
+        '''
+        miller_indices: a list of tuples of either: (h,k,l) or (h, k, l, m)
+        This calculates the d-spacing in a general way for either 3D or (3+d)D miller indices
+        if you are doing the (3+d)D case, you MUST ensure that you input your q vector
+        '''
+        ds = []
+        try:
+            for h, k, l, m in miller_indices:
+                d = 1/np.sqrt(((h+qa*m)/a)**2 + ((k +qb*m)/b)**2 + ((l + qc*m)/c)**2)
+                ds.append(d)
+        except:
+            for h, k, l in miller_indices:
+                d = 1/np.sqrt((h/a)**2 + (k/b)**2 + (l/c)**2)
+                ds.append(d)
+        return ds 
     #}}}
 #}}}
 # UsefulUnicode: {{{
@@ -345,6 +422,8 @@ class UsefulUnicode:
         self._degree_symbol = u'\u00b0'
         self._degree_celsius = u'\u2103'
         self._theta = u'\u03b8'
+        self._phi = u'\u1D719'
+        self._lambda = u'\u03BB'
 
         self._sub_a = u'\u2090'
         self._sub_b = u'\u1D47'
@@ -798,5 +877,16 @@ class DataCollector:
         return fixed_range
     
     #}}} 
+#}}}
+# is_number: {{{
+def is_number(v):
+    '''
+    Simply test if something is a number.
+    '''
+    try:
+        float(v)
+        return True
+    except:
+        return False
 #}}}
 

@@ -420,6 +420,10 @@ class RefinementPlotter(PlottingUtils):
         For each of these, we would need to know 
 
         '''
+        if normalized:
+            normalized_label = ' Normalized'
+        else:
+            normalized_label = ''
         if specific_substance != None and type(specific_substance) == str:
             specific_substance = [specific_substance]
         plot_type = plot_type.lower() # This ensures everything is lowercase.
@@ -442,7 +446,7 @@ class RefinementPlotter(PlottingUtils):
             keys = ['scale_factor', 'sf','scale factor'] # These are the variations likely to be used
             yaxis_title = 'Scale Factor'
             title = 'Scale Factor'
-            normalized = True
+            #normalized = True
         #}}}
         # Rwp: {{{
         elif plot_type == 'rwp':
@@ -735,7 +739,7 @@ class RefinementPlotter(PlottingUtils):
                 ticks = ticks,
             ), 
             yaxis = dict(
-                title = yaxis_title,
+                title = f'{yaxis_title}{normalized_label}',
                 ticks = ticks,
             ),
             font = dict(

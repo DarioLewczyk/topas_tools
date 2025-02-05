@@ -10,7 +10,6 @@ src/topas_tools/__init__.py
 src/topas_tools.egg-info/PKG-INFO
 src/topas_tools.egg-info/SOURCES.txt
 src/topas_tools.egg-info/dependency_links.txt
-src/topas_tools.egg-info/entry_points.txt
 src/topas_tools.egg-info/requires.txt
 src/topas_tools.egg-info/top_level.txt
 src/topas_tools/HEXtools/__init__.py
