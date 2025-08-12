@@ -22,7 +22,10 @@ class MetadataParser:
         self, 
         time_key:str = 'time:',
         temp_key:str = 'element_temp',
+        setpoint_key:str = 'setpoint',
+        det_z_key:str = 'Det_1_Z',
         fileextension:str = 'yaml',
+        voltage_key:str = 'Voltage_percent',
         metadata_data:dict = None,
         ):
         if metadata_data == None:
@@ -32,8 +35,9 @@ class MetadataParser:
         md = DataCollector(fileextension=fileextension, metadata_data = self.metadata_data)
         md.scrape_files() # This gives us the yaml files in order in data_dict
         self.metadata = md.file_dict # This is the dictionary with all of the files.
-        self.get_metadata(time_key=time_key, temp_key=temp_key) 
+        self.get_metadata(time_key=time_key, temp_key=temp_key, setpoint_key=setpoint_key, det_z_key=det_z_key, voltage_key=voltage_key) 
         self._sort_metadata_by_epoch_time() # Sort the metadata 
+        self._calculate_time_from_start_of_run() # Get the corrected times.
         #os.chdir(self._data_dir) # Returns us to the original directory.
     #}}}
     # get_metadata: {{{
@@ -66,6 +70,8 @@ class MetadataParser:
                         temp = np.around(float(re.findall(r'\d+\.\d?',line)[0]) - 273.15, 2) #           This gives us the Celsius temperature of the element thermocouple.  
                     if voltage_key in line:
                         voltage = float(re.findall(r'\d+\.\d+',line)[0])
+                    else:
+                        voltage = None
                     if line.startswith(setpoint_key):
                         setpoint = float(re.findall(r'\d+\.\d?', line)[0])
                     if line == f'{det_z_key}:': 
@@ -97,6 +103,23 @@ class MetadataParser:
         # Convert the sorted list of tuples back to a dictionary 
         self.metadata_data = {k: v for k,v in sorted_metadata}  
         #}}}
+    #}}}
+    # _calculate_time_from_start_of_run: {{{
+    def _calculate_time_from_start_of_run(self,):
+        ''' 
+        This function will automatically go through and calculate 
+        the difference in time from the initial time at which the run 
+        was started in seconds. 
+        
+        This time will be recorded as "corrected_time"
+        '''
+        t0 = None # epoch time of first point.
+        for  i, (key, entry) in enumerate(self.metadata_data.items()):
+            epoch_time = entry['epoch_time'] # Current epoch time
+            if t0 == None:
+                t0 = epoch_time
+            present_time_s = epoch_time - t0 # This gives the exact time difference
+            self.metadata_data[key].update({'corrected_time': present_time_s})
     #}}}
 #}}}
 

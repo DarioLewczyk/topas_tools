@@ -342,6 +342,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                 tmp_out = [] 
                 tmp_bkg_xy = [] 
                 #}}}
+                missing_bkg_curves = 0
                 for rng_idx in self.corrected_range:  
                     try: 
                         tmp_csv.append(self.sorted_csvs[rng_idx]) # Adds the correct csv in the correct order
@@ -349,11 +350,13 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                         tmp_xy.append(self.sorted_xy[rng_idx])
                         tmp_out.append(self.sorted_out[rng_idx])
                     except Exception as e: 
-                        print(f'There was a problem with your corrected range index {rng_idx}: {e}')
+                        print(f'There was a problem with your corrected range index {rng_idx}: {e}') 
                     try:
                         tmp_bkg_xy.append(self.sorted_bkg_xy[rng_idx])
                     except:
-                        print('Failed to correct bkg curves!')
+                        missing_bkg_curves += 1 # This counts the background curves
+                if missing_bkg_curves:
+                    print(f'Failed to correct background curves for {missing_bkg_curves} patterns.')
                 self.sorted_csvs = tmp_csv
                 self.sorted_xy = tmp_xy
                 self.sorted_out = tmp_out
@@ -409,7 +412,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             
            
         except:
-            print(f'failed to get all files')
+            print(f'failed to get all files (.CSVs, Phase .XYs, .OUT files)')
         
         
         #}}}
@@ -493,46 +496,81 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
 
     #}}}
     # get_pattern_from_time: {{{
-    def get_pattern_from_time(self, time:float = None, units:str = 'min'):
+    def get_pattern_from_time(
+            self,  
+            time:float = None, 
+            units:str = 'min', 
+            toffset:float = 0, 
+            raw_patterns:bool = False,
+            printout = True
+        ):
         '''
         The purpose of this function is to get the number of the pattern in a time series
         by inputting the time you find from looking at a plot. 
 
         It gives the index of the pattern relative to the number of patterns you refined. 
+
+        toffset: If you have an offset, put it here so that you can correctly retrieve the pattern
+                    youre looking for on the new time scale
+        raw_patterns: Tells the program whether you would like to look at the raw data or not.
+                        Note: If you are using this mode, it will return the key for file_dict and metadata_data
         ''' 
         # Convert time to seconds: {{{
         if units == 's':
-            conv_time = time
+            conv_time = time + toffset
         elif units == 'min':
-            conv_time = time*60 # Convert minutes to seconds
+            conv_time = time*60 + toffset* 60  # Convert minutes to seconds
         elif units == 'h':
-            conv_time = time*60**2 # Convert hours to seconds
-
+            conv_time = time*60**2 + toffset*60**2# Convert hours to seconds 
         #}}}
         min_time_diff = float('inf') # Start with an infinite time difference. 
         closest_pattern = None
 
         # go through the patterns to find the closest one: {{{
-        for i, pattern in enumerate(self.rietveld_data):
-            p_time = self.rietveld_data[pattern]['corrected_time']
-            time_diff = abs(p_time - conv_time) # Gives the absolute difference 
-            if time_diff < min_time_diff:
-                min_time_diff = time_diff
-                closest_pattern = pattern
+        if not raw_patterns:
+            for i, pattern in enumerate(self.rietveld_data):
+                p_time = self.rietveld_data[pattern]['corrected_time']
+                time_diff = abs(p_time - conv_time) # Gives the absolute difference 
+                if time_diff < min_time_diff:
+                    min_time_diff = time_diff
+                    closest_pattern = pattern
+
+            # Create an output printout: {{{
+            if closest_pattern != None:
+                rr_data = self.rietveld_data[closest_pattern]
+                csv_name = rr_data['csv_name']
+                orig_name = rr_data['original_name']
+                p_time = rr_data['corrected_time'] 
+                if units == 'min':
+                    p_time = p_time/60
+                if units == 'h':
+                    p_time = p_time/(60**2)
+                final_printout = f'{closest_pattern} ({np.around(p_time,2)} {units})\n\t{csv_name}\n\t{orig_name}'
+            #}}}
         #}}} 
-        # Create an output printout: {{{
-        if closest_pattern != None:
-            rr_data = self.rietveld_data[closest_pattern]
-            csv_name = rr_data['csv_name']
-            orig_name = rr_data['original_name']
-            p_time = rr_data['corrected_time'] 
-            if units == 'min':
-                p_time = p_time/60
-            if units == 'h':
-                p_time = p_time/(60**2)
-            final_printout = f'{closest_pattern} ({np.around(p_time,2)} {units})\n\t{csv_name}\n\t{orig_name}'
-            print(final_printout)
+        # If using raw patterns: {{{
+        else:
+            for key, entry in self.metadata_data.items():
+                p_time = entry['corrected_time']
+                time_diff = abs(p_time - conv_time) # Gives the abs difference
+                if time_diff < min_time_diff:
+                    min_time_diff = time_diff
+                    closest_pattern = key # If you are using the raw data finder, it will return the key
+            if closest_pattern != None:
+                md_entry = self.metadata_data[closest_pattern]  # This is the entry with parsed MD stuff
+                md_name = md_entry['filename']
+                temp = md_entry['temperature'] # In deg C
+                p_time = md_entry['corrected_time']
+                orig_name = self.file_dict[closest_pattern] # This is the .xy
+                if units == 'min':
+                    p_time = p_time/60
+                if units == 'h':
+                    p_time = p_time/(60**2)
+                final_printout = f'{closest_pattern} ({np.around(p_time,2)} {units})\n\t{md_name}\n\t{orig_name}' 
         #}}}
+        if printout:
+            print(final_printout)
+        return closest_pattern # Output the index
     #}}}
     # get_pattern_dict: {{{
     def get_pattern_dfs(self,

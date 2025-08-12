@@ -79,31 +79,33 @@ class OUT_Parser:
                     skipline = True
                 #}}}
                 # Start by finding a structure: {{{
-                if 'str' in line and not comment_block and not skipline: # Look for the start of a structure object that is not inside of a comment block 
+                bareline = line.strip()
+                if bareline.startswith('str') and not comment_block and not skipline: # Look for the start of a structure object that is not inside of a comment block 
                     if last_phase_type != None:
                         phase_num += 1
                     last_phase_type = 'str'
                     out_phase_dict[phase_num] = {'phase_type': last_phase_type}
                     skipline = True
                  
-                elif 'hkl_Is' in line and not comment_block and not skipline: # Check for the hkl_Is flag for an hkl phase. Also make sure that the phase is not inside of a comment block
+                elif bareline.startswith('hkl_Is') and not comment_block and not skipline: # Check for the hkl_Is flag for an hkl phase. Also make sure that the phase is not inside of a comment block
                     if last_phase_type != None:
                         phase_num += 1
                     last_phase_type = 'hkl_Is'
                     out_phase_dict[phase_num] = {'phase_type': last_phase_type}
                     skipline = True
-                elif 'xo_Is' in line and not comment_block and not skipline: # Check for the xo_Is flag for peaks phases. 
+                elif bareline.startswith('xo_Is') and not comment_block and not skipline: # Check for the xo_Is flag for peaks phases. 
                     if last_phase_type != None:
                         phase_num += 1
                     last_phase_type = 'xo_Is'
                     out_phase_dict[phase_num] = {'phase_type': last_phase_type}
                     skipline = True
-                elif 'C_matrix_normalized' in line or 'out' in line:
+                elif bareline.startswith('C_matrix_normalized') or 'out' in line:
                     end_of_out = True # This stops recording
                  
                 #}}}
                 # Add the phase data: {{{
                 if not comment_block and last_phase_type != None and not end_of_out and not skipline: # This will record values ONLY if we have not reached the C_matrix, are not in a comment block, or are inside of a phase.
+                    
                     ints,floats,words = self._get_ints_floats_words(line) # This is used a lot, so let's just use it here. 
                     # Phase Name: {{{
                     if 'phase_name' in line:
@@ -168,11 +170,12 @@ class OUT_Parser:
                     #}}}
                     # Get lattice parameters if not in a macro: {{{
                         
-                    elif re.findall(r'^\s+a|^\s+b|^\s+c|^\s+al|^\s+be|^\s+ga',line):
+                    elif re.findall(r'^\s*a\b|^\s*b\b|^\s*c\b|^\s*al\b|^\s*be\b|^\s*ga\b',line):
                         try:
                             words = re.findall(r'a|b|c|al|be|ga',line)
                             out_phase_dict[phase_num][words[0]] = float(floats[0])
                         except:
+                            print(f'{i}: {line}')
                             print(f'Failed at getting {words} to have a value! for {phase}')
                     #}}}
                     # MVW: {{{
@@ -188,6 +191,23 @@ class OUT_Parser:
                             out_phase_dict[phase_num].update({macro_var:rec}) # This records the macro value
 
                     #}}}
+                    # Getting Peter's strain correction (lorentzian): {{{  
+                    elif 'strain_isoL' in line:  
+                        ints, floats, words = self._get_ints_floats_words(line)
+                        if floats:
+                            rec = float(floats[0]) # This is the calculated value
+                            #rec_err = float(floats[1]) # This should be the error
+                        out_phase_dict[phase_num].update({'strain_isoL':rec})
+                    #}}}
+                    # Getting Peter's strain correction (gaussian): {{{ 
+                    elif 'strain_isoG' in line: 
+                        ints, floats, words = self._get_ints_floats_words(line)
+                        if floats:
+                            rec = float(floats[0]) # This is the calculated value
+                            #rec_err = float(floats[1]) # This should be the error
+                        out_phase_dict[phase_num].update({'strain_isoG':rec})
+                    #}}}
+
                     # Get the cell mass: {{{
                     elif 'cell_mass' in line: 
                         out_phase_dict[phase_num]['cell_mass'] = float(floats[0])

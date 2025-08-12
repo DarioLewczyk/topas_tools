@@ -406,7 +406,7 @@ class DiffracGeometry(DiffracGeometryInterface):
         return distance_offset
     #}}}
     # move_detector_by_angle: {{{
-    def move_detector_by_angle(self, v1=None, angle, axis = 'x',update_prms:bool = False):
+    def move_detector_by_angle(self, v1=None, angle:float = 0, axis = 'x',update_prms:bool = False):
         '''
         This uses a vector (the unmodified detector position) and an angle to 
         determine the new vector that defines the top of the detector after some rotation

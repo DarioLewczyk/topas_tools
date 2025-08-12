@@ -80,6 +80,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             time_error:float = 1.1, 
             on_sf_value:float = 1.0e-5, 
             check_order:bool = False,
+            snr_threshold:float = 2.0,
             **kwargs
         ):
         '''
@@ -101,6 +102,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             14. time_error: if "on_method" is time, how much ±?    
             15. on_sf_value: SF Value(s) for when a phase is enabled.     
             16. check_order: If time recording gets messed up, this will ensure order is set properly
+            17. snr_threshold: If you want to filter data that are possible of bad quality use this. Generally a good value is 2. 
         NOTE: both on and off methods can be lists because some phases you may want to treat
         in different ways.
 
@@ -242,8 +244,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         Since we don't need to pair the data with the metadata, we should be able to simply reverse the order of the range. 
         ''' 
         
-        rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine. 
-        
+        rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine.  
+
         for index,number in enumerate(rng):     
             file_time = data_dict_keys[number-1]
             xy_filename = data.file_dict[file_time]
@@ -294,43 +296,53 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             with open('Dummy.inp','w') as dummy:
                 for line in template:
                     dummy.write(line) 
-            self.refine_pattern('Dummy.inp') # Run the actual refinement
-            # Monitor Refinement Parameters: {{{
-            '''
-            If you want to monitor scale factor values, it MUST
-            happen before the Dummy file is copied to a new file. 
-
-            Likewise, if you want a phase to be added...
-
-            Both will be handled with the same function.
-            '''
-            out = 'Dummy.out' # This is the name of the file we are looking for.
-            if phases_to_disable != None or phases_to_enable != None:   
-                self._modify_out_for_monitoring(
-                        out=out, 
-                        on_phases=phases_to_enable,
-                        off_phases=phases_to_disable,
-                        threshold_for_on=threshold_for_on,
-                        threshold_for_off=threshold_for_off,
-                        current_idx=index,
-                        off_sf_value=off_sf_value,
-                        on_sf_value=on_sf_value,
-                        on_method = on_method, # This is to tell if we are working with times or not
-                        off_method = off_method, # This tells whether to look for times of scale factors
-                        current_time = time, # This is either a time or None
-                        debug=debug,
-                        time_error=time_error, # This is the +/- the time can be off to trigger the turning on of a phase.
-                    )
-
-                
-            #}}}
-            copyfile(out,f'{output}.out')
-            template = [line for line in open(out)] # Make the new template the output of the last refinement. 
-            #}}}
-            # Get the single phase patterns: {{{ 
-            if get_individual_phases:
-                self._calculate_phase_from_out(out = f'{output}.out',subtract_bkg=subtract_bkg)
-            #}}}
+            # Check the quality of the diffraction pattern first: {{{
+            skip_refinement = False
+            if snr_threshold != None:
+                xdat, ydat = self._load_raw_xy(xy_filename, data_dir) # This gets you the pattern data and also returns you to the same directory
+                snr = self.calculate_snr(ydat)
+                if snr > snr_threshold:
+                    print(f'Your SNR threshold of: {snr_threshold} triggered to prevent \npattern: "{xy_filename}" from being refined')
+                    skip_refinement = True 
+            #}}} 
+            if not skip_refinement:
+                self.refine_pattern('Dummy.inp') # Run the actual refinement
+                # Monitor Refinement Parameters: {{{
+                '''
+                If you want to monitor scale factor values, it MUST
+                happen before the Dummy file is copied to a new file. 
+    
+                Likewise, if you want a phase to be added...
+    
+                Both will be handled with the same function.
+                '''
+                out = 'Dummy.out' # This is the name of the file we are looking for.
+                if phases_to_disable != None or phases_to_enable != None:   
+                    self._modify_out_for_monitoring(
+                            out=out, 
+                            on_phases=phases_to_enable,
+                            off_phases=phases_to_disable,
+                            threshold_for_on=threshold_for_on,
+                            threshold_for_off=threshold_for_off,
+                            current_idx=index,
+                            off_sf_value=off_sf_value,
+                            on_sf_value=on_sf_value,
+                            on_method = on_method, # This is to tell if we are working with times or not
+                            off_method = off_method, # This tells whether to look for times of scale factors
+                            current_time = time, # This is either a time or None
+                            debug=debug,
+                            time_error=time_error, # This is the +/- the time can be off to trigger the turning on of a phase.
+                        )
+    
+                 
+                #}}}
+                copyfile(out,f'{output}.out')
+                template = [line for line in open(out)] # Make the new template the output of the last refinement. 
+                #}}}
+                # Get the single phase patterns: {{{ 
+                if get_individual_phases:
+                    self._calculate_phase_from_out(out = f'{output}.out',subtract_bkg=subtract_bkg)
+                #}}}
         #}}}
     #}}}
     # _get_line_info: {{{

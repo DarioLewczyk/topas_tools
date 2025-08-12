@@ -51,8 +51,8 @@ def make_hovertemplate(xs, ys, yerrs, hs, ks, ls,  labels = ['s (nm^-1)', 'IZTF 
     return hts
 #}}}
 # go_to_dir_and_get_xy: {{{
-def go_to_dir_and_get_xy(base_folder, subfolder_idx):
-    go_to_dir(base_folder, subfolder_idx)
+def go_to_dir_and_get_xy(base_folder, subfolder_idx, subfolders:list = ['IPS', 'xPS', 'xPx', 'IPx']):
+    go_to_dir(base_folder, subfolder_idx, subfolders)
     xy_file = glob('*.xy')[0] # Get the xy file
     return parse_xy(xy_file)
 #}}}
@@ -241,8 +241,64 @@ def get_datasets(profile_data:dict = None, colors:list = ['blue'],
         })
     return datasets
 #}}}
+# calculate_size_error: {{{
+def calculate_size_error(size_arr, beta_size, beta_err):
+    '''
+    Since the size error is not as simple as rescaling 
+    or copy/pasting, here is a function
+    to get the error associated with a IB -> size conversion
+
+    Takes: 
+        array of sizes (in units of nm)
+        array of beta_size (strain corrected IB in s (nm^-1))
+        array of beta errors (units of s (nm^-1))
+    '''
+    size_err = np.array(size_arr) - 1/(np.array(beta_size) + np.array(beta_err))  # Calculate the size error in appropriate units
+    return size_err
+#}}}
+# calculate_size: {{{ 
+def calculate_size(s_arr, beta_arr, beta_err, epsilon, scale_factor = None, mode:int = 0):
+    ''' 
+    This function uses 3 arrays (s, beta, and beta_error) along with an epsilon (strain)
+    and optional scaling factor to convert IB data to size data
+
+    mode: 0 = returns the strain corrected IBs (beta_size)
+    mode: 1 = returns the hkl-dependent MCL sizes
+
+    returns: (array, error_array)
+    '''
+    s_arr = np.array(s_arr)
+    beta_arr = np.array(beta_arr)
+    beta_err = np.array(beta_err)
+
+    # Calculations for Beta_size: {{{
+    unscaled_beta_size_arr = (beta_arr - epsilon * s_arr) 
+    if not isinstance(scale_factor,type(None)):
+        scaled_beta_size_arr = (beta_arr - epsilon * s_arr) * scale_factor
+        scaled_beta_err = beta_err * scale_factor # Error is just a rescaling
+        if mode == 0:
+            return (scaled_beta_size_arr, scaled_beta_err) 
+    if mode == 0: 
+        # This means that we would then just return the unscaled beta sizes
+        return(unscaled_beta_size_arr, beta_err)
+    #}}}
+    # Size Calculations: {{{
+    if mode == 1:
+        unscaled_size = 1/unscaled_beta_size_arr # The size is just the inversion of the IB in s
+        unscaled_size_err = calculate_size_error(unscaled_size, unscaled_beta_size_arr, beta_err) # This gives us the correct strain
+        if not isinstance(scale_factor, type(None)):
+            scaled_size = unscaled_size * scale_factor
+            scaled_size_err = unscaled_size_err * scale_factor
+            return (scaled_size, scaled_size_err)
+        return (unscaled_size, unscaled_size_err)
+
+    #}}} 
+        
+#}}}
 # get_size_dataset: {{{
-def get_size_dataset(datasets:list = None, params:list = None, unscaled_idx:int = 1, mode:int = 0, apply_scale:bool = True):
+def get_size_dataset(datasets:list = None, params:list = None, unscaled_idx:int = 1, 
+        guess_for_unscaled_beta:float = None,
+        mode:int = 0, apply_scale:bool = True):
     ''' 
     This takes datasets and will automatically size correct them 
 
@@ -257,12 +313,13 @@ def get_size_dataset(datasets:list = None, params:list = None, unscaled_idx:int 
         epsilons = params[0]
         scale_factors = params[1:]
     else:
-        epsilons = params[:num_datasets] # The first half are epsilons
-        scale_factors = params[num_datasets:] # The second half are scale factors
+        epsilons = params[:num_datasets-1] # The first half are epsilons
+        scale_factors = params[num_datasets-1:] # The second half are scale factors
     #}}}
     size_datasets = []
     # Generate new datasets: {{{
     for i, dataset in enumerate(datasets): 
+        # Get the prms: {{{
         s = dataset['x']
         b = dataset['y']
         berr = dataset['yerr']
@@ -272,30 +329,34 @@ def get_size_dataset(datasets:list = None, params:list = None, unscaled_idx:int 
         h = dataset['H']
         k = dataset['K']
         l = dataset['L']
-        # epsilon: {{{
-        try:
-            epsilon = epsilons[i]
-        except:
-            epsilon = epsilons
         #}}}
         # scale factor: {{{
         if i < unscaled_idx:
+            try:
+                epsilon = epsilons[i]
+            except:
+                epsilon = epsilons
             scale_factor = scale_factors[i]
         elif i > unscaled_idx:
+            try:
+                epsilon = epsilons[i-1]
+            except:
+                epsilon = epsilons
             scale_factor = scale_factors[i-1]
         else:
+            if guess_for_unscaled_beta:
+                epsilon = guess_for_unscaled_beta
+            else:
+                epsilon = epsilons
             scale_factor = 1
 
         #}}}
         if apply_scale:
-            sc_ib = scale_factor * (b - epsilon * s)# Calculate the strain corrected IB
-            sc_ib_err = berr * scale_factor # Scale the error appropriately
+            sc_ib, sc_ib_err = calculate_size(s, b, berr, epsilon, scale_factor,mode) # This gives the associated Beta_size array
         else:
-            sc_ib = b - epsilon * s # This is the unscaled Strain corrected IB
-            sc_ib_err = berr
+            sc_ib, sc_ib_err = calculate_size(s, b, berr, epsilon, mode=mode) # This gives unscaled Beta_size arrays
         if mode == 1:
-            size = 1/sc_ib
-            size_err = size - 1/(sc_ib + berr)  # Calculate the size error in appropriate units
+            size, size_err = calculate_size(s,b, berr, epsilon, mode=mode)
             recorded_y = size
             recorded_yerr = size_err
             label = 'Size (nm)'
@@ -371,13 +432,146 @@ def subtract_datasets(datasets1, datasets2, tolerance):
     return result       
         
 #}}}
+# get_profile_output: {{{
+def get_profile_output(
+        profile_data:dict = None, 
+        filter_key:str = None, 
+        epsilon = None, 
+        scale_factors:list = None, 
+        unscaled_idx:int = 1,
+        compositions:list = [80, 70, 50, 30],
+        ):
+    ''' 
+    Function purpose: 
+        Return a dataset for a given set of data (e.g. 600 mm S2D with compositions 80%, 70%, 50%, 30%) where relevant data to 
+        the composition is stored as well as relevant data to the distance is stored.
+    Contains entries: 
+    {distance}
+        {composition}
+            1) s_nm # 1/d in nm
+            2) I_scale # Intensity scaling
+            3) I_scale_e # error in intensity scaling
+            4) beta_total # IZTF_IBs
+            5) beta_total_e # IZTF_IBs_e (error in the IB)
+            6) beta_size # Strain-corrected IZTF_IBs
+            7) beta_size_e # Strain-corrected IZTF_IBs_e (error in beta_size)
+            8) size_mcl # This is the set of hkl-dependent MCLs
+            9) size_mcl_e # This is the set of hkl-dependent MCLs errors
+            10) hkl_label # This is the set of hkl labels for the reflections 
+            11) avg_mcl_size # This is a single value representing the average MCL for the composition
+            12) avg_mcl_size_e # This is the average error associated with the avg MCL
+            13) beta_size_scaled # SC IZTF_IBs with scale factor
+            14) beta_size_scaled_e # SC IZTF_IBs_e with scale factor
+        ...
+        compositions: # This is a list of the compositions (numerical)
+        avg_mcl_sizes: # This is a list of the average MCL sizes for all the compositions
+        avg_mcl_sizes_e # This is a list of all the average MCL size errors for all the compositions
+
+    The output here will allow for figures to be made easily in an outside program like IGOR.
+
+    Inputs: 
+        1) profile_data: profile_data made by the code
+        2) filter_key: optional key if using filtered profile_data
+        3) epsilon: refined epsilon value(s) for your data
+        4) scale_factors: scale factors for your data
+        5) unscaled_idx: The index of your data that is not affected by a scale factor (it was the reference during fitting)
+        6) compositions: A list of composition numbers e.g. [80, 70, 50, 30]
+    '''
+    profile_output = {} # This is the profile output
+    avg_mcl_sizes = []
+    avg_mcl_sizes_e = []
+
+    if filter_key:
+        profile_data = profile_data[filter_key]
+    # Loop through the profile data: {{{
+    for i, (key, entry) in enumerate(profile_data.items()):
+        if 'filtered' in key:
+            break # Skip these entries if they exist
+        # Make the entry label for the output: {{{
+        try:
+            comp_label = f'{key}_{filter_key}'
+        except:
+            comp_label = key
+        #}}}  
+        # gather the profile data we need: {{{
+        s = entry['s_nm']
+        b = entry['IZTF_IBs'] # beta (IB, size + strain)
+        berr = entry['IZTF_IBs_e'] # beta error
+        hkl = entry['hkl']
+        i_scale = entry['I_scale']
+        i_scale_err = entry['I_scale_e']
+        #}}}
+        # get curr_epsilon : {{{
+        try:
+            curr_epsilon = epsilon[i] 
+        except:
+            curr_epsilon = epsilon
+        #}}}
+        # get curr_sf: {{{
+        if type(scale_factors) != type(None):
+            if i < unscaled_idx:
+                curr_sf = scale_factors[i] # There is no modification to the index necessary
+            elif i > unscaled_idx:
+                curr_sf = scale_factors[i-1] # We now need to subtract one from the index to be on the correct scale factor
+            else:
+                curr_sf = 1 # We just set the SF to one since we skipped this one from scaling.
+
+            scaled_beta_size, scaled_beta_size_e = calculate_size(s, b, berr, curr_epsilon, curr_sf, mode=0) # Returns scaled beta size
+        else:
+            scaled_beta_size, scaled_beta_size_e = (None,None)
+        #}}}
+        # Calculate the Beta_size (unscaled): {{{
+        unscaled_beta_size, unscaled_beta_size_e = calculate_size(s, b, berr, curr_epsilon, mode=0) # Returns unscaled beta size
+        #}}}
+        # Calculate the MCL sizes: {{{
+        mcl_size, mcl_size_e = calculate_size(s, b, berr, curr_epsilon, mode = 1) # Returns the MCLs for each hkl along with their errors
+        #}}}
+        # Calculate the average MCL and MCL error: {{{
+        avg_mcl = np.average(mcl_size)
+        avg_mcl_e = np.average(mcl_size_e)
+
+        avg_mcl_sizes.append(avg_mcl)
+        avg_mcl_sizes_e.append(avg_mcl_e)
+        #}}}
+        # Update the output dictionary entry: {{{
+        profile_output[comp_label] = {
+            's_nm': s,# 1/d in nm
+            'i_scale': i_scale, # Intensity scaling
+            'i_scale_e': i_scale_err, # Error in intensity scaling
+            'beta_total': b,# IZTF_IBs
+            'beta_total_e':berr,# IZTF_IBs_e (error in the IB)
+            'beta_size': unscaled_beta_size, # Strain-corrected IZTF_IBs
+            'beta_size_e': unscaled_beta_size_e, # Strain-corrected IZTF_IBs_e (error in beta_size)
+            'size_mcl': mcl_size,# This is the set of hkl-dependent MCLs
+            'size_mcl_e': mcl_size_e,# This is the set of hkl-dependent MCLs errors
+            'hkl_label':hkl,# This is the set of hkl labels for the reflections 
+            'avg_mcl_size': avg_mcl,# This is a single value representing the average MCL for the composition
+            'avg_mcl_size_e': avg_mcl_e,# This is the average error associated with the avg MCL
+        } 
+        if type(scaled_beta_size) != type(None):
+            profile_output[comp_label].update({
+                'beta_size_scaled':scaled_beta_size, # SC IZTF_IBs with scale factor
+                'beta_size_scaled_e':scaled_beta_size_e,# SC IZTF_IBs_e with scale factor
+            })
+        #}}}
+    #}}}
+    # Finally, add the list of avg MCLs and compositions: {{{
+    profile_output.update({
+        'compositions': compositions,
+        'avg_mcl_sizes': avg_mcl_sizes,
+        'avg_mcl_sizes_e': avg_mcl_sizes_e,
+    })
+    #}}}
+    return profile_output
+#}}}
 #}}}
 # Optimization Functions: {{{
 # williamson_hall_optimization:{{{ 
 def williamson_hall_optimization(
         params:list = None, 
         datasets:list = None,
-        unscaled_idx:int = 1, 
+        unscaled_idx:int = 1,  
+        guess_for_unscaled_beta:float = None,
         **kwargs   
     ):
     ''' 
@@ -406,38 +600,40 @@ def williamson_hall_optimization(
     #}}}
     # Objective function: {{{
     def objective(params):
-        num_datasets = len(datasets)
+        num_datasets = len(datasets) -1
         num_prms = len(params) # If we know how many parameters are passed, we can deduce intent (single epsilon or one for each dataset)
         # Single epsilon case: {{{
-        if num_prms == num_datasets:
+        if num_prms == num_datasets+1:
             epsilons = params[0] # A single epsilon
             scale_factors = params[1:]
         #}}}
         # Multiple epsilon case: {{{
-        elif num_prms == (2* num_datasets) - 1:
-            epsilons = params[:num_datasets] # a list of epsilons for each dataset
-            scale_factors = params[num_datasets:] # list of scale factors 
-        #}}}
+        elif num_prms == 2*(num_datasets+1) - 2:
+            epsilons = params[:num_datasets] # a list of epsilons for each dataset should be 1 less than all datasets
+            scale_factors = params[num_datasets:] # list of scale factors  should be 1 less than all datasets
+        #}}} 
         # fail case: {{{
         else:
             raise ValueError(f'You gave the wrong number of parameters for {num_datasets} datasets')
-        #}}} 
+        #}}}  
         sizes = []
         # Calculate sizes: {{{
         for i, dataset in enumerate(datasets):
             s = dataset['x']
             b = dataset['y']
-            # choose epsilon: {{{
-            try:
-                epsilon = epsilons[i]
-            except:
-                epsilon = epsilons
-            #}}}
             # choose scale factor: {{{
             if i < unscaled_idx:
+                try:
+                    epsilon = epsilons[i]
+                except:
+                    epsilon = epsilons
                 # In this case, we can just use the i'th scale factor
                 scale_factor = scale_factors[i]
             elif i > unscaled_idx:
+                try:
+                    epsilon = epsilons[i-1]
+                except:
+                    epsilon = epsilons
                 # If this is the case, we have already passed the idx to skip
                 scale_factor = scale_factors[i - 1] 
             #}}} 
@@ -445,7 +641,11 @@ def williamson_hall_optimization(
             if i != unscaled_idx:
                 size = scale_factor * (b - epsilon * s)  # Since the scale factor that is 1 isnt refined it's okay to write like this
             else:
-                size = (b-epsilon * s)
+                #size = (b-epsilon * s)
+                if guess_for_unscaled_beta:
+                    size = (b - guess_for_unscaled_beta * s)
+                else:
+                    size = (b - epsilon * s) # Dont refine the unscaled beta
             #}}}
             sizes.append(size)
         #}}}
@@ -467,7 +667,7 @@ def williamson_hall_optimization(
                 rmse = np.sqrt(np.mean(((size - avg_size)/ (berr * scale_factor))**2)) 
             else:
                 rmse = np.sqrt(np.mean(((size - avg_size)/ berr)**2)) 
-            rmses.append(rmse)
+            rmses.append(rmse) 
         #}}}
         return sum(rmses)
     #}}}
@@ -475,11 +675,11 @@ def williamson_hall_optimization(
     plot_datasets_with_error(datasets, legend_x=legend_x, legend_y=legend_y, yaxis_range=yaxis_range) # This just plots the raw data
     result = minimize(objective, params)
     # plot the result of fitting: {{{
-    size_dataset = get_size_dataset(datasets, result.x, unscaled_idx)
+    size_dataset = get_size_dataset(datasets, result.x, unscaled_idx, guess_for_unscaled_beta)
     plot_datasets_with_error(size_dataset, title_text='Strain corrected IBs', yaxis_title='IZF IB (s, nm)', legend_x = legend_x, legend_y = legend_y, yaxis_range=yaxis_range)
     #}}}
     print(result)
-    print(f'Final error: {result.fun}')
+    print(f'Final error: {result.fun}') 
     return result.x
 
 #}}}
@@ -707,5 +907,69 @@ def write_profile_data_to_excel(
             df.to_excel(writer, sheet_name = identifiers[i], index = False)
     os.chdir(home)
     print(f'Wrote {excel_file} to:\n{output_dir}')
+#}}}
+# write_output_data_to_excel: {{{
+def write_output_data_to_excel(
+        all_output_pd:list = None,
+        all_epsilons:list = None,
+        capillaries:list = ['kapton', 'glass'],
+        distances:list = [220, 600, 900, 1200],
+        excel_dir:str = os.getcwd(),
+    ):
+    ''' 
+    This function allows you to quickly output large amounts of data to excel
+    using the "profile_output" dictionary created by this code in a sequential fashion. 
+
+    all_output_pd: list of profile_output dictionaries
+    all_epsilons: list of the epsilon values you want to use in order
+    capillaries: list of the unique capillary types in your output. Must be in order of the repeat.
+        ex: capillaries = ["kapton", "glass"]
+        data: [220_kap, 220_glass, 500_kap, 500_glass]
+    distances: list of distances as above
+    '''
+    if not os.path.exists(excel_dir):
+        os.mkdir(excel_dir)
+    # Loop through each profile_output: {{{
+    for i, pd_out in enumerate(all_output_pd):
+        # Make useful string arguments: {{{
+        if len(capillaries) == 2:
+            curr_capillary = capillaries[i%2]
+            dist_idx = (i//2)%len(distances)
+            curr_dist = distances[dist_idx]
+        else:
+            curr_capillary = capillaries[0]
+            curr_dist = distances[i]
+        curr_epsilon = all_epsilons[i]
+        curr_epsilon = str(np.format_float_scientific(curr_epsilon,2)).replace('.','p')
+        excel_file = f'{curr_capillary}_{curr_dist}mm_eps_{curr_epsilon}.xlsx'
+
+
+        cap_letter_id = curr_capillary[0] # Gives either a k or a g for labeling
+        dist_id = f'{curr_dist}{cap_letter_id}'
+        #}}} 
+        dfs = []
+        special_entries = ['compositions', 'avg_mcl_sizes', 'avg_mcl_sizes_e'] # These are specifically defined in the profile_output
+        # Loop through the dictionary: {{{
+        for comp, pd_entry in pd_out.items():
+            if comp not in special_entries:
+                key_prefix = f'{dist_id}_{comp}'
+                new_keys = []
+                keys = list(pd_entry.keys())
+                for key in keys: 
+                    new_keys.append(f'{key_prefix}_{key}_eps_{curr_epsilon}')
+                updated_entry = {new_keys[i]:value for i, (key, value) in enumerate(pd_entry.items())}
+                df = pd.DataFrame(updated_entry)
+                dfs.append(df)
+        
+        df = pd.DataFrame([pd_out[special_entries[0]], pd_out[special_entries[1]], pd_out[special_entries[2]]], index=[f'{dist_id}_{df_lbl}' for df_lbl in special_entries]).T
+        dfs.append(df)
+        #}}} 
+        # Now we want to write the file
+        with pd.ExcelWriter(os.path.join(excel_dir,excel_file)) as writer:
+            start_col = 0
+            for df in dfs:
+                df.to_excel(writer, sheet_name=dist_id, startcol=start_col, index=False)
+                start_col+=len(df.T)
+    #}}}
 #}}}
 #}}}

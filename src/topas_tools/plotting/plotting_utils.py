@@ -385,6 +385,123 @@ class GenericPlotter(UsefulUnicode):
                 )
             })
     #}}}
+    # plot_waterfall: {{{ 
+    def plot_waterfall(self, 
+            tth_arr = None, 
+            time_arr = None, 
+            i_arr = None, 
+            min_on_zmax = 1000, # This sets the minimum value you would like the colorscale to max out on. 
+            min_on_zmin = -1000, # This sets the max value you would like on the colorscale min
+            num_max_buttons = 5,
+            num_min_buttons = 5,
+            **kwargs
+        ):
+        '''
+        This will plot a waterfall plot 
+        You can change up the z scaling with buttons 
+
+        If you would like to adjust parameters for fitting, you can do so using kwargs: 
+
+            button_layer_1_height
+            button_layer_2_height
+            colorscale
+            height
+            width
+            title
+            time_units
+            hovertemplate
+        '''
+        # Set the attributes to plot: {{{
+        if type(tth_arr) != type(None):
+            self.tth_arr = tth_arr
+            self.time_arr = time_arr
+            self.i_arr = i_arr 
+            self.max_i = max([max(i) for i in self.i_arr])
+        #}}}
+        # kwargs: {{{
+        button_layer_1_height = kwargs.get('button_layer_1_height', 1.17)
+        button_layer_2_height = kwargs.get('button_layer_2_height', 1.1)
+        colorscale = kwargs.get('colorscale', 'viridis')
+        height = kwargs.get('height', 800)
+        width = kwargs.get('width', 1000)
+        title_text = kwargs.get('title', 'Waterfall Plot')
+        self.time_units = kwargs.get('time_units', self.time_units)
+        hovertemplate = kwargs.get('hovertemplate', f'2{self._theta}{self._degree}:'+'%{x}<br>Time/'+f'{self.time_units}: '+'%{y} <br>Intensity: %{z}')
+        #}}}
+        # Set up the min and max ranges for buttons: {{{
+        min_steps = (0 - min_on_zmin)/(num_min_buttons -1)
+        max_steps = (self.max_i - min_on_zmax)/ (num_max_buttons-1)
+ 
+        zmin_arange = np.arange(min_on_zmin, 0+min_steps,min_steps)
+        zmax_arange = np.arange(min_on_zmax, self.max_i+max_steps, max_steps)
+        #}}}
+
+        self.fig = go.Figure()
+        self.fig.add_heatmap(
+            x = self.tth_arr,
+            y = self.time_arr,
+            z = self.i_arr,
+            hovertemplate = hovertemplate,
+            colorscale = colorscale,
+        )
+        # Create the min buttons: {{{
+        zmin_buttons = [
+            dict(
+                label = f'I_min: {np.around(v,2)}',
+                method = 'restyle',
+                args = [
+                    {'zmin': v},
+                ]
+            )for v in zmin_arange
+        ]
+        #}}}
+        # Create the max buttons: {{{
+        zmax_buttons = [
+            dict(
+                label = f'I_max: {np.around(v,2)}',
+                method = 'restyle',
+                args = [
+                    {'zmax':v},
+                ]
+            )for v in zmax_arange
+        ]
+        #}}}
+        # Update the layout: {{{
+        self.fig.update_layout( 
+            height = height,
+            width = width,
+            margin = dict(t=200,b=0,l=0,r=0),
+            autosize = False,
+            title_text = title_text,
+            xaxis_title = f'2{self._theta}{self._degree}',
+            yaxis_title = f'Time/{self.time_units}',
+            updatemenus = [
+                dict(
+                    buttons = zmax_buttons,
+                    yanchor = 'top',
+                    type = 'buttons',
+                    y = button_layer_1_height,
+                    x = 0,
+                    xanchor = 'left',
+                    pad = {'r':10, 't':10},
+                    direction = 'right',
+                ),
+                dict(
+                    buttons = zmin_buttons,
+                    yanchor = 'top',
+                    type = 'buttons',
+                    y = button_layer_2_height,
+                    x=0,
+                    xanchor = 'left',
+                    pad = {'r':10,'t': 10},
+                    direction = 'right',
+                )
+            ],
+
+        )
+        #}}}
+        self.fig.show()
+    #}}} 
 #}}}
 # PlottingUtils: {{{
 class PlottingUtils(GenericPlotter):

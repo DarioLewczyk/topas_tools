@@ -4,6 +4,7 @@
 #}}}
 # Imports: {{{
 import copy
+import os
 import numpy as np
 import plotly.graph_objects as go
 import re
@@ -354,6 +355,153 @@ class RefinementPlotter(PlottingUtils):
             return(tth,yobs, ycalc, ydiff, hovertemplate, title_text, xaxis_title, yaxis_title)
         #}}}
     #}}}
+    # plot_raw_pattern: {{{
+    def plot_raw_pattern(self, 
+            idx:int = None, 
+            time:float = None, 
+            time_units:str = 'min',
+            skiprows:int = 1,
+            **kwargs
+        ):
+        ''' 
+        This function allows you to quickly plot a pattern from your data directory
+        Does not require you to have first gone through and done refinement. 
+
+        Allows you to quickly pull up a pattern by giving the time at which the pattern shows up or giving an index. 
+        ''' 
+        orig_dir = os.getcwd()
+        os.chdir(self.data_dir)
+        # assign variables from kwargs: {{{
+        # default kwargs: {{{
+        self._default_kwargs = {
+            'template' : 'simple_white',
+            'tth_range' : None,
+            'yrange' :None,
+            'height':800,
+            'width':1000,
+            'show_legend':True,
+            'legend_x':None,
+            'legend_y':None,
+            'legend_xanchor':None,
+            'legend_yanchor':None,
+            'font_size':20,
+            'button_xanchor':'right',
+            'button_yanchor':'top',
+            'button_x':1.45,
+            'button_y':1.05,
+            'showgrid':False,
+            'dtick':1,
+            'ticks':'inside',
+            'phase_colors': None,
+        }
+        #}}}  
+        # Apply any kwarg updates: {{{
+        alternates = {
+            'tth_range': ['tth_range', 'xrange', 'x_range'], 
+            'yrange': ['yrange', 'y_range'], 
+            'phase_colors': ['colors', 'phase_colors']
+        }
+        Utils._update_default_kwargs(self, 
+            kwargs=kwargs,
+            alternates=alternates,
+        )
+        #}}}
+        # Set variables from the dictionary: {{{
+        template = Utils._get_kwarg(self,'template')
+        tth_range = Utils._get_kwarg(self,'tth_range')
+        yrange = Utils._get_kwarg(self,'yrange')
+        height = Utils._get_kwarg(self,'height')
+        width = Utils._get_kwarg(self,'width')
+        show_legend = Utils._get_kwarg(self,'show_legend')
+        legend_x = Utils._get_kwarg(self,'legend_x')
+        legend_y = Utils._get_kwarg(self,'legend_y')
+        legend_xanchor = Utils._get_kwarg(self,'legend_xanchor')
+        legend_yanchor = Utils._get_kwarg(self,'legend_yanchor')
+        font_size = Utils._get_kwarg(self,'font_size')
+        button_xanchor = Utils._get_kwarg(self,'button_xanchor')
+        button_yanchor = Utils._get_kwarg(self,'button_yanchor')
+        button_x = Utils._get_kwarg(self,'button_x')
+        button_y = Utils._get_kwarg(self,'button_y')
+        showgrid = Utils._get_kwarg(self,'showgrid')
+        dtick = Utils._get_kwarg(self,'dtick')
+        ticks = Utils._get_kwarg(self,'ticks')
+        phase_colors = Utils._get_kwarg(self,'phase_colors')
+        #}}} 
+        #}}} 
+        hovertemplate = f"2{self._theta}{self._degree}" + "%{x}<br>Intensity: %{y}"
+        # Identify the entries in relevant dictionaries: {{{
+        keys = list(self.file_dict.keys())
+        if idx != None:     
+            key = keys[idx]
+        elif time != None:
+            times = self._get_time_arr(self.metadata_data, time_units = time_units)
+            idx = self.find_closest(times, time, mode = 1) # Returns the index of the key
+            key = keys[idx]
+        file = self.file_dict[key]
+        md = self.metadata_data[key]
+        #}}}
+        # Get the data: {{{
+        data = np.loadtxt(file, skiprows=skiprows)  # This has the x, y data 
+        tth = data[:,0]
+        yobs = data[:,1]
+        #}}}
+        # Generate the figure: {{{
+        self.pattern_plot = go.Figure() 
+        # Add the plots: {{{ 
+        self.pattern_plot.add_scatter(
+            x = tth,
+            y = yobs,
+            hovertemplate = hovertemplate,
+            marker = dict(
+                color = 'black',
+            ),
+            name = 'Observed',
+            )
+        #}}}
+        #Get Info for Updating Layout: {{{
+        if tth_range == None:
+            tth_range = [min(tth), max(tth)] # plot the whole range
+        if time_units == 's':
+            curr_time = md['corrected_time']
+        elif time_units == 'min':
+            curr_time = md['corrected_time']/60
+        elif time_units == 'h':
+            curr_time = md['corrected_time']/(60**2)
+        try:
+            curr_temp = md['temperature']
+        except:
+            curr_temp = 0.0
+
+        title_text = f'Time: {np.around(curr_time,2)} {time_units}, (Temperature: {np.around(curr_temp,2)}{self._deg_c})'
+        xaxis_title = f'2{self._theta}{self._degree}'
+        yaxis_title = 'Intensity'
+        #}}}
+        # Update Layout: {{{
+        self._update_pattern_layout(
+            fig=self.pattern_plot,
+            title_text=title_text,
+            xaxis_title=xaxis_title,
+            yaxis_title=yaxis_title,
+            tth_range=tth_range,
+            yrange = yrange,
+            template=template,
+            font_size=font_size,
+            height=height,
+            width = width,
+            show_legend=show_legend,
+            legend_x = legend_x,
+            legend_y = legend_y,
+            legend_xanchor = legend_xanchor,
+            legend_yanchor= legend_yanchor,
+            showgrid = showgrid,
+            dtick = dtick,
+            ticks = ticks,
+        ) 
+        #}}} 
+        #}}}
+        self.pattern_plot.show()
+        os.chdir(orig_dir)
+    #}}}
     # plot_csv_info: {{{
     def plot_csv_info(self, 
             plot_type:str = 'rwp',
@@ -474,7 +622,7 @@ class RefinementPlotter(PlottingUtils):
         #}}}
         # B-values: {{{
         if plot_type == 'b values' or plot_type == 'beq' or plot_type == 'bvals':
-            keys = ['bvals', 'beq','bval', 'b value', 'b val', 'b values', 'b_value','b_val','b_values','B'] # tells the code what the likely keywords to look for are.
+            keys = ['bvals', 'beq','bval', 'b value', 'b val', 'b values', 'b_value','b_val','b_values','B', 'b'] # tells the code what the likely keywords to look for are.
             yaxis_title = 'B-Values'
             title = 'B-Values'
         #}}}
@@ -647,7 +795,14 @@ class RefinementPlotter(PlottingUtils):
                                 numerical_check = plot_key
                         except:
                             numerical_check = ''
-                        if plot_key.lower() in keys or plot_key.strip(f'{substance}_') in keys or numerical_check in keys: # Need to check if the keys we are searching for are present.
+                        if debug:
+                            print(f'Substance: {substance}')
+                            stripped_substance = plot_key.strip(f'{substance.lower()}_')
+                            print(f'Keys for plotting: {keys}')
+                            print(f'Plot key: {plot_key.lower()}\n\tStripped substance: {stripped_substance}\n\tNumerical Check: {numerical_check}')
+                            
+                            
+                        if plot_key.lower() in keys or plot_key.strip(f'{substance.lower()}_') in keys or numerical_check in keys: # Need to check if the keys we are searching for are present.
                             if debug:
                                 print(f'PASSED TEST: \n\tplot key: {plot_key}\n\tnumerical check: {numerical_check}\n')
                             # Handle most cases: {{{ 
@@ -1234,5 +1389,192 @@ class RefinementPlotter(PlottingUtils):
         )
         #}}}
         fig.show() 
+    #}}}
+    # plot_multiple_raw_patterns{{{
+    def plot_multiple_raw_patterns(self,
+            start_idx:int = 0,
+            end_idx:int = None,
+            num_patterns:int = 2,
+            offset = 20,
+            xrange:list = None,
+            yrange:list = None,
+            height:int = 800,
+            width:int = 1000,
+            color = 'blue',
+            colorscale = 'viridis',
+            waterfall = False,
+            zmin_args:tuple = (-10, 5), # The first is the minimum intensity button, the second is the number of buttons
+            zmax_args:tuple = (10, 5), # The first is the minimum I for the max buttons and the second is the number of buttons
+            button_layer_1_height = 1.17,
+            button_layer_2_height = 1.1,
+            **kwargs
+            ):
+        '''
+        This function expands on the plot raw pattern concept 
+        and allows us to plot many patterns at once given a spacing 
+        
+        If you want to actually see a waterfall plot (e.g. with a heatmap) 
+        then you need to change the waterfall option to "true"
+        ''' 
+        self.get_raw_patterns(start_idx, end_idx, num_patterns) # This gets all the data and stores them 
+        # If waterfall, create lists: {{{
+        if waterfall:
+            self._max_i = 0
+            # This necessitates a more complex list structure. 
+            self.x = [] # This is going to be 2 theta range
+            self.y = [] # This is the time axis
+            self.z = [] # This will be a list of lists for intensity.
+            self.temps = [] # This will be a list of the temperatures for the data
+        #}}}
+        # Data collection for Waterfall or plotting for non-waterfall: {{{ 
+        for i, (idx, entry) in enumerate(self.raw_data.items()):
+         
+            ht = entry['hovertemplate']
+            tth = entry['tth']
+            yobs = entry['yobs']
+            xaxis_title = f'2{self._theta}{self._degree_symbol}'
+            yaxis_title = 'Integrated intensity'
+            title_text = os.path.basename(self.data_dir) # Sets a generic title for the plot
+ 
+            # Get data for waterfall: {{{ 
+            if waterfall:
+                time = np.around(entry['corrected_time']/60,4) 
+                self.x = tth # This only needs to be 1 series.
+                self.y.append(time) # This puts it into minutes 
+                self.z.append(yobs) # This adds the observed intensity.
+                if max(yobs) > self._max_i:
+                    self._max_i = max(yobs)
+                self.temps.append(entry['temp'])
+                 
+            #}}}
+            # If NOT a waterfall: {{{
+            else:
+                plot_offset = offset * i # This way the offset doesnt get changed and go up exponentially
+                yobs = yobs + plot_offset
+                if i == 0:
+                    self.plot_data(tth, yobs,mode = 'lines', title_text=title_text, xaxis_title=xaxis_title, yaxis_title=yaxis_title, 
+                        xrange = xrange, yrange= yrange, height=height, width=width, color = color, show_legend=False,hovertemplate= ht,
+                        **kwargs)
+                else: 
+                    self.add_data_to_plot(tth, yobs, mode = 'lines', color = color, hovertemplate = ht, **kwargs) 
+            #}}}
+        #}}}
+        # Waterfall Plot Added: {{{ 
+        if waterfall: 
+            self.raw_waterfall = go.Figure()
+            # Generate the hovertemplate: {{{
+            hovertemplate = []
+            hovertemplate_template = f"2{self._theta}{self._degree}" + "%{x}<br>Intensity: %{z}<br>" + "Time: %{y}<br>"
+            shape = np.random.rand(len(self.y), len(self.x))
+            #for t in self.temps:
+            #    hovertemplate.append(hovertemplate_template + f'Temperature: {t} {self._degree_celsius}')
+            for i, v in enumerate(shape):
+                row = []
+                for j, v in enumerate(self.x):
+                    t = self.temps[i]
+                    time = np.around(self.y[i] , 4)
+                    tth = np.around(v,4)
+                    intensity = np.around(self.z[i][j], 4)
+                    row.append(f'2{self._theta}{self._degree}: {tth}<br>Intensity: {intensity}<br>Time: {time} min<br>Temperature: {t} {self._degree_celsius}')
+                hovertemplate.append(row)
+            #}}}
+            
+            self.raw_waterfall.add_heatmap(
+                x = self.x,
+                y = self.y,
+                z = self.z, 
+                #hovertemplate = hovertemplate,
+                text = hovertemplate, 
+                hoverinfo = 'text',
+                colorscale= colorscale,
+            )
+            yaxis_title = 'Time / min'
+            # Get Button Args: {{{ 
+            min_on_zmin, num_min_buttons = zmin_args # unpack the tuple
+            min_on_zmax, num_max_buttons = zmax_args # unpack the tuple
+            min_steps = (0 -min_on_zmin)/(num_min_buttons -1)
+            max_steps = (self._max_i -min_on_zmax)/ (num_max_buttons-1)
+  
+            zmin_arange = np.arange(min_on_zmin, 0+min_steps,min_steps)
+            zmax_arange = np.arange(min_on_zmax, self._max_i+max_steps, max_steps)
+            #}}}
+            # Make buttons to change scaling: {{{
+            zmin_buttons = [
+                dict(
+                    label = f'I_min: {np.around(v,2)}',
+                    method = 'restyle',
+                    args = [
+                        {'zmin': v},
+                    ]
+                ) for v in zmin_arange
+            ]
+            zmax_buttons = [
+                dict(
+                    label = f'I_max: {np.around(v,2)}',
+                    method = 'restyle',
+                    args = [
+                        {'zmax': v},
+                    ]
+                ) for v in zmax_arange
+            ]
+            #}}}
+            #}}}
+            # Update Layout: {{{
+        
+            self._update_pattern_layout(
+                    fig = self.raw_waterfall,
+                    title_text=title_text,
+                    xaxis_title=xaxis_title,
+                    yaxis_title=yaxis_title,
+                    tth_range= xrange,
+                    yrange = yrange,
+                    template= 'simple_white',
+                    #font_size=font_size,
+                    height=height,
+                    width=width,
+                    show_legend= False,
+                    #legend_x = legend_x,
+                    #legend_y=legend_y,
+                    #legend_xanchor=legend_xanchor,
+                    #legend_yanchor=legend_yanchor,
+                    #showgrid = showgrid,
+                    #dtick = dtick,
+                    #ticks = ticks,
+            )
+            # Waterfall Update: {{{
+        
+            self.raw_waterfall.update_layout( 
+                    margin = dict(t=200,b=0,l=0,r=0),
+                    autosize = False,
+                    updatemenus = [
+                    dict(
+                        buttons = zmax_buttons,
+                        yanchor = 'top',
+                        type = 'buttons',
+                        y = button_layer_1_height,
+                        x = 0,
+                        xanchor = 'left',
+                        pad = {'r':10, 't':10},
+                        direction = 'right',
+                    ),
+                    dict(
+                        buttons = zmin_buttons,
+                        yanchor = 'top',
+                        type = 'buttons',
+                        y = button_layer_2_height,
+                        x=0,
+                        xanchor = 'left',
+                        pad = {'r':10,'t': 10},
+                        direction = 'right',
+                    )
+                ],
+                
+            )
+            self.raw_waterfall.show()
+            #}}} 
+
+        #}}} 
+        if not waterfall:
+            self.show_figure()
     #}}}
 #}}}

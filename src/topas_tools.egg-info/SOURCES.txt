@@ -22,6 +22,7 @@ src/topas_tools/__pycache__/__init__.cpython-39.pyc
 src/topas_tools/__pycache__/gvs.cpython-310.pyc
 src/topas_tools/__pycache__/gvs.cpython-39.pyc
 src/topas_tools/analyze/__init__.py
+src/topas_tools/analyze/experiment_plan_analyzer.py
 src/topas_tools/analyze/refinement_analyzer.py
 src/topas_tools/analyze/__pycache__/__init__.cpython-310.pyc
 src/topas_tools/analyze/__pycache__/__init__.cpython-312.pyc
@@ -29,15 +30,19 @@ src/topas_tools/analyze/__pycache__/refinement_analyzer.cpython-310.pyc
 src/topas_tools/analyze/__pycache__/refinement_analyzer.cpython-312.pyc
 src/topas_tools/area_detector_tools/__init__.py
 src/topas_tools/area_detector_tools/area_detector_tools.py
+src/topas_tools/area_detector_tools/geometry.py
 src/topas_tools/area_detector_tools/__pycache__/__init__.cpython-312.pyc
 src/topas_tools/area_detector_tools/__pycache__/area_detector_tools.cpython-312.pyc
 src/topas_tools/background_subtraction/__init__.py
 src/topas_tools/background_subtraction/bkg_sub.py
 src/topas_tools/background_subtraction/__pycache__/__init__.cpython-310.pyc
 src/topas_tools/background_subtraction/__pycache__/bkg_sub.cpython-310.pyc
+src/topas_tools/experimental/__init__.py
+src/topas_tools/experimental/topas8_utils.py
 src/topas_tools/plotting/__init__.py
 src/topas_tools/plotting/advanced_plotting.py
 src/topas_tools/plotting/bkgsub_plotting.py
+src/topas_tools/plotting/experiment_geometry_plotting.py
 src/topas_tools/plotting/image_plotting.py
 src/topas_tools/plotting/mtf_temp_log_plotter.py
 src/topas_tools/plotting/plotting_utils.py
