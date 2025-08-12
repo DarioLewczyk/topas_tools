@@ -424,12 +424,16 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                         'phase_lines':copy.deepcopy(phase_lines),
                     })
                     keep_reading=False
+                    print(f'Should have stopped: Line: {i}')
                     phase_lines.clear() # Reset the list
                     phase_num+=1 # Move to the next phase
                 #}}}
                 # str line: {{{
                 splitline = line.strip('\t\n') # if we get rid of these modifiers, we can check if str starts the line
-                if splitline.startswith('str'):
+                str_pattern = r'^str\b'
+                #if splitline.startswith('str'):
+                if bool(re.match(str_pattern, splitline)):
+                    print(f'New Structure: line: {i} {splitline}')
                     if not keep_reading:
                         pass # We don't need to do anything. It is the first phase. 
                     inp_dict['phases'][phase_num] = {
@@ -485,9 +489,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         #print(f'inp_dict after: {inp_dict["phases"]}') # FAILED
         #}}}
         # Loop through the structures: {{{ 
+        print(inp_dict['phases'])
         for phase in inp_dict['phases']:  
             inp_file = []
-            entry = inp_dict['phases'][phase] 
+            entry = inp_dict['phases'][phase]  
             substance = entry['symbol'] 
             phase_lines = entry['phase_lines']
             header = inp_dict['header'] 

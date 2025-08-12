@@ -1172,7 +1172,7 @@ class DataCollector:
         The resulting dataset will have evenly spaced data given your input parameters
         '''
         os.chdir(self.data_dir)
-        files = self.file_dict
+        files = self.metadata_data # It is better to use this because these keys are sorted in time order
         total_files = len(files)
         
         if end_idx == None:
@@ -1183,30 +1183,36 @@ class DataCollector:
         self.raw_data = {}
         pattern = 0
 
-        for i, (key, f) in enumerate(files.items()):
+        for i, (key, md) in enumerate(files.items()):
             ''' 
             If the index (i) is equal to a value in the 
             pattern_range, we load and record it. 
             If not, we discard.
             '''
-            if i in pattern_rng:
-                tth, yobs = self._load_raw_xy(f, self.data_dir)
-                md = self.metadata_data[key]
-                temp = md['temperature'] # This is the temp in deg C
-                corrected_time = md['corrected_time']
-                time = np.around(corrected_time/60, 2) # This is the time in minutes
+            try:
+                f = self.file_dict[key] 
+                if i in pattern_rng:
+                    tth, yobs = self._load_raw_xy(f, self.data_dir) 
+                    temp = md['temperature'] # This is the temp in deg C
+                    corrected_time = md['corrected_time']
+                    time = np.around(corrected_time/60, 2) # This is the time in minutes
 
-                hovertemplate = f'2{self._theta}{self._degree_symbol}: '+'%{x}<br>Intensity: '+'%{y}<br>'+f'Pattern {i}: {time} min<br>{temp} {self._degree_celsius}'
-                self.raw_data[pattern] = {
-                        'tth': tth,
-                        'yobs': yobs,
-                        'md': md,
-                        'temp': temp,
-                        'time': time,
-                        'corrected_time': corrected_time,
-                        'hovertemplate': hovertemplate,
-                }
-                pattern += 1
+                    hovertemplate = f'2{self._theta}{self._degree_symbol}: '+'%{x}<br>Intensity: '+'%{y}<br>'+f'Pattern {i}: {time} min<br>{temp} {self._degree_celsius}'
+                    self.raw_data[pattern] = {
+                            'tth': tth,
+                            'yobs': yobs,
+                            'md': md,
+                            'temp': temp,
+                            'time': time,
+                            'corrected_time': corrected_time,
+                            'hovertemplate': hovertemplate,
+                    }
+                    pattern += 1
+            except:
+                time_min = np.around(md['corrected_time']/60, 2)
+                index = md['pattern_index']
+                print(f'Key: {key} not found in file dict: \n\tTime: {time_min} min\n\tPattern index: {index}\n\tpossible missing data')
+                pass
         os.chdir(self.current_dir)
 
     #}}}
