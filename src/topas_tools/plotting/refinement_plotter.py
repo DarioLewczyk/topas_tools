@@ -469,9 +469,10 @@ class RefinementPlotter(PlottingUtils):
             curr_time = md['corrected_time']/(60**2)
         try:
             curr_temp = md['temperature']
+            if curr_temp == None:
+                curr_temp = 0.0
         except:
-            curr_temp = 0.0
-
+            curr_temp = 0.0 
         title_text = f'Time: {np.around(curr_time,2)} {time_units}, (Temperature: {np.around(curr_temp,2)}{self._deg_c})'
         xaxis_title = f'2{self._theta}{self._degree}'
         yaxis_title = 'Intensity'

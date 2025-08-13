@@ -95,7 +95,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             7. subtract_bkg: Do you want to perform background subtraction? Rolling ball method
             8. phases_to_enable: Phase(s) to monitor to enable
             9. phases_to_disable: Phase(s) to monitor to disable
-            10. threshold_for_on: Threshold(s) to trigger on
+            10. threshold_for_on: Threshold(s) to trigger on (This is a percentage)
             11. threshold_for_off: Threshold(s) to trigger off (percent of scale factor)
             12. on_method: either "time" or "rwp"
             13. off_method: either 'time' or 'sf'
@@ -424,7 +424,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                         'phase_lines':copy.deepcopy(phase_lines),
                     })
                     keep_reading=False
-                    print(f'Should have stopped: Line: {i}')
+                    #print(f'Should have stopped: Line: {i}')
                     phase_lines.clear() # Reset the list
                     phase_num+=1 # Move to the next phase
                 #}}}
@@ -433,7 +433,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                 str_pattern = r'^str\b'
                 #if splitline.startswith('str'):
                 if bool(re.match(str_pattern, splitline)):
-                    print(f'New Structure: line: {i} {splitline}')
+                    #print(f'New Structure: line: {i} {splitline}')
                     if not keep_reading:
                         pass # We don't need to do anything. It is the first phase. 
                     inp_dict['phases'][phase_num] = {
@@ -488,8 +488,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             inp_dict['header'] = header_lines 
         #print(f'inp_dict after: {inp_dict["phases"]}') # FAILED
         #}}}
-        # Loop through the structures: {{{ 
-        print(inp_dict['phases'])
+        # Loop through the structures: {{{  
         for phase in inp_dict['phases']:  
             inp_file = []
             entry = inp_dict['phases'][phase]  
