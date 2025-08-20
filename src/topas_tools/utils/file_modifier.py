@@ -132,7 +132,7 @@ class FileModifier():
                     try:
                         min_rwp = min(rwps) # This will give us the min Rwp value (remember that low Rwp is good, high Rwp is bad)
                         current_rwp = current_entry['rwp'] # This gives us the current Rwp
-                        rwp_pct_diff = (current_rwp - min_rwp)/min_rwp * 100  # If this is positive, that could trigger the turning on of a phase. we are not dealing with a percentage 
+                        rwp_pct_diff = (current_rwp - min_rwp)/min_rwp # If this is positive, that could trigger the turning on of a phase. we are not dealing with a percentage 
                         if rwp_pct_diff >= threshold and not stopped:
                             entry['stopped'] = True # We are adding the phase so we can stop monitoring
                             # IF this is the case, we have yet to enable the phase. 
@@ -174,10 +174,10 @@ class FileModifier():
                 if entry_type == 'off' and method == 'sf':
                     if debug:
                         print(f'norm_val: {norm_val}, threshold: {threshold}')
-                    if norm_val > threshold/100:
+                    if norm_val > threshold:
                         # This means we keep going. The scale factor hasnt fallen far enough
                         entry['values'].append(current_value)
-                    elif norm_val <= threshold/100 and not stopped:
+                    elif norm_val <= threshold and not stopped:
                         entry['stopped'] = True # We are removing the phase, so stop monitoring it. 
                         # Now, DISABLE the phase: {{{
                         self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=off_sf_value,debug=debug)

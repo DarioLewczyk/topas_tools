@@ -95,8 +95,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             7. subtract_bkg: Do you want to perform background subtraction? Rolling ball method
             8. phases_to_enable: Phase(s) to monitor to enable
             9. phases_to_disable: Phase(s) to monitor to disable
-            10. threshold_for_on: Threshold(s) to trigger on (This is a percentage)
-            11. threshold_for_off: Threshold(s) to trigger off (percent of scale factor)
+            10. threshold_for_on: Threshold(s) to trigger on (This is a fraction scaled from 0 to 1)
+            11. threshold_for_off: Threshold(s) to trigger off (This is a fraction scaled from 0 to 1)
             12. on_method: either "time" or "rwp"
             13. off_method: either 'time' or 'sf'
             14. time_error: if "on_method" is time, how much ±?    

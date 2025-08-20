@@ -690,6 +690,7 @@ class RefinementPlotter(PlottingUtils):
         # stephens: {{{
         if plot_type.lower() == 'stephens':
             keys = [
+                'eta',
                 's400',
                 's040',
                 's004',
@@ -708,6 +709,15 @@ class RefinementPlotter(PlottingUtils):
             ]
             yaxis_title = 'Stephens Parameter'
             title = 'Stephens Parameters'
+        #}}}
+        # Occupancies: {{{
+        if plot_type.lower() == 'occupancies' or plot_type.lower() == 'occ':
+            keys = [
+                'occupancy',
+                'occ',
+            ]
+            yaxis_title  = 'Occupancy'
+            title = 'Occupancy Evolution'
         #}}}
         #}}}
         # Update the title text: {{{
@@ -790,15 +800,22 @@ class RefinementPlotter(PlottingUtils):
                             #numerical_check = numerical_check.strip(f'{substance}_')
                             
                             #if 'b_value' in numerical_check:
+                            splitkey = plot_key.split('_')
                             if 'b_value' in plot_key:
                                 numerical_check = 'b_value'
+                            if len(splitkey) > 1:
+                                if splitkey[-1] == 'occ' or splitkey[-1] == 'occupancy':
+                                    numerical_check = 'occ'
+                                else:
+                                    numerical_check = ''
+
                             else:
                                 numerical_check = plot_key
                         except:
                             numerical_check = ''
                         if debug:
                             print(f'Substance: {substance}')
-                            stripped_substance = plot_key.strip(f'{substance.lower()}_')
+                            stripped_substance = plot_key.strip(f'{substance}_')
                             print(f'Keys for plotting: {keys}')
                             print(f'Plot key: {plot_key.lower()}\n\tStripped substance: {stripped_substance}\n\tNumerical Check: {numerical_check}')
                             
