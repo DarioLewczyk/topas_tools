@@ -8,8 +8,10 @@ import re
 import glob
 import numpy as np
 import texttable
+from scipy.optimize import fsolve
 #from PIL import Image
 import fabio
+from scipy.signal import savgol_filter
 #}}}
 # Utils: {{{
 class Utils: 
@@ -299,24 +301,508 @@ class Utils:
         return (start,end)
     #}}}
     # convert_to_q: {{{
-    def convert_to_q(self, tth, lambda_angstrom:float = None, mode = 0):
+    def convert_to_q(self, tth = None, d = None,  lambda_angstrom:float = None, mode = 0):
         '''
         This function serves to convert 2theta to q space
+        It can also convert d to q
         
         mode = 0: gives q in angstrom
         mode = 1: gives q in nm
-        '''
-        lambda_nm = lambda_angstrom * 10
 
-        # unit selection: {{{
-        if mode == 0:
-            lam = lambda_angstrom
-        elif mode == 1:
-            lam = lambda_nm
+        REMEMBER that the mode switch will only do what is expected if you are working with 2theta and a wavelength.
+
+        Can work with either a single value or a list of values
+        '''
+        # If using 2THETA: {{{
+        if lambda_angstrom:
+            lambda_nm = lambda_angstrom * 10
+
+            # unit selection: {{{
+            if mode == 0:
+                lam = lambda_angstrom
+            elif mode == 1:
+                lam = lambda_nm
+            #}}}
+        # If a list of TTH values is passed: {{{
+        try:
+            qs = []
+            for tth_val in tth:
+                tth_rad = np.radians(tth_val)
+                q = 4*np.pi/lam * np.sin(tth_rad/2)
+                qs.append(q)
+            return qs
+        #}}} 
+        # If only one value passed: {{{
+        except:
+            try:
+                tth_rad = np.radians(tth)
+                q = 4*np.pi/lam * np.sin(tth_rad/2)
+                return q
+            except:
+                pass # This kicks it to the d spacing version
         #}}}
-        tth_rad = tth * np.pi / 180
-        q = 4*np.pi/lam * np.sin(tth_rad/2)
-        return q
+        #}}}
+        # d-spacing to q: {{{
+        # If passing a list of values: {{{
+        try:
+            qs = []
+            for dval in d:
+                q = (2*np.pi)/dval
+                qs.append(q)
+            return qs
+        #}}} 
+        # If passing only a single value: {{{
+        except:
+            q = (2*np.pi)/d
+            return q
+        #}}}
+        #}}}
+    #}}}
+    # convert_to_s: {{{
+    def convert_to_s(self, d): 
+        '''
+        This function takes a d spacing as input. 
+
+        It can either convert a single value of d to s
+        OR
+        It can convert a list of values of d to s
+        '''
+        s_vals = []
+        # If a list of values passed: {{{
+        try:
+            for dval in d:
+                s_vals.append(1/dval)
+            return s_vals
+        #}}}
+        # If only one passed: {{{
+        except:
+            return 1/d
+        #}}}
+    #}}}
+    # convert_d_to_tof: {{{
+    def convert_d_to_tof(self, d = None, zero:float = None, difa:float = None, difb:float = None, difc = None):
+        ''' 
+        This allows us to back-calculate from d-spacing to TOF if we want
+        This can be helpful when you double check peak positions from JANA with a python figure.
+
+        This can either convert a single value of d 
+        OR 
+        a list of ds to TOF
+        '''
+        # If user passes a list of ds: {{{
+        try:
+            tofs = []
+            for dval in d:
+                tof = (zero+difc*dval + difa*dval**2 + difb/dval)/1000
+                tofs.append(tof)
+            return tofs
+        #}}}
+        # If user passes a single d: {{{
+        except:
+            tof = (zero+difc*d+ difa*d**2 + difb/d)/1000
+            return tof
+        #}}}
+    #}}}
+    # _tof_eqn: {{{
+    def _tof_eqn(self, d, tof, zero, difa, difb, difc):
+        return zero + difc * d + difa * d**2 + difb/d - tof*1000
+    #}}}
+    # convert_tof_to_d: {{{
+    def convert_tof_to_d(self, tof = None, zero:float = None, difa:float = None, difb:float = None, difc:float = None, debug:bool=False):
+        '''
+        Uses the calibration parameters obtained from the TOF diffractometer team to calculate the d-spacing of your data.
+
+        This can either use a list of TOF values 
+        OR
+        A singular TOF value
+        '''
+
+        if debug:
+            print(f'zero: {zero}\ndifa: {difa}\ndifb: {difb}\ndifc: {difc}')
+        # If using a list of TOFs: {{{
+        try:
+            ds = []
+            for i, tof_val in enumerate(tof):
+                # Initial guess for d
+                d_guess = 0.5
+                #solve for d
+                d = fsolve(self._tof_eqn, d_guess, args = (tof_val, zero, difa, difb, difc)) # Solve the quadratic function for d
+                if debug:
+                    print(f'd (calc {i}): {d}') 
+                ds.append(d[0])
+            return ds
+        #}}}
+        # If using a singular TOF: {{{
+        except:
+            # Initial guess for d
+            d_guess = 0.5
+            #solve for d
+            d = fsolve(self._tof_eqn, d_guess, args = (tof, zero, difa, difb, difc)) # Solve the quadratic function for d
+            if debug:
+                print(f'd (calc {i}): {d}') 
+            return d[0]
+        #}}}
+    #}}}
+    # convert_d_to_tth: {{{
+    def convert_d_to_tth(self, d = None, lam:float = 0.1665):
+        ''' 
+        This function allows you to calculate either a single d spacing to 2theta 
+        OR
+        a whole list of d spacings to 2theta
+        
+        This is just a proxy function because i like the "convert" scheme a bit better for these calculations
+        now. 
+        '''
+        return self.calc_tth_from_d(lam= lam, d= d)
+       
+    #}}}
+    # calc_tth_from_d: {{{
+    def calc_tth_from_d(self, lam:float = 0.1665, d:float = 0.1):
+        '''
+        Uses Bragg's law to convert from d spacing to 2theta
+        returns in degrees
+        This will work for either a single value or multiple values
+
+        if you have given a value that is not possible, then it will default to 180
+        '''
+        try:
+            len(d)
+            ds = d
+            tths = []
+            for d in ds:
+                angle = lam/(2*d) 
+        
+                if angle <= 1:
+                    tth = np.degrees(2*np.arcsin(angle)) 
+                else:
+                    tth = np.degrees(2*np.arcsin(1))
+                tths.append(tth)
+            return(np.array(tths))
+        except:  
+            angle = lam/(2*d) 
+        
+            if angle <= 1:
+                tth = np.degrees(2*np.arcsin(angle)) 
+            else:
+                tth = np.degrees(2*np.arcsin(1))
+            return tth
+    #}}}
+    # convert_tth_to_d: {{{
+    def calc_d_from_tth(self, lam:float = 0.1665, tth:float = 0.8):
+        '''
+        n lam = 2d sin(theta)
+
+        make sure that you give the tth in degrees.
+        '''
+        th = tth/2 # Convert 2theta into theta
+    
+        return lam/(2 * np.sin(np.deg2rad(th)))
+    #}}}
+    # calculate_d_from_hklm: {{{
+    def calculate_d_from_miller_indices(self, miller_indices, a, b, c, qa:float = 0, qb:float = 0, qc:float = 0):
+        '''
+        miller_indices: a list of tuples of either: (h,k,l) or (h, k, l, m)
+        This calculates the d-spacing in a general way for either 3D or (3+d)D miller indices
+        if you are doing the (3+d)D case, you MUST ensure that you input your q vector
+        '''
+        ds = []
+        try:
+            for h, k, l, m in miller_indices:
+                d = 1/np.sqrt(((h+qa*m)/a)**2 + ((k +qb*m)/b)**2 + ((l + qc*m)/c)**2)
+                ds.append(d)
+        except:
+            for h, k, l in miller_indices:
+                d = 1/np.sqrt((h/a)**2 + (k/b)**2 + (l/c)**2)
+                ds.append(d)
+        return ds 
+    #}}}
+    # calculate_rmse: {{{
+    def calculate_rmse(self,data, fit, precision = 4):
+        ''' 
+        data is your actual data
+        fit is the fit to the data
+        '''
+        resid = np.array(fit - data)
+        sq_resid = resid**2
+        avg = np.average(sq_resid)
+        return np.around(np.sqrt(avg), precision)
+    #}}}
+    # calculate_rsq: {{{
+    def calculate_rsq(self, data, fit, precision = 4):
+        ''' 
+        data is the actual data
+        fit is the fit to the data
+        '''
+        dat_avg = np.average(data)
+    
+        sst = np.sum((np.array(data) - dat_avg)**2)
+        ssr = np.sum((np.array(data) - np.array(fit))**2)
+        rval = 1 - (ssr/sst)
+        return np.around(rval, precision)
+    #}}}
+    # calculate_derivative: {{{
+    def calculate_derivative(self, x, y, step_size = 1, mode = 0, polyorder:int = 1):
+        '''
+        mode: 0 = moving average
+        mode: 1 = no smoothing
+        mode: 2 = use savgol filter
+
+        If you use mode 2: 
+            step_size is the window size
+            polyorder is the order of the polynomial for smoothing
+        '''
+     
+        x = np.array(x)
+        y = np.array(y)
+        step_size = int(step_size)
+        # No Smoothing: Mode 1: {{{
+        if mode == 1:
+            dydx = np.gradient(y, x)
+            new_x = x[::step_size]
+            dydx = dydx[::step_size]
+        #}}}
+        # Moving average: Mode 0:  {{{
+        elif mode == 0:
+            # Smooth the data using a moving average with a specified step size
+            y_smooth = np.convolve(y, np.ones(step_size)/step_size, mode = 'valid')
+            new_x = x[:len(y_smooth)]
+            # Calculate the derivative
+            dydx = np.gradient(y_smooth, new_x)
+        #}}}
+        # Savgol Filter: Mode 2: {{{
+        elif mode == 2:
+            y_smooth = savgol_filter(y, step_size, polyorder)
+            # Calculate differences between consecutive points
+            dx = np.diff(x)
+            dy_smooth = np.diff(y_smooth)
+
+            new_x = x[1:] # The new x should be one shorter than the original 
+            dydx = dy_smooth/dx
+
+        #}}}
+        
+        return new_x, dydx
+    #}}}
+    # calculate_toffset_for_isotherm: {{{
+    def calculate_toffset_for_isotherm(self, x, y, tolerance:float = 0.1, print_delta_x:bool = False):
+        ''' 
+        This function will print out a time offset placing the start of your isotherm at 
+        t = 0. It will  also return the corrected time range. 
+
+        currently, this only matches a value in the range 
+        This uses the derivative to determine when the temperature has settled
+        '''
+        x = np.array(x)
+        y = np.array(y)
+        newx, dydx = self.calculate_derivative(x,y, 1, mode = 1)
+        settling_idx = np.where(np.abs(dydx) <= tolerance)[0][0]
+        settling_x = x[settling_idx]
+        
+        if print_delta_x:
+            print(f'∆x = {np.around(settling_x - x[0],2)}')
+        return x - settling_x
+
+    #}}}
+    # fit_linear: {{{ 
+    def fit_linear(self, x, y, start_idx:int = None, end_idx:int = None, print_results:bool = True, print_precision:int = 2, print_idx:int = 1):
+        ''' 
+        This function allows you to quickly fit data to a line
+        and also receive feedback on how the fit quality is
+
+        returns a tuple: 
+
+        (slope, intercept, fit_line)
+
+        IMPORTANT: Since we are using slices, the end index is the human readable item number 
+        This is since slices are exclusive of the end index given. 
+        '''
+        if not start_idx:
+            start_idx = 0
+        if not end_idx:
+            end_idx = len(y)
+        fitx = x[start_idx:end_idx]
+        fity = y[start_idx:end_idx]
+
+        m, b = np.polyfit(fitx, fity, deg = 1)
+        fit = np.array([m*x + b for x in x])
+        
+        # Printout: {{{
+        if print_results:
+            rsq = self.calculate_rsq(fity, fit[start_idx:end_idx], print_precision)
+            rmse = self.calculate_rmse(fity, fit[start_idx:end_idx], print_precision)
+            print(f'Region {print_idx}:')
+            print(f'\tRMSE: {rmse}')
+            print(f'\tR^2: {rsq}')
+            print(f'\tFit parameters: slope: {np.format_float_scientific(m, print_precision)}, intercept: {np.format_float_scientific(b, print_precision)}')
+
+        #}}}
+        return m, b, fit
+    #}}}
+    # calculate_snr: {{{
+    def calculate_snr(self, y):
+        ''' 
+        This function calculates the mean of intensity data divided by the standard deviation
+        Generally I have found that if the ratio is low (e.g. < 2) the pattern is good
+
+        If the ratio is larger (e.g. 10, 26, etc.) the pattern is unusable
+        '''
+        signal = np.mean(y)
+        noise = np.std(y)
+        return signal/noise if noise !=0 else 0
+    #}}}
+    # _load_raw_xy: {{{
+    def _load_raw_xy(self,fn:str = None, data_dir:str = None):
+        home = os.getcwd()
+        os.chdir(data_dir)
+        data = np.loadtxt(fn, skiprows=1)
+        x = data[:,0]
+        y = data[:,1]
+        os.chdir(home)
+        return x,y
+    #}}}
+    # _filter_csv_dict: {{{
+    def _filter_csv_dict(self, csv_plot_data:dict = None, plot_type:str = None, debug:bool = False):
+        ''' 
+        This function is used to generate a new dictionary with only the values you care about for the specific plot.
+
+        '''
+        pattern = None
+        yaxis_title = ''
+        yaxis2_title = ''
+        title = ''
+        new_csv_dict = {} # This is the output dictionary
+        # Determine the pattern and the labels: {{{
+        # Lattice Params: {{{ 
+        if plot_type == 'lattice parameters' or plot_type == 'lattice' or plot_type == 'lp':
+            pattern = r'^(a|b|c|al|be|ga|alpha|beta|gamma)$' # This is a pattern to match only lattice parameter entries 
+            yaxis_title = f'Lattice Parameter / {self._angstrom}' # This is the a, b, c lattice parameter title
+            yaxis2_title = f'Lattice Parameter / {self._degree}' # this is the al, be, ga lattice parameter title
+            title = 'Lattice Parameters'
+        #}}}
+        # Scale Factor: {{{
+        elif plot_type == 'scale factor' or plot_type == 'sf': 
+            pattern = r'^(scale_factor|sf|scale factor)$'
+            yaxis_title = 'Scale Factor'
+            title = 'Scale Factor'
+            #normalized = True
+        #}}}
+        # Volume: {{{
+        elif plot_type == 'volume' or plot_type == 'vol': 
+            pattern = r'^vol$|^volume$|^cell_volume$|^cell volume$'
+            yaxis_title = f'Volume / {self._angstrom}{self._cubed}'
+            title = 'Volume'
+        #}}}
+        # R Bragg: {{{
+        if plot_type == 'rbragg' or plot_type == 'rb':
+            pattern = r'^r bragg$|^r_bragg$' 
+            yaxis_title = 'R Bragg'
+            title = 'R Bragg'
+        #}}}
+        # Weight Percent: {{{
+        if plot_type == 'weight percent' or plot_type == 'wp': 
+            pattern = r'^weight_percent$|^weight_percent$' 
+            yaxis_title = 'Weight Percent'
+            title = 'Weight Percent'
+        #}}}
+        # B-values: {{{
+        if plot_type == 'b values' or plot_type == 'beq' or plot_type == 'bvals':
+            pattern = r'^(bvals|beq|bval|b value|b val|b values|b_value|b_val|b_values)_\w+$' 
+            yaxis_title = 'B-Values'
+            title = 'B-Values'
+        #}}}
+        # Size L: {{{
+        if plot_type == 'size l' or plot_type == 'csl' or plot_type == 'sizel':
+            pattern = r'^(size_l|csl|lorentzian_size|Size_L|cslv)$' 
+            yaxis_title = 'Lorentzian Size'
+            title = 'Lorentzian Size'
+        #}}}
+        # Size G: {{{
+        if plot_type == 'size g' or plot_type == 'csg' or plot_type == 'sizeg':
+            pattern = r'^(size_g|csg|gaussian_size|Size_G|csgv)$'  
+            yaxis_title = 'Gaussian Size'
+            title = 'Gaussian Size' 
+        #}}}
+        # Strain L: {{{ 
+        if plot_type == 'strain l' or plot_type == 'strl' or plot_type == 'strainl':
+            pattern = r'^(strain_l|strl|lorentzian_strain|Strain_L|slv)$' 
+            yaxis_title = 'Lorentzian Strain'
+            title = 'Lorentzian Strain'
+        #}}}
+        # Strain G: {{{
+        if plot_type == 'strain g' or plot_type == 'strg' or plot_type == 'straing':
+            pattern = r'^(strain_g|strg|gaussian_strain|Strain_G|sgv)$'   
+            yaxis_title = 'Gaussian Strain'
+            title = 'Gaussian Strain' 
+        #}}}
+        # Lvol: {{{ 
+        if plot_type.lower() == 'lvol':
+            pattern = r'^lvol$'
+            yaxis_title = 'LVol'
+            title = 'LVol'
+        #}}}
+        # Lvolf: {{{
+        if plot_type.lower() == 'lvolf': 
+            pattern = r'^lvolf$' 
+            yaxis_title = 'Lvolf'
+            title = 'LVolf'
+        #}}}
+        # e0: {{{ 
+        if plot_type.lower() == 'e0':
+            pattern = r'^e0$' 
+            yaxis_title = f'e{self._subscript_zero}'
+            title = f'e{self._subscript_zero}'
+        #}}}
+        # phase_MAC: {{{
+        if plot_type.lower() == 'phase_mac':
+            pattern = r'^(phase_mac|phase_MAC)$' 
+            yaxis_title = 'Phase MAC'
+            title = 'Phase MAC'
+        #}}}
+        # cell_mass: {{{
+        if plot_type.lower() == 'cell_mass' or plot_type.lower() == 'cm' or plot_type.lower == 'mass':
+            pattern = r'^cell_mass$' 
+            yaxis_title = 'Cell Mass'
+            title = 'Cell Mass'
+        #}}}
+        # eta: {{{
+        if plot_type.lower() == 'eta':
+            pattern = r'^eta$' 
+            yaxis_title = 'Eta'
+            title = 'Eta Values'
+        #}}}
+        # stephens: {{{
+        if plot_type.lower() == 'stephens':
+            pattern = r'^(eta|s400|s040|s004|s220|s202|s022|s310|s031|s130|s301|s013|s211|s121|s112)$'
+            yaxis_title = 'Stephens Parameter'
+            title = 'Stephens Parameters'
+        #}}}
+        # Occupancies: {{{
+        if plot_type.lower() == 'occupancies' or plot_type.lower() == 'occ':
+            pattern = r'^(occupancy|occ)_\w+$|^\w+_(occupancy|occ)$'
+            yaxis_title  = 'Occupancy'
+            title = 'Occupancy Evolution'
+        #}}}
+        #}}}
+        # Return the data: {{{
+        if pattern != None: 
+            for key, old_csv in csv_plot_data.items():
+                if debug:
+                    try:
+                        print(f'Old CSV: {old_csv.keys()}')
+                    except:
+                        print(f'key: {key} does not have a dict entry!')
+                try: 
+                    pattern = re.compile(pattern) # Compile the regex
+                    filtered_dict = {k:v for k, v in old_csv.items() if pattern.match(k.lower())} # Create a copy dict with only relevant entries
+                    if debug:
+                        print(f'{key}\n\t{pattern}: {filtered_dict.keys()}')
+                    new_csv_dict[key] = filtered_dict # Add the filtered dictionary to the 
+                except:
+                    pass
+            return new_csv_dict, yaxis_title, yaxis2_title, title
+        else:
+            print(f'The plot type: {plot_type} is not defined!')
+        #}}}
     #}}}
 #}}}
 # UsefulUnicode: {{{
@@ -345,6 +831,8 @@ class UsefulUnicode:
         self._degree_symbol = u'\u00b0'
         self._degree_celsius = u'\u2103'
         self._theta = u'\u03b8'
+        self._phi = u'\u1D719'
+        self._lambda = u'\u03BB'
 
         self._sub_a = u'\u2090'
         self._sub_b = u'\u1D47'
@@ -445,52 +933,84 @@ class DataCollector:
             # We now sort the dictionary entries by their number (least to greatest.) 
         self.file_dict = dict(sorted(tmp.items())) 
     #}}}
-    # set_time_range: {{{
-    def set_time_range(self,):
+    # _resort_with_metadata: {{{
+    def _resort_with_metadata(self, file_dict:dict = None, metadata_data:dict = None, ):
         '''
-        This function will allow you to set a time range over which you would like to
-        plot the data.
-        The function will tell the user the high and low values and allow the user to
-        set the bounds.
+        Sometimes, the readable times fail horribly and you need to fall back on metadata to determine the 
+        ordering of filenames. 
+
+        In these cases, you use this function which will reorder the file dictionary for you based off of 
+        a correctly sorted metadata dictionary.
+        ''' 
+        #print(len(file_dict), len(metadata_data))
+        #print(list(file_dict.keys()))
+        #print(list(metadata_data.keys()))
+        correctly_sorted_readable_times = list(metadata_data.keys()) # These are correctly sorted by epoch time
+        # Create a new dictionary with the sorted keys from the metadata dictionary:
+        sorted_file_dict = {key: file_dict[key] for key in correctly_sorted_readable_times if key in file_dict}
+ 
+        return sorted_file_dict
+    #}}}
+    # get_data_for_waterfall: {{{
+    def get_data_for_waterfall(self,metadata_data:dict = None, 
+            start_time:int = None, 
+            end_time:int = None, 
+            num_patterns:int = None,
+            ):
         '''
-        selecting = True
-        while selecting:
-            # Gather the information we need to progress: {{{
-            timecodes = list(self.file_dict.keys())
-            min_t = min(timecodes)
-            max_t = max(timecodes)
-            min_index = timecodes.index(min_t)
-            max_index = timecodes.index(max_t)
-            #}}}
-            print(f'You have {len(timecodes)} patterns in this directory.')
-            print('#'*80)
-            selection = input('Enter the index of the pattern you want to start with and the             number of patterns to plot separated by comma or space.\nIf you want to plot all of the data,            press return\n') 
-            numbers = re.findall(r'\d+', selection)
-            # If the length of the user input is appropriate (len == 2): {{{
-            if len(numbers) == 2:
-                self.first_pattern_idx = int(numbers[0])
-                number_of_patterns  = int(numbers[1])
-                proposed_final_idx = self.first_pattern_idx + number_of_patterns # This will give a possible index (may be out of range)
-                if proposed_final_idx <= max_index:
-                    self.last_pattern_idx = proposed_final_idx
+        This function allows you to quickly get a range over which to plot data
+        in a waterfall plot.  
+        '''
+        times = self._get_time_arr(metadata_data, self.time_units)
+        # Go through input: {{{
+        if not start_time and not end_time and not num_patterns:
+            selecting = True
+            while selecting:
+                # Gather the information we need to progress: {{{ 
+                first_time, idx_first_time, key_first_time, fn_first_time = self._get_first_time(metadata_data)
+                first_time = key_first_time # This uses the readable time which will be the key
+                last_time = max(metadata_data, key = lambda k: metadata_data[k]['epoch_time'])
+
+                timecodes = list(self.file_dict.keys())
+                min_index = timecodes.index(first_time)
+                max_index = timecodes.index(last_time)
+                
+                min_time = np.around(min(times),1)
+                max_time = np.around(max(times),1)
+                #}}}
+                print(f'You have {len(timecodes)} patterns in this directory.\nThe time ranges from: {min_time} {self.time_units} to {max_time} {self.time_units}')
+                print('#'*80)
+                selection = input('Enter the time range over which you want to plot along with the number of plots you want. (3 values)\nIf you just want to plot everything, press return\n')
+                numbers = selection.split(',')
+                
+                # If the length of the user input is appropriate (len == 2): {{{
+                if len(numbers) == 3:
+                    time_range = [float(v.strip()) for v in numbers[:2]]
+                
+                    self._first_pattern_idx = self.find_closest(times, time_range[0], mode = 1) # This gives the index of the time 
+                    self._last_pattern_idx = self.find_closest(times, time_range[1], mode = 1) # This gives the index of the last pattern
+                    self._num_patterns = int(numbers[-1])
+                    
+                    selecting = False
+                #}}}
+                # No input is given and thus, all files are loaded: {{{
                 else:
-                    self.last_pattern_idx = max_index
-                selecting = False
-            #}}}
-            # The User inputs an invalid selection: {{{
-            elif len(numbers) >0 or len(numbers) < 0:
-                # This means that it is not 2 but is not zero
-                print('Your selection: {} was invalid.'.format(selection))
-            #}}}
-            # No input is given and thus, all files are loaded: {{{
-            else:
-                self.first_pattern_idx = min_index
-                self.last_pattern_idx = max_index
-                selecting = False
-            #}}}
+                    self._first_pattern_idx = min_index
+                    self._last_pattern_idx = max_index
+                    self._num_patterns = len(timecodes)
+                    selecting = False
+                #}}}
+        #}}}
+        # If given a starting and ending idx: {{{
+        else:
+            self._first_pattern_idx = self.find_closest(times, start_time, mode = 1)
+            self._last_pattern_idx = self.find_closest(times, end_time, mode = 1)
+            self._num_patterns = num_patterns
+        #}}}
+        self._get_arrs(metadata_data=metadata_data)
     #}}} 
     # get_arrs: {{{
-    def get_arrs(self,metadata:bool = False):
+    def _get_arrs(self, metadata_data:dict = None):
         '''
         This function is used to obtain the data from the files that fall within the time
         frame selected.
@@ -501,50 +1021,36 @@ class DataCollector:
         ys = []
         files = []
         temps = []
-        first_time = min(list(self.file_dict.keys()))
-        # if there is NOT metadata: {{{
-        if not metadata:
-            # Filter the data by time range: {{{
-            for i, time in enumerate(self.file_dict):
-                f = self.file_dict[time]
-                # Convert time to selected units: {{{
-                if self.time_units == 'min' and self.file_time_units == 'sec':
-                    chosen_time_unit = (time-first_time)/60
-                elif self.time_units == 'h' and self.file_time_units == 'sec':
-                    chosen_time_unit = (time-first_time)/60**2
-                elif self.time_units == 'sec' and self.file_time_units == 'sec':
-                    chosen_time_unit = time-first_time
-                #}}}
-                # Get the times and files: {{{
-                if i >= self.first_pattern_idx and i <= self.last_pattern_idx:
-                    ys.append(chosen_time_unit)
-                    files.append(f)
-                #}}}
+        #first_time = min(list(self.file_dict.keys())) 
+        keys = list(metadata_data.keys())
+        #all_times = self._get_time_arr(metadata_data=metadata_data, time_units=self.time_units) # All the times
+        readable_time_keys = list(metadata_data.keys())
+
+        tmp_rng = np.linspace(self._first_pattern_idx, self._last_pattern_idx, self._num_patterns) 
+        tmp_rng = self.check_order_against_time(tmp_rng, readable_time_keys, metadata_data, )
+        rng = [int(fl) for fl in tmp_rng]
+
+        # Get the times: {{{
+        t0 = metadata_data[readable_time_keys[rng[0]]]['epoch_time'] # The  initial time
+        for i in rng:
+            time = readable_time_keys[i] # Gives us the current readable time key
+            temps.append(metadata_data[time]['temperature']) # Add the celsius temp
+            f = self.file_dict[time]
+            t1 = metadata_data[time]['epoch_time'] # Gives the current metadata
+            # convert the time to selected units: {{{
+            if self.time_units == 'min':
+                current_time = (t1-t0)/60
+            elif self.time_units == 'h':
+                current_time = (t1-t0)/(60**2)
+            elif self.time_units == 'sec':
+                current_time == t1-t0
+            #}}}
+            # Get the times and files: {{{
+            ys.append(current_time)
+            files.append(f)
             #}}}
         #}}}
-        # If Metadata: {{{
-        else:
-            # Filter by the Metadata Time Range: {{{
-            t0 = self.metadata_data[first_time]['epoch_time']
-            for i, time in enumerate(self.file_dict):
-                temps.append(self.metadata_data[time]['temperature']) # Add the celsius temp
-                f = self.file_dict[time]
-                t1 = self.metadata_data[time]['epoch_time'] # Gives the correct time
-                # Convert time to selected units: {{{
-                if self.time_units == 'min' and self.file_time_units == 'sec':
-                    chosen_time_unit = (t1-t0)/60
-                elif self.time_units == 'h' and self.file_time_units == 'sec':
-                    chosen_time_unit = (t1-t0)/60**2
-                elif self.time_units == 'sec' and self.file_time_units == 'sec':
-                    chosen_time_unit = t1-t0
-                #}}}
-                # Get the times and files: {{{
-                if i >= self.first_pattern_idx and i <= self.last_pattern_idx:
-                    ys.append(chosen_time_unit)
-                    files.append(f)
-                #}}}
-            #}}}
-        #}}}
+
         # Get the tth and I vals {{{ 
         zs = [] # This will be the length of the files but will hold lists of intensities for each.
         self.max_i = 0
@@ -706,8 +1212,43 @@ class DataCollector:
             return end
         #}}}  
     #}}}
+    # _get_time_arr: {{{
+    def _get_time_arr(self, metadata_data:dict = None, time_units:str = 'min'):
+        ''' 
+        This function enables the fast acquisition of an array of 
+        times for determining the range over which you would like to 
+        collect data for making a waterfall plot or other useful functionality of this code. 
+        '''
+        first_time = min(entry['epoch_time'] for entry in metadata_data.values())
+        if time_units == 's':
+            times = [entry['epoch_time'] - first_time for entry in metadata_data.values()]
+        elif time_units == 'min':
+            times = [(entry['epoch_time'] - first_time)/60 for entry in metadata_data.values()]
+        elif time_units == 'h':
+            times = [(entry['epoch_time'] - first_time)/3600 for entry in metadata_data.values()]
+        return times
+    #}}}
+    # _get_first_time{{{ 
+    def _get_first_time(self,metadata_data:dict = None, debug = True):
+        md_keys = list(metadata_data.keys()) # These are the timecodes pulled from the filenames
+        epoch_times = [] # List of the epoch times for the dataset
+        for key, entry in metadata_data.items():
+            epoch = entry['epoch_time']
+            epoch_times.append(epoch) # Add each of the epoch times 
+        first_time = min(epoch_times) # Get the epoch time for the beginning of the run
+        idx_first_time = epoch_times.index(first_time) # Get the index of the first time 
+        key_first_time = md_keys[idx_first_time] # This gives us the timecode to look for
+        fn_first_time = metadata_data[key_first_time]['filename'] # Give the exact filename 
+        if idx_first_time != 0:
+            if debug:
+                print(f'Starting index is not zero! idx: {idx_first_time}')
+                print(f'Starting timecode: {key_first_time}\nFilename: {fn_first_time}')
+        return (first_time, idx_first_time, key_first_time, fn_first_time)
+            
+    #}}}
     # check_order_against_time: {{{
-    def check_order_against_time(self,tmp_rng:list = None,data_dict_keys:list = None,  metadata_data:dict = None, mode:int= 0 ):
+    def check_order_against_time(self,tmp_rng:list = None,data_dict_keys:list = None,  metadata_data:dict = None, mode:int= 0,
+            debug:bool = False):
         '''
         This function is designed to reorder the files you are analyzing 
         if you discover that the order is wrong after analysis.
@@ -718,19 +1259,22 @@ class DataCollector:
             0: This is normal mode, returns a range of indices from the original dataset you pull from (for refinements)
             1: This is the alt mode, returns a range of indices from the refined dataset (after refinement, for analysis)
         '''
+        # First, figure out what the actual t0 time is: {{{
+        md_keys = list(metadata_data.keys()) # These are the timecodes pulled from the filenames
+        start_time, idx_first_time, md_key_for_zero, md_filename = self._get_first_time(metadata_data, debug)
+        #}}}
+        # Now, we need to check if the order is correct regarding the metadata: {{{   
         fixed_range = []
         negative_times = [] # indices of the patterns we need to reorient. 
-        # Now, we need to check if the order is correct regarding the metadata: {{{  
         for idx, number in enumerate(tmp_rng): 
-            file_time = data_dict_keys[int(number)-1] 
-            md_keys = list(metadata_data.keys()) 
+            file_time = data_dict_keys[int(number)-1]  
             md_entry = metadata_data[file_time] # Get the metadata for the current time
-            start_time = metadata_data[md_keys[0]]['epoch_time'] # This gives us the starting time
+            #start_time = metadata_data[md_keys[0]]['epoch_time'] # This gives us the starting time
             current_epoch_time = md_entry['epoch_time'] # This gives the current epoch time
             time = (current_epoch_time - start_time)/60 # This is in minutes 
             if time <0:
                 negative_times.append(idx)
- 
+
         if negative_times:  
             for idx in negative_times: 
                 if mode == 0:
@@ -745,11 +1289,87 @@ class DataCollector:
                         fixed_range.append(idx)
         else: 
             #fixed_range = np.linspace(0, len(tmp_rng)-1, len(tmp_rng), dtype=int)
-            fixed_range = np.linspace(1, len(tmp_rng), len(tmp_rng), dtype=int) # I think this has to start at 1 because we subtract 1 elsewhere.
-
+            if mode == 0:
+                fixed_range = tmp_rng
+            elif mode == 1:
+                fixed_range = np.linspace(0, len(tmp_rng)-1, len(tmp_rng), dtype=int) # I think this has to start at 1 because we subtract 1 elsewhere.
+        
         #}}} 
+        if debug:
+            print(f'Final fixed range: {fixed_range}')
         return fixed_range
     
     #}}} 
+    # get_raw_patterns: {{{
+    def get_raw_patterns(self,
+            start_idx:int = 0,
+            end_idx:int = None,
+            num_patterns:int = 2,
+        ):
+        '''
+        The purpose of this function is to quickly get pattern data from 
+        raw data that have been located and allow you to plot the data as a waterfall. 
+
+        This is a good tool for when you want to see a broad overview of what happened during an experiment
+        without having to refine all the data first. 
+
+        The resulting dataset will have evenly spaced data given your input parameters
+        '''
+        os.chdir(self.data_dir)
+        files = self.metadata_data # It is better to use this because these keys are sorted in time order
+        total_files = len(files)
+        
+        if end_idx == None:
+            end_idx = total_files - 1
+
+        pattern_rng = np.linspace(start_idx, end_idx, num_patterns, dtype= int)
+
+        self.raw_data = {}
+        pattern = 0
+
+        for i, (key, md) in enumerate(files.items()):
+            ''' 
+            If the index (i) is equal to a value in the 
+            pattern_range, we load and record it. 
+            If not, we discard.
+            '''
+            try:
+                f = self.file_dict[key] 
+                if i in pattern_rng:
+                    tth, yobs = self._load_raw_xy(f, self.data_dir) 
+                    temp = md['temperature'] # This is the temp in deg C
+                    corrected_time = md['corrected_time']
+                    time = np.around(corrected_time/60, 2) # This is the time in minutes
+
+                    hovertemplate = f'2{self._theta}{self._degree_symbol}: '+'%{x}<br>Intensity: '+'%{y}<br>'+f'Pattern {i}: {time} min<br>{temp} {self._degree_celsius}'
+                    self.raw_data[pattern] = {
+                            'tth': tth,
+                            'yobs': yobs,
+                            'md': md,
+                            'temp': temp,
+                            'time': time,
+                            'corrected_time': corrected_time,
+                            'hovertemplate': hovertemplate,
+                    }
+                    pattern += 1
+            except:
+                time_min = np.around(md['corrected_time']/60, 2)
+                index = md['pattern_index']
+                print(f'Key: {key} not found in file dict: \n\tTime: {time_min} min\n\tPattern index: {index}\n\tpossible missing data')
+                pass
+        os.chdir(self.current_dir)
+
+    #}}}
+#}}}
+# is_number: {{{
+def is_number(v):
+    '''
+    Simply test if something is a number.
+    '''
+    try:
+        float(v)
+        return True
+    except:
+        return False
 #}}}
 

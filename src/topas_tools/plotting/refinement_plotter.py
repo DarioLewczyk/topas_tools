@@ -4,6 +4,7 @@
 #}}}
 # Imports: {{{
 import copy
+import os
 import numpy as np
 import plotly.graph_objects as go
 import re
@@ -285,7 +286,6 @@ class RefinementPlotter(PlottingUtils):
         #Get Info for Updating Layout: {{{
         if tth_range == None:
             tth_range = [min(tth), max(tth)] # plot the whole range
-        
         title_text = f'Time: {np.around(self._current_time,2)} {time_units}, ({temp_label}: {np.around(temp,temp_decimals)}{self._deg_c}) Rwp: {np.around(self._rwp,rwp_decimals)}'
         xaxis_title = f'2{self._theta}{self._degree}'
         yaxis_title = 'Intensity'
@@ -355,6 +355,154 @@ class RefinementPlotter(PlottingUtils):
             return(tth,yobs, ycalc, ydiff, hovertemplate, title_text, xaxis_title, yaxis_title)
         #}}}
     #}}}
+    # plot_raw_pattern: {{{
+    def plot_raw_pattern(self, 
+            idx:int = None, 
+            time:float = None, 
+            time_units:str = 'min',
+            skiprows:int = 1,
+            **kwargs
+        ):
+        ''' 
+        This function allows you to quickly plot a pattern from your data directory
+        Does not require you to have first gone through and done refinement. 
+
+        Allows you to quickly pull up a pattern by giving the time at which the pattern shows up or giving an index. 
+        ''' 
+        orig_dir = os.getcwd()
+        os.chdir(self.data_dir)
+        # assign variables from kwargs: {{{
+        # default kwargs: {{{
+        self._default_kwargs = {
+            'template' : 'simple_white',
+            'tth_range' : None,
+            'yrange' :None,
+            'height':800,
+            'width':1000,
+            'show_legend':True,
+            'legend_x':None,
+            'legend_y':None,
+            'legend_xanchor':None,
+            'legend_yanchor':None,
+            'font_size':20,
+            'button_xanchor':'right',
+            'button_yanchor':'top',
+            'button_x':1.45,
+            'button_y':1.05,
+            'showgrid':False,
+            'dtick':1,
+            'ticks':'inside',
+            'phase_colors': None,
+        }
+        #}}}  
+        # Apply any kwarg updates: {{{
+        alternates = {
+            'tth_range': ['tth_range', 'xrange', 'x_range'], 
+            'yrange': ['yrange', 'y_range'], 
+            'phase_colors': ['colors', 'phase_colors']
+        }
+        Utils._update_default_kwargs(self, 
+            kwargs=kwargs,
+            alternates=alternates,
+        )
+        #}}}
+        # Set variables from the dictionary: {{{
+        template = Utils._get_kwarg(self,'template')
+        tth_range = Utils._get_kwarg(self,'tth_range')
+        yrange = Utils._get_kwarg(self,'yrange')
+        height = Utils._get_kwarg(self,'height')
+        width = Utils._get_kwarg(self,'width')
+        show_legend = Utils._get_kwarg(self,'show_legend')
+        legend_x = Utils._get_kwarg(self,'legend_x')
+        legend_y = Utils._get_kwarg(self,'legend_y')
+        legend_xanchor = Utils._get_kwarg(self,'legend_xanchor')
+        legend_yanchor = Utils._get_kwarg(self,'legend_yanchor')
+        font_size = Utils._get_kwarg(self,'font_size')
+        button_xanchor = Utils._get_kwarg(self,'button_xanchor')
+        button_yanchor = Utils._get_kwarg(self,'button_yanchor')
+        button_x = Utils._get_kwarg(self,'button_x')
+        button_y = Utils._get_kwarg(self,'button_y')
+        showgrid = Utils._get_kwarg(self,'showgrid')
+        dtick = Utils._get_kwarg(self,'dtick')
+        ticks = Utils._get_kwarg(self,'ticks')
+        phase_colors = Utils._get_kwarg(self,'phase_colors')
+        #}}} 
+        #}}} 
+        hovertemplate = f"2{self._theta}{self._degree}" + "%{x}<br>Intensity: %{y}"
+        # Identify the entries in relevant dictionaries: {{{
+        keys = list(self.file_dict.keys())
+        if idx != None:     
+            key = keys[idx]
+        elif time != None:
+            times = self._get_time_arr(self.metadata_data, time_units = time_units)
+            idx = self.find_closest(times, time, mode = 1) # Returns the index of the key
+            key = keys[idx]
+        file = self.file_dict[key]
+        md = self.metadata_data[key]
+        #}}}
+        # Get the data: {{{
+        data = np.loadtxt(file, skiprows=skiprows)  # This has the x, y data 
+        tth = data[:,0]
+        yobs = data[:,1]
+        #}}}
+        # Generate the figure: {{{
+        self.pattern_plot = go.Figure() 
+        # Add the plots: {{{ 
+        self.pattern_plot.add_scatter(
+            x = tth,
+            y = yobs,
+            hovertemplate = hovertemplate,
+            marker = dict(
+                color = 'black',
+            ),
+            name = 'Observed',
+            )
+        #}}}
+        #Get Info for Updating Layout: {{{
+        if tth_range == None:
+            tth_range = [min(tth), max(tth)] # plot the whole range
+        if time_units == 's':
+            curr_time = md['corrected_time']
+        elif time_units == 'min':
+            curr_time = md['corrected_time']/60
+        elif time_units == 'h':
+            curr_time = md['corrected_time']/(60**2)
+        try:
+            curr_temp = md['temperature']
+            if curr_temp == None:
+                curr_temp = 0.0
+        except:
+            curr_temp = 0.0 
+        title_text = f'Time: {np.around(curr_time,2)} {time_units}, (Temperature: {np.around(curr_temp,2)}{self._deg_c})'
+        xaxis_title = f'2{self._theta}{self._degree}'
+        yaxis_title = 'Intensity'
+        #}}}
+        # Update Layout: {{{
+        self._update_pattern_layout(
+            fig=self.pattern_plot,
+            title_text=title_text,
+            xaxis_title=xaxis_title,
+            yaxis_title=yaxis_title,
+            tth_range=tth_range,
+            yrange = yrange,
+            template=template,
+            font_size=font_size,
+            height=height,
+            width = width,
+            show_legend=show_legend,
+            legend_x = legend_x,
+            legend_y = legend_y,
+            legend_xanchor = legend_xanchor,
+            legend_yanchor= legend_yanchor,
+            showgrid = showgrid,
+            dtick = dtick,
+            ticks = ticks,
+        ) 
+        #}}} 
+        #}}}
+        self.pattern_plot.show()
+        os.chdir(orig_dir)
+    #}}}
     # plot_csv_info: {{{
     def plot_csv_info(self, 
             plot_type:str = 'rwp',
@@ -377,6 +525,7 @@ class RefinementPlotter(PlottingUtils):
             legend_yanchor:str = 'top',
             debug:bool = False,
             ticks:str = 'inside',
+            **kwargs
             ):
         ''' 
         plot_type: This can be any of the below. 
@@ -421,141 +570,31 @@ class RefinementPlotter(PlottingUtils):
         For each of these, we would need to know 
 
         '''
+        first_plot = False # This tracks if we have already added data to the plot or not.
+        # basic categorization: {{{
+        if normalized:
+            normalized_label = ' Normalized'
+        else:
+            normalized_label = ''
         if specific_substance != None and type(specific_substance) == str:
             specific_substance = [specific_substance]
         plot_type = plot_type.lower() # This ensures everything is lowercase.
         if not self._data_collected:
             print('You did not yet collect data. Do that now...')
             self.get_data()
-        # Determine what to look for in the data: {{{
-        yaxis_title = '' # DEfault
-        yaxis2_title = '' # Default
-        xaxis_title = f'Time / {time_units}'
-        # Lattice Params: {{{ 
-        if plot_type == 'lattice parameters' or plot_type == 'lattice' or plot_type == 'lp':
-            keys = ['a','b','c', 'al','be','ga', 'alpha', 'beta', 'gamma'] # These are the 
-            yaxis_title = f'Lattice Parameter / {self._angstrom}' # This is the a, b, c lattice parameter title
-            yaxis2_title = f'Lattice Parameter / {self._degree}' # this is the al, be, ga lattice parameter title
-            title = 'Lattice Parameters'
         #}}}
-        # Scale Factor: {{{
-        elif plot_type == 'scale factor' or plot_type == 'sf':
-            keys = ['scale_factor', 'sf','scale factor'] # These are the variations likely to be used
-            yaxis_title = 'Scale Factor'
-            title = 'Scale Factor'
-            normalized = True
+        # Determine what to look for in the data: {{{ 
+        xaxis_title = f'Time / {time_units}' 
+        self._sort_csv_keys() # This gets self.csv_plot_data
+        # All non-rwp plots: {{{
+        if plot_type != 'rwp':
+            plot_data, yaxis_title, yaxis2_title, title =  Utils._filter_csv_dict(self, self.csv_plot_data, plot_type) # Outsource the pattern matching
         #}}}
-        # Rwp: {{{
-        elif plot_type == 'rwp':
-            keys = ['rwp']
-            yaxis_title = 'Rwp'
+        # Rwp plot: {{{
+        else:
+            plot_data = self.csv_plot_data # We don't need to do anything special for this case
             title = 'Rwp'
-        #}}}
-        # Volume: {{{
-        elif plot_type == 'volume' or plot_type == 'vol':
-            keys = ['vol', 'volume', 'cell volume', 'cell_volume']
-            yaxis_title = f'Volume / {self._angstrom}{self._cubed}'
-            title = 'Volume'
-        #}}}
-        # R Bragg: {{{
-        if plot_type == 'rbragg' or plot_type == 'rb':
-            keys = ['r bragg','r_bragg'] # this tells the code what to search for
-            yaxis_title = 'R Bragg'
-            title = 'R Bragg'
-        #}}}
-        # Weight Percent: {{{
-        if plot_type == 'weight percent' or plot_type == 'wp': 
-            keys = ['weight percent', 'weight_percent']
-            yaxis_title = 'Weight Percent'
-            title = 'Weight Percent'
-        #}}}
-        # B-values: {{{
-        if plot_type == 'b values' or plot_type == 'beq' or plot_type == 'bvals':
-            keys = ['bvals', 'beq','bval', 'b value', 'b val', 'b values', 'b_value','b_val','b_values','B'] # tells the code what the likely keywords to look for are.
-            yaxis_title = 'B-Values'
-            title = 'B-Values'
-        #}}}
-        # Size L: {{{
-        if plot_type == 'size l' or plot_type == 'csl' or plot_type == 'sizel':
-            keys = ['size_l', 'csl','lorentzian_size','Size_L','cslv']
-            yaxis_title = 'Lorentzian Size'
-            title = 'Lorentzian Size'
-        #}}}
-        # Size G: {{{
-        if plot_type == 'size g' or plot_type == 'csg' or plot_type == 'sizeg':
-            keys = ['size_g', 'csg','gaussian_size','Size_G', 'csgv']
-            yaxis_title = 'Gaussian Size'
-            title = 'Gaussian Size' 
-        #}}}
-        # Strain L: {{{ 
-        if plot_type == 'strain l' or plot_type == 'strl' or plot_type == 'strainl':
-            keys = ['strain_l', 'strl','lorentzian_strain','Strain_L','slv']
-            yaxis_title = 'Lorentzian Strain'
-            title = 'Lorentzian Strain'
-        #}}}
-        # Strain G: {{{
-        if plot_type == 'strain g' or plot_type == 'strg' or plot_type == 'straing':
-            keys = ['strain_g', 'strg','gaussian_strain','Strain_G','sgv']
-            yaxis_title = 'Gaussian Strain'
-            title = 'Gaussian Strain' 
-        #}}}
-        # Lvol: {{{ 
-        if plot_type.lower() == 'lvol':
-            keys = ['lvol']
-            yaxis_title = 'LVol'
-            title = 'LVol'
-        #}}}
-        # Lvolf: {{{
-        if plot_type.lower() == 'lvolf': 
-            keys = ['lvolf']
-            yaxis_title = 'Lvolf'
-            title = 'LVolf'
-        #}}}
-        # e0: {{{ 
-        if plot_type.lower() == 'e0':
-            keys = ['e0']
-            yaxis_title = f'e{self._subscript_zero}'
-            title = f'e{self._subscript_zero}'
-        #}}}
-        # phase_MAC: {{{
-        if plot_type.lower() == 'phase_mac':
-            keys = ['phase_MAC']
-            yaxis_title = 'Phase MAC'
-            title = 'Phase MAC'
-        #}}}
-        # cell_mass: {{{
-        if plot_type.lower() == 'cell_mass' or plot_type.lower() == 'cm' or plot_type.lower == 'mass':
-            keys = ['cell_mass']
-            yaxis_title = 'Cell Mass'
-            title = 'Cell Mass'
-        #}}}
-        # eta: {{{
-        if plot_type.lower() == 'eta':
-            keys = ['eta']
-            yaxis_title = 'Eta'
-            title = 'Eta Values'
-        #}}}
-        # stephens: {{{
-        if plot_type.lower() == 'stephens':
-            keys = [
-                's400',
-                's040',
-                's004',
-                's220',
-                's202',
-                's022',
-                's310',
-                's103',
-                's031',
-                's130',
-                's301',
-                's013',
-                's211',
-                's121',
-                's112',
-            ]
-            yaxis_title = 'Stephens Parameter'
-            title = 'Stephens Parameters'
+            yaxis_title = 'Rwp'
         #}}}
         #}}}
         # Update the title text: {{{
@@ -563,7 +602,7 @@ class RefinementPlotter(PlottingUtils):
             title = f'{additional_title_text} {title}' # combines what the user wrote with the original title.
         #}}}
         # For the CSV Data, we need to find the data that we care about inside of self.csv_plot_data: {{{
-        self._sort_csv_keys() # This gets self.csv_plot_data
+        # Collect relevant data to CSV_Data: {{{
         for entry in self.rietveld_data:
             if plot_temp:
                 if 'temperature' not in self.csv_plot_data:
@@ -580,203 +619,126 @@ class RefinementPlotter(PlottingUtils):
                 self.csv_plot_data['time'] = []
             self._get_time(entry,time_units, check_order = self.check_order) # This gives us the time in the units we wanted (self._current_time)
             self.csv_plot_data['time'].append(self._current_time) # Add the time
+        #}}} 
         # IF YOU WANT TO USE THE OUTPUT, Also DEFINE plot_data : {{{
         if use_out_data:
             self._sort_out_keys() # This gets self.out_plot_dict
             self.out_plot_dict['temperature'] = self.csv_plot_data['temperature']
             self.out_plot_dict['time'] = self.csv_plot_data['time']
-            plot_data = self.out_plot_dict # This local dictionary will be used to make the plot in this function. 
-        else:
-            plot_data = self.csv_plot_data # This is the local dictionary used to make the plot. 
+            #plot_data = self.out_plot_dict # This local dictionary will be used to make the plot in this function. 
+            plot_data, yaxis_title, yaxis2_title, title =  Utils._filter_csv_dict(self, self.out_plot_dict, plot_type) # Outsource the pattern matching
         #}}}
         #}}}
         # plot the data: {{{
-        fig = go.Figure()
-        second_yaxis = False
-        third_yaxis = False
-        x = plot_data['time']
-        base_ht = f'Time/{time_units}: '+'%{x}<br>' # This is the basis for all hovertemplates
-        
-        if keys == ['rwp']:
+        x =self.csv_plot_data['time'] # Since we are changing the source.
+        base_ht = f'Time/{time_units}: '+'%{x}<br>' # This is the basis for all hovertemplates 
+        # special case: Rwp: {{{
+        if plot_type == 'rwp':
             hovertemplate = base_ht+'Rwp: %{y}'
             y = plot_data['rwp']
-            fig.add_scatter(
-                    x = x,
-                    y = y,
-                    hovertemplate = hovertemplate, 
-                    yaxis = 'y1',
-                    name = 'Rwp',
-            )
-            
-
+            self.plot_data(x = x, y = y, hovertemplate = hovertemplate, name = 'Rwp',color = 'black',
+                    xaxis_title = xaxis_title, yaxis_title = yaxis_title,height = height, width = width, 
+                    font_size = font_size, legend_x = legend_x, legend_y = legend_y, legend_xanchor = legend_xanchor, 
+                    legend_yanchor = legend_yanchor, xrange = time_range, yrange = y_range,
+                    **kwargs)
+            first_plot = True
+        #}}}
+        # Plot any other type of figure: {{{
         else:
-            for substance in plot_data:
-                color = self._get_random_color() # This gives us a color
+            for substance, entry in plot_data.items():
+                ''' 
+                This section will simply loop through the plot dictionary
+                This should have only entries that we actually care about 
+                for the given plot we are trying to make, so we don't 
+                have to do any complex sorting here.
+                '''
+                color = self._get_random_color() # This gives us a color for each substance
+                # Handle where we want to plot only one substance's params: {{{ 
                 if not specific_substance:
                     usr_substance = substance.lower() # If a specific substance is not given, it is set as the current. 
                 else:
                     for sub in specific_substance:
                         if sub.lower() == substance.lower():
-                            usr_substance = sub.lower()
+                            usr_substance = sub.lower() # Set the substance to the one the user selected
                             break
                         else:
                             usr_substance = None
-                
-                if substance != 'time' and substance != 'temperature' and substance != 'rwp' and substance.lower() == usr_substance:
-                    entry = plot_data[substance] # This will be a dictionary entry with keys. 
-                    entry_keys = list(entry.keys()) # These will be the keys for the entry. 
-                    if debug:
-                        print(f'ENTRY KEYS: {entry_keys}')
-                    for plot_key in entry_keys:
-                        try:
-                            # This will be done to see if there are any matches to a value that may have a number.
+                #}}}
+                # if the user wants to plot the substance, do it: {{{
+                if substance.lower() == usr_substance:
+                    # If the user is selecting a substance, it gets its own colors for all: {{{
+                    if specific_substance:
+                        color = self._get_random_color()
+                    #}}}
+                    # Plot all of the data in the entry: {{{
+                    for plot_key, data in entry.items():
+                        name = f'{substance} {plot_key}'
+                        # Get Hovertemplate: {{{
+                        possible_angle_keys = ['al', 'alpha', 'be', 'beta', 'ga', 'gamma']
+                        if plot_key not in possible_angle_keys:
+                            hovertemplate = base_ht +f'{yaxis_title} ({substance}, {plot_key}): '+'%{y}' # HT for most things
+                            y2 = False
+                            y2_title = None
                             
-                            numerical_check = re.findall(r'(\w+\d*)*.',plot_key)[0] # This will match to anything that represents a formula.
-                            numerical_check = numerical_check.strip(f'{substance}_')
-                            if 'b_value' in numerical_check:
-                                numerical_check = 'b_value'
-                        except:
-                            numerical_check = ''
-                        if plot_key.lower() in keys or plot_key.strip(f'{substance}_') in keys or numerical_check in keys: # Need to check if the keys we are searching for are present.
-                            if debug:
-                                print(f'PASSED TEST: \n\tplot key: {plot_key}\n\tnumerical check: {numerical_check}\n')
-                            # Handle most cases: {{{ 
-                            if plot_key != 'al' or plot_key != 'be' or plot_key != 'ga' or plot_key != 'alpha' or plot_key != 'beta' or plot_key != 'gamma':
-                                if specific_substance:
-                                    color = self._get_random_color() # Set a specific color for each lattice parameter if only one substance plotted. 
-                                # This is the default section since units should be consistent enough. 
-                                # Get the data: {{{
-                                if normalized:
-                                    y = self._normalize(entry[plot_key]) # This will normalize the plot data
-                                else:
-                                    y = entry[plot_key] # This will just give us the data
-                                #}}}
-                                hovertemplate = base_ht +f'{yaxis_title} ({substance}, {plot_key}): '+'%{y}' # This gives us the hovertemplate for this part.
-                                # Add the scatter (Y1): {{{
-                                fig.add_scatter(
-                                    x = x,
-                                    y = y,
-                                    hovertemplate = hovertemplate,
-                                    name = f'{substance} {plot_key}',
-                                    mode = 'lines+markers',
-                                    marker = dict(
-                                        color = color,
-                                    ),
-                                    line = dict(
-                                        color = color,
-                                    ),
-                                    yaxis = 'y1',
-                                )
-                                #}}}
-                             
-                            #}}}
-                            # Handle the case where we need to plot lattice angles: {{{
-                            else:
-                                # In this case, we need a second y axis for the degrees.
-                                # get the data: {{{
-                                if normalized:
-                                    y = self._normalize(entry[plot_key])
-                                else:
-                                    y = entry[plot_key]
-                                #}}}
-                                hovertemplate = base_ht + f'{yaxis2_title} ({substance}, {plot_key}): '+'%{y}'
-                                # Add the scatter (Y2):{{{
-                                fig.add_scatter(
-                                    x = x,
-                                    y = y,
-                                    hovertemplate = hovertemplate,
-                                    name = f'{substance} {plot_key}',
-                                    mode = 'lines+markers',
-                                    marker = dict(
-                                        color = color,
-                                    ),
-                                    line = dict(
-                                        color = color,
-                                    ),
-                                    yaxis = 'y2',
-                                ) 
-                                second_yaxis = True
-                                #}}}
-                            #}}}
-        # Plot temp data: {{{
+                        else:
+                            y2 = True
+                            hovertemplate = base_ht + f'{yaxis2_title} ({substance}, {plot_key}): '+'%{y}' 
+                            y2_title = yaxis2_title
+                        #}}}
+                        # Get the y data: {{{
+                        if normalized:
+                            y = self._normalize(data) # Returns a normalized array (based on max val)
+                        else:
+                            y = data
+                        #}}}
+                        # Plot the data: {{{
+                        if not first_plot: 
+                            self.plot_data(x = x, y = y, hovertemplate = hovertemplate, name = name, mode = 'lines+markers', 
+                                color = color,xaxis_title = xaxis_title, yaxis_title = yaxis_title, title_text = title,
+                                legend_x = legend_x, legend_y = legend_y, legend_xanchor = legend_xanchor, 
+                                legend_yanchor = legend_yanchor,font_size = font_size, xrange = time_range, yrange = y_range,
+                                **kwargs
+                            )
+                            first_plot = True
+                        else:
+                            self.add_data_to_plot(
+                                x = x, y = y, name = name, mode = 'lines+markers', xrange = time_range, yrange = y_range, 
+                                color = color, hovertemplate = hovertemplate, legend_x = legend_x, legend_y = legend_y, 
+                                legend_xanchor = legend_xanchor, legend_yanchor = legend_yanchor, y2 = y2, y2_title = y2_title,
+                                y2_position = yaxis_2_position,
+                                **kwargs
+                            )
+
+                        #}}}
+                    #}}} 
+                #}}}
+        #}}}
+        # if we are wanting to plot the temp: {{{
         if plot_temp:
-            yaxis3_title = f'{temp_label} /{self._deg_c}'
-            hovertemplate = base_ht + f'{temp_label}/{self._deg_c}: '+'%{y}'
-            fig.add_scatter(
-                x = x,
-                y = plot_data['temperature'],
-                hovertemplate = hovertemplate,
-                yaxis = 'y3',
-                name = f'{temp_label}/{self._deg_c}',
-                mode = 'lines+markers',
-                marker = dict(color = 'red'),
-                line = dict(color = 'red'),
-            )
-            third_yaxis = True
-        #}}}
-        # Update layout: {{{
-        if time_range == None:
-            time_range = [min(x), max(x)]
-        # Update the first y axis and plot: {{{
-        fig.update_layout(
-            height = height,
-            width = width,
-            title_text = f'Plot of {title} vs. Time',
-            xaxis = dict(
-                title = xaxis_title,
-                domain = [yaxis_2_position, 1], # the active area for x axis
-                range = time_range,
-                ticks = ticks,
-            ), 
-            yaxis = dict(
-                title = yaxis_title,
-                ticks = ticks,
-            ),
-            font = dict(
-                size = font_size,
-            ),
-            template = 'simple_white',
-            legend = dict(
-                yanchor = legend_yanchor,
-                xanchor = legend_xanchor,
-                y = legend_y,
-                x = legend_x,
-            ),
-
-        )
-        #}}}
-        if y_range:
-            fig.update(layout_yaxis_range = y_range)
-        # if second y axis: {{{
-        if second_yaxis:
-            fig.update_layout(
-                yaxis2 = dict(
-                    title = yaxis2_title,
-                    anchor = 'free',
-                    overlaying = 'y',
-                    side = 'left',
-                    position = yaxis_2_position,
-                    ticks = ticks,
-                ),
-            )
-        #}}}
-        # if third axis: {{{
-        if third_yaxis:
-            fig.update_layout(
-                yaxis3 = dict(
-                    title = yaxis3_title,
-                    anchor = 'x',
-                    overlaying = 'y',
-                    side = 'right',
-                    ticks = ticks,
-
-                ),
-            )
+            if not first_plot:
+                print(f'This figure will be empty because your search: {plot_type}\n'+
+                        'was not found'
+                        )
+            else:
+                y3_title = f'Temperature ({self._degree}C)'
+                name = 'Thermocouple Temperature'
+                self.add_data_to_plot(
+                        x = x,
+                        y = self.csv_plot_data['temperature'],
+                        name = name,
+                        mode = 'lines+markers',
+                        color = 'red',
+                        xrange = time_range, yrange = y_range, y3 = True,
+                        y3_title = y3_title, legend_x = legend_x, legend_y = legend_y, 
+                        legend_xanchor= legend_xanchor, legend_yanchor = legend_yanchor,
+                        **kwargs
+                )
         #}}}
         #}}}
-
-        #}}}
-        fig.show()     
+        try:
+            self.show_figure()
+        except:
+            pass
     #}}}
     # plot_multiple_patterns: {{{
     def plot_multiple_patterns(self,
@@ -868,8 +830,8 @@ class RefinementPlotter(PlottingUtils):
                 else:
                     if max(ycalc) > self._max_i:
                         self._max_i = max(ycalc)
-            except:
-                print(f'failed to plot: {i}')
+            except Exception as e: 
+                raise Exception(f'failed to plot: {i}')
             #}}}
             # If You Want a Waterfall: {{{
             if waterfall:  
@@ -1224,5 +1186,192 @@ class RefinementPlotter(PlottingUtils):
         )
         #}}}
         fig.show() 
+    #}}}
+    # plot_multiple_raw_patterns{{{
+    def plot_multiple_raw_patterns(self,
+            start_idx:int = 0,
+            end_idx:int = None,
+            num_patterns:int = 2,
+            offset = 20,
+            xrange:list = None,
+            yrange:list = None,
+            height:int = 800,
+            width:int = 1000,
+            color = 'blue',
+            colorscale = 'viridis',
+            waterfall = False,
+            zmin_args:tuple = (-10, 5), # The first is the minimum intensity button, the second is the number of buttons
+            zmax_args:tuple = (10, 5), # The first is the minimum I for the max buttons and the second is the number of buttons
+            button_layer_1_height = 1.17,
+            button_layer_2_height = 1.1,
+            **kwargs
+            ):
+        '''
+        This function expands on the plot raw pattern concept 
+        and allows us to plot many patterns at once given a spacing 
+        
+        If you want to actually see a waterfall plot (e.g. with a heatmap) 
+        then you need to change the waterfall option to "true"
+        ''' 
+        self.get_raw_patterns(start_idx, end_idx, num_patterns) # This gets all the data and stores them 
+        # If waterfall, create lists: {{{
+        if waterfall:
+            self._max_i = 0
+            # This necessitates a more complex list structure. 
+            self.x = [] # This is going to be 2 theta range
+            self.y = [] # This is the time axis
+            self.z = [] # This will be a list of lists for intensity.
+            self.temps = [] # This will be a list of the temperatures for the data
+        #}}}
+        # Data collection for Waterfall or plotting for non-waterfall: {{{ 
+        for i, (idx, entry) in enumerate(self.raw_data.items()):
+         
+            ht = entry['hovertemplate']
+            tth = entry['tth']
+            yobs = entry['yobs']
+            xaxis_title = f'2{self._theta}{self._degree_symbol}'
+            yaxis_title = 'Integrated intensity'
+            title_text = os.path.basename(self.data_dir) # Sets a generic title for the plot
+ 
+            # Get data for waterfall: {{{ 
+            if waterfall:
+                time = np.around(entry['corrected_time']/60,4) 
+                self.x = tth # This only needs to be 1 series.
+                self.y.append(time) # This puts it into minutes 
+                self.z.append(yobs) # This adds the observed intensity.
+                if max(yobs) > self._max_i:
+                    self._max_i = max(yobs)
+                self.temps.append(entry['temp'])
+                 
+            #}}}
+            # If NOT a waterfall: {{{
+            else:
+                plot_offset = offset * i # This way the offset doesnt get changed and go up exponentially
+                yobs = yobs + plot_offset
+                if i == 0:
+                    self.plot_data(tth, yobs,mode = 'lines', title_text=title_text, xaxis_title=xaxis_title, yaxis_title=yaxis_title, 
+                        xrange = xrange, yrange= yrange, height=height, width=width, color = color, show_legend=False,hovertemplate= ht,
+                        **kwargs)
+                else: 
+                    self.add_data_to_plot(tth, yobs, mode = 'lines', color = color, hovertemplate = ht, **kwargs) 
+            #}}}
+        #}}}
+        # Waterfall Plot Added: {{{ 
+        if waterfall: 
+            self.raw_waterfall = go.Figure()
+            # Generate the hovertemplate: {{{
+            hovertemplate = []
+            hovertemplate_template = f"2{self._theta}{self._degree}" + "%{x}<br>Intensity: %{z}<br>" + "Time: %{y}<br>"
+            shape = np.random.rand(len(self.y), len(self.x))
+            #for t in self.temps:
+            #    hovertemplate.append(hovertemplate_template + f'Temperature: {t} {self._degree_celsius}')
+            for i, v in enumerate(shape):
+                row = []
+                for j, v in enumerate(self.x):
+                    t = self.temps[i]
+                    time = np.around(self.y[i] , 4)
+                    tth = np.around(v,4)
+                    intensity = np.around(self.z[i][j], 4)
+                    row.append(f'2{self._theta}{self._degree}: {tth}<br>Intensity: {intensity}<br>Time: {time} min<br>Temperature: {t} {self._degree_celsius}')
+                hovertemplate.append(row)
+            #}}}
+            
+            self.raw_waterfall.add_heatmap(
+                x = self.x,
+                y = self.y,
+                z = self.z, 
+                #hovertemplate = hovertemplate,
+                text = hovertemplate, 
+                hoverinfo = 'text',
+                colorscale= colorscale,
+            )
+            yaxis_title = 'Time / min'
+            # Get Button Args: {{{ 
+            min_on_zmin, num_min_buttons = zmin_args # unpack the tuple
+            min_on_zmax, num_max_buttons = zmax_args # unpack the tuple
+            min_steps = (0 -min_on_zmin)/(num_min_buttons -1)
+            max_steps = (self._max_i -min_on_zmax)/ (num_max_buttons-1)
+  
+            zmin_arange = np.arange(min_on_zmin, 0+min_steps,min_steps)
+            zmax_arange = np.arange(min_on_zmax, self._max_i+max_steps, max_steps)
+            #}}}
+            # Make buttons to change scaling: {{{
+            zmin_buttons = [
+                dict(
+                    label = f'I_min: {np.around(v,2)}',
+                    method = 'restyle',
+                    args = [
+                        {'zmin': v},
+                    ]
+                ) for v in zmin_arange
+            ]
+            zmax_buttons = [
+                dict(
+                    label = f'I_max: {np.around(v,2)}',
+                    method = 'restyle',
+                    args = [
+                        {'zmax': v},
+                    ]
+                ) for v in zmax_arange
+            ]
+            #}}}
+            #}}}
+            # Update Layout: {{{
+        
+            self._update_pattern_layout(
+                    fig = self.raw_waterfall,
+                    title_text=title_text,
+                    xaxis_title=xaxis_title,
+                    yaxis_title=yaxis_title,
+                    tth_range= xrange,
+                    yrange = yrange,
+                    template= 'simple_white',
+                    #font_size=font_size,
+                    height=height,
+                    width=width,
+                    show_legend= False,
+                    #legend_x = legend_x,
+                    #legend_y=legend_y,
+                    #legend_xanchor=legend_xanchor,
+                    #legend_yanchor=legend_yanchor,
+                    #showgrid = showgrid,
+                    #dtick = dtick,
+                    #ticks = ticks,
+            )
+            # Waterfall Update: {{{
+        
+            self.raw_waterfall.update_layout( 
+                    margin = dict(t=200,b=0,l=0,r=0),
+                    autosize = False,
+                    updatemenus = [
+                    dict(
+                        buttons = zmax_buttons,
+                        yanchor = 'top',
+                        type = 'buttons',
+                        y = button_layer_1_height,
+                        x = 0,
+                        xanchor = 'left',
+                        pad = {'r':10, 't':10},
+                        direction = 'right',
+                    ),
+                    dict(
+                        buttons = zmin_buttons,
+                        yanchor = 'top',
+                        type = 'buttons',
+                        y = button_layer_2_height,
+                        x=0,
+                        xanchor = 'left',
+                        pad = {'r':10,'t': 10},
+                        direction = 'right',
+                    )
+                ],
+                
+            )
+            self.raw_waterfall.show()
+            #}}} 
+
+        #}}} 
+        if not waterfall:
+            self.show_figure()
     #}}}
 #}}}

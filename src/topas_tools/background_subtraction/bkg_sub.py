@@ -593,7 +593,12 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
         # Plot the result: {{{
         if plot_result:
             # plot the glass reference: {{{
-            tth_offset = res['tth'][glass_peak_idx] - self.glass_ref_peaks['tth'][0]
+            try:
+                tth_offset = res['tth'][glass_peak_idx] - self.glass_ref_peaks['tth'][0]
+            except:
+                print('failed to get peaks!')
+                tth_offset = self.glass_ref_peaks['tth'][0] - self.glass_ref_peaks['tth'][0]
+
             # Get a copy of the glass reference data: {{{
             air_sub = self.patterns['air_sub_glass']
             glass = self.patterns['glass']
@@ -610,27 +615,52 @@ class Bkgsub(Utils, BkgsubUtils, BkgSubPlotter):
            
             # First Scale Background: {{{ 
             ref_peak = self.glass_ref_peaks['peak_info']['peak_heights'][0]
-            data_peak = res['peak_info']['peak_heights'][glass_peak_idx]
+            try:
+                data_peak = res['peak_info']['peak_heights'][glass_peak_idx]
+            except:
+                print(f'Invalid value for height')
+                data_peak = ref_peak
             scaled_glass = self.scale_reference(shifted_glass, ref_peak, data_peak, scale_modifier)
             
             #}}}
 
             #}}} 
-            self.plot_pattern_with_peaks(
-                pattern_tth = x,
-                pattern_yobs = y,
-                pattern_name = name,
-                peaks_tth= res['tth'],
-                peaks_yobs= res['yobs'],
-                scaled_glass_tth = scaled_glass['tth'],
-                scaled_glass_yobs = scaled_glass['yobs'],
-                scale_modifier = scale_modifier,
-                peaks_name = f'Data Peaks (idx: {idx})',
-                height = plot_height,
-                width = plot_width,
-                legend_x = legend_x,
-                legend_y = legend_y,
-            )
+            # Normal Operation plotting: {{{
+            try:
+                self.plot_pattern_with_peaks(
+                    pattern_tth = x,
+                    pattern_yobs = y,
+                    pattern_name = name,
+                    peaks_tth= res['tth'],
+                    peaks_yobs= res['yobs'],
+                    scaled_glass_tth = scaled_glass['tth'],
+                    scaled_glass_yobs = scaled_glass['yobs'],
+                    scale_modifier = scale_modifier,
+                    peaks_name = f'Data Peaks (idx: {idx})',
+                    height = plot_height,
+                    width = plot_width,
+                    legend_x = legend_x,
+                    legend_y = legend_y,
+                )
+            #}}}
+            # Fault Plotting: {{{
+            except:
+                self.plot_pattern_with_peaks(
+                    pattern_tth = x,
+                    pattern_yobs = y,
+                    pattern_name = name,
+                    peaks_tth= [0],
+                    peaks_yobs= [0],
+                    scaled_glass_tth = scaled_glass['tth'],
+                    scaled_glass_yobs = scaled_glass['yobs'],
+                    scale_modifier = scale_modifier,
+                    peaks_name = f'Data Peaks (idx: {idx})',
+                    height = plot_height,
+                    width = plot_width,
+                    legend_x = legend_x,
+                    legend_y = legend_y,
+                )
+            #}}}
         #}}} 
         # Return for if you are not running in a loop: {{{
         if not run_in_loop:

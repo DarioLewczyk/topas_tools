@@ -28,8 +28,66 @@ class OUT_Parser:
         '''
         ints = list(filter(lambda x: len(x) >0,re.findall(r'\d+', txt)))
         floats = list(filter(lambda x: len(x) >0,re.findall(r'\d+\.\d+e?\-?\d+',txt)))
-        words = list(filter(lambda x: len(x) >0,re.findall(r'\w+_?\w+',txt)))
+        words = list(filter(lambda x: len(x) >0,re.findall(r'\w+[_\w+]?',txt)))
         return(ints,floats,words)
+    #}}}
+    # _extract_site_name {{{
+    def _extract_site_name(self, site_string:str = None):
+        '''
+        This function will get the name of the site
+        '''
+        match = re.search(r"\bsite\s+(\w+)", site_string)
+        return match.group(1) if match else None
+
+    #}}}
+    # _extract_site_kw_vals: {{{
+    def _extract_site_kw_vals(self, site_string:str = None):
+        ''' 
+        This function takes a TOPAS style site string and 
+        will return the values for each of the keywords: 
+            x, y, z, occ, beq
+        '''
+        keywords = {"x", "y", "z", "occ", "beq"}
+        tokens = site_string.split()
+        result = {}
+        i = 0
+        # Step 1: Get a dict with all the matches for the values: {{{
+        while i < len(tokens):
+            token = tokens[i]
+            if token in keywords:
+                i += 1
+                while i < len(tokens):
+                    current = tokens[i]
+                    # Skip equations, symbols, and variable names
+                    if any(c in current for c in "=@*;:") or not any(char.isdigit() for char in current):
+                        i += 1
+                        continue
+                    # Match float integer or composite value
+                    if re.match(r"\d+(?:\.\d+)?(?:'_?\d+(?:\.\d+)?)?", current):
+                        result.setdefault(token, []).append(current)
+                        break
+                    i += 1
+            else:
+                i += 1
+        #}}}
+        # Step 2: Return the dict with the values: {{{
+        final_result = {}
+        for key, value in result.items():
+            ints, floats, _ = self._get_ints_floats_words(value[0]) # This takes the match and feeds it into this parser which will find all the ints floats and so on.
+            # Get the value or refined value: {{{
+            try:
+                final_result[key] = float(floats[0])
+            except:
+                final_result[key] = float(ints[0]) # If the user passes a single integer for something like "occ"
+            #}}} 
+            # Get the errors (if any): {{{
+            try:
+                final_result[f'{key}_err'] = float(floats[1])
+            except:
+                final_result[f'{key}_err'] = None
+            #}}}
+        #}}}
+        return final_result
     #}}}
     # _parse_out_phases: {{{
     def _parse_out_phases(self,out_file:str = None, idx:int = None):
@@ -79,31 +137,33 @@ class OUT_Parser:
                     skipline = True
                 #}}}
                 # Start by finding a structure: {{{
-                if 'str' in line and not comment_block and not skipline: # Look for the start of a structure object that is not inside of a comment block 
+                bareline = line.strip()
+                if bareline.startswith('str') and not comment_block and not skipline: # Look for the start of a structure object that is not inside of a comment block 
                     if last_phase_type != None:
                         phase_num += 1
                     last_phase_type = 'str'
                     out_phase_dict[phase_num] = {'phase_type': last_phase_type}
                     skipline = True
                  
-                elif 'hkl_Is' in line and not comment_block and not skipline: # Check for the hkl_Is flag for an hkl phase. Also make sure that the phase is not inside of a comment block
+                elif bareline.startswith('hkl_Is') and not comment_block and not skipline: # Check for the hkl_Is flag for an hkl phase. Also make sure that the phase is not inside of a comment block
                     if last_phase_type != None:
                         phase_num += 1
                     last_phase_type = 'hkl_Is'
                     out_phase_dict[phase_num] = {'phase_type': last_phase_type}
                     skipline = True
-                elif 'xo_Is' in line and not comment_block and not skipline: # Check for the xo_Is flag for peaks phases. 
+                elif bareline.startswith('xo_Is') and not comment_block and not skipline: # Check for the xo_Is flag for peaks phases. 
                     if last_phase_type != None:
                         phase_num += 1
                     last_phase_type = 'xo_Is'
                     out_phase_dict[phase_num] = {'phase_type': last_phase_type}
                     skipline = True
-                elif 'C_matrix_normalized' in line or 'out' in line:
+                elif bareline.startswith('C_matrix_normalized') or 'out' in line:
                     end_of_out = True # This stops recording
                  
                 #}}}
                 # Add the phase data: {{{
                 if not comment_block and last_phase_type != None and not end_of_out and not skipline: # This will record values ONLY if we have not reached the C_matrix, are not in a comment block, or are inside of a phase.
+                    
                     ints,floats,words = self._get_ints_floats_words(line) # This is used a lot, so let's just use it here. 
                     # Phase Name: {{{
                     if 'phase_name' in line:
@@ -168,11 +228,12 @@ class OUT_Parser:
                     #}}}
                     # Get lattice parameters if not in a macro: {{{
                         
-                    elif re.findall(r'^\s+a|^\s+b|^\s+c|^\s+al|^\s+be|^\s+ga',line):
+                    elif re.findall(r'^\s*a\b|^\s*b\b|^\s*c\b|^\s*al\b|^\s*be\b|^\s*ga\b',line):
                         try:
                             words = re.findall(r'a|b|c|al|be|ga',line)
                             out_phase_dict[phase_num][words[0]] = float(floats[0])
                         except:
+                            print(f'{i}: {line}')
                             print(f'Failed at getting {words} to have a value! for {phase}')
                     #}}}
                     # MVW: {{{
@@ -188,6 +249,23 @@ class OUT_Parser:
                             out_phase_dict[phase_num].update({macro_var:rec}) # This records the macro value
 
                     #}}}
+                    # Getting Peter's strain correction (lorentzian): {{{  
+                    elif 'strain_isoL' in line:  
+                        ints, floats, words = self._get_ints_floats_words(line)
+                        if floats:
+                            rec = float(floats[0]) # This is the calculated value
+                            #rec_err = float(floats[1]) # This should be the error
+                        out_phase_dict[phase_num].update({'strain_isoL':rec})
+                    #}}}
+                    # Getting Peter's strain correction (gaussian): {{{ 
+                    elif 'strain_isoG' in line: 
+                        ints, floats, words = self._get_ints_floats_words(line)
+                        if floats:
+                            rec = float(floats[0]) # This is the calculated value
+                            #rec_err = float(floats[1]) # This should be the error
+                        out_phase_dict[phase_num].update({'strain_isoG':rec})
+                    #}}}
+
                     # Get the cell mass: {{{
                     elif 'cell_mass' in line: 
                         out_phase_dict[phase_num]['cell_mass'] = float(floats[0])
@@ -210,102 +288,26 @@ class OUT_Parser:
                         out_phase_dict[phase_num]['space_group'] = sg[-1]
                     #}}}
                     # Parse Sites: {{{
-                    elif 'site' in line.lower():
+                    elif 'site' in line.lower(): 
                         if 'sites' not in list(out_phase_dict[phase_num].keys()):
                             out_phase_dict[phase_num]['sites'] = {} # Initialize a bin to hold these data.
-                        site_args = [
-                            'site', # Not important
-                            'element_label', # This is the element plus an index, typically. 
-                            'x', # This is the label "x"
-                            'xval', # This is the value for x
-                            'y', # This may not be the next value (if you have mins and maxes, they will come before this)
-                            'yval', # Value for y
-                            'z', # This may not be next, if mins and maxes exist,they will be before this. 
-                            'zval', # value for z
-                            'element', # This should be the actual element name (e.g. no number)
-                            'occ', #This will be a float for the occupancy. 
-                            'beq', # This may or may not be present. but is the key to look for b values
-                            'beq_label', # If the next entry is a string, it is the B-value label
-                            'bval', # The next thing should be the actual B value
-                         
-                        ]
-                        #split = list(filter(lambda x: len(x) > 0, line.split(' '))) # Don't record any blank strings
-                        #split = list(filter(lambda x: len(x)>1 , re.findall(r'\S+', line)))
-                        split = re.findall(r'\S+',line) # This should only give strings that are not whitespace
-                        x_idx = None
-                        y_idx = None
-                        z_idx = None
-                        occ_idx = None
-                        occ = None
-                        beq_idx = None
-                        bval_recorded = False
-                        site = None 
-                        #print(split)
-                        for j, val in enumerate(split): 
-                            #ints,floats,words = self._get_ints_floats_words(val) # This gets these quantities for the current entry.
-                            if j == 1:
-                                site = val # This should be the site label
-                                out_phase_dict[phase_num]['sites'][site] = {}
-                            if j > 1:
-                                # Find KWDS: {{{
-                                #val = val.strip('\t') # Get rid of tabs
-                                #val = val.strip(' ') # Get rid of spaces 
-                                if val == 'x':
-                                    x_idx = j
-                                elif val == 'y':
-                                    y_idx = j
-                                elif val == 'z':
-                                    z_idx = j
-                                elif val == 'beq':
-                                    beq_idx = j
-                                if val == 'occ':
-                                    occ_idx = j # This is where occ is called. This means that the atom will be next then the float.
-                                #}}}
-                                # Record Vals: {{{
-                                if x_idx:
-                                    if j == x_idx+1:
-                                        coord = re.findall(r'\d+\.\d+|\d+',val) # This gets the coordinate
-                                        out_phase_dict[phase_num]['sites'][site].update({'x': float(coord[0])})
-                                if y_idx:
-                                    if j == y_idx+1:
-                                        coord = re.findall(r'\d+\.\d+|\d+',val) # This gets the coordinate
-                                        out_phase_dict[phase_num]['sites'][site].update({'y': float(coord[0])})
-                                if z_idx:
-                                    if j == z_idx+1:
-                                        coord = re.findall(r'\d+\.\d+|\d+',val) # This gets the coordinate
-                                        out_phase_dict[phase_num]['sites'][site].update({'z': float(coord[0])})
-                                if beq_idx and not bval_recorded:
-                                    # Get the variable name: {{{
-                                    if j == beq_idx +1: 
-                                        try:
-                                            b_val_keyword = re.findall(r'\w+_\w+',val)[0] # This should find any keyword for bvals 
-                                            out_phase_dict[phase_num]['sites'][site].update({'b_val_prm':b_val_keyword}) # This will record the variable. 
-                                        except:
-                                            out_phase_dict[phase_num]['sites'][site].update({'b_val_prm':None}) # If the previous criteria are not met, record nothing.
-                                            try:
-                                                bval = float(re.findall(r'\d+\.\d+|\d+',val)[0])
-                                                out_phase_dict[phase_num]['sites'][site].update({'bval': bval})
-                                                bval_recorded = True
-                                            except:
-                                                out_phase_dict[phase_num]['sites'][site].update({'bval': None})
+                        # step 1: Find out what the site name is: {{{
+                        site_name = self._extract_site_name(line) # This will get the site name (e.g. Ti or Ti1)
+                        _ , _, words = self._get_ints_floats_words(site_name)
+                        try:
+                            atom_name = words[0] # This is the atom for the site
+                        except:
+                            atom_name = None
+                        #}}} 
+                        # step 2: Get the values for the kwargs: {{{
+                        site_val_dict = self._extract_site_kw_vals(line) # This returns a dict with keys of the kwargs 
+                        #}}}
+                        # Update the site dictionary: {{{
+                        out_phase_dict[phase_num]['sites'][site_name] = {'atom_name': atom_name} # Initialize the sub dictionary for the site
+                        for key, value in site_val_dict.items():
+                            out_phase_dict[phase_num]['sites'][site_name].update({key: value})
+                        #}}}
 
-                                    #}}}
-                                    # Get the variable value: {{{
-                                    elif j == beq_idx+2: 
-                                        try:
-                                            bval = float(re.findall(r'\d+\.\d+|\d+',val)[0]) 
-                                            out_phase_dict[phase_num]['sites'][site].update({'bval': bval})
-                                            bval_recorded = True
-                                        except:
-                                            out_phase_dict[phase_num]['sites'][site].update({'bval':None})
-                                    #}}}
-                                if occ_idx:
-                                    if j == occ_idx+1:
-                                        occ = val # This should be the atom name for the occupancy
-                                    elif j == occ_idx+2:
-                                        occupancy = re.findall(r'\d+\.\d+|\d+',val)
-                                        out_phase_dict[phase_num]['sites'][site].update({f'{occ}_occ':float(occupancy[0])})
-                                #}}}
                     #}}}
                     # Parse TOPAS Scale: {{{
                     elif 'scale ' in line: 
