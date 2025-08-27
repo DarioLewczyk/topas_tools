@@ -80,6 +80,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             time_error:float = 1.1, 
             on_sf_value:float = 1.0e-5, 
             check_order:bool = False,
+            snr_threshold:float = 2.0,
+            **kwargs
         ):
         '''
         Expansion of the code written by Adam A Corrao and Gerrard Mattei. 
@@ -93,18 +95,20 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             7. subtract_bkg: Do you want to perform background subtraction? Rolling ball method
             8. phases_to_enable: Phase(s) to monitor to enable
             9. phases_to_disable: Phase(s) to monitor to disable
-            10. threshold_for_on: Threshold(s) to trigger on
-            11. threshold_for_off: Threshold(s) to trigger off (percent of scale factor)
+            10. threshold_for_on: Threshold(s) to trigger on (This is a fraction scaled from 0 to 1)
+            11. threshold_for_off: Threshold(s) to trigger off (This is a fraction scaled from 0 to 1)
             12. on_method: either "time" or "rwp"
             13. off_method: either 'time' or 'sf'
             14. time_error: if "on_method" is time, how much ±?    
             15. on_sf_value: SF Value(s) for when a phase is enabled.     
             16. check_order: If time recording gets messed up, this will ensure order is set properly
+            17. snr_threshold: If you want to filter data that are possible of bad quality use this. Generally a good value is 2. 
         NOTE: both on and off methods can be lists because some phases you may want to treat
         in different ways.
 
         '''
-        debug = False# Set this to True if you want to see debugging information. 
+        debug = kwargs.get('debug',False) # Set this to True if you want to see debugging information. 
+        
         off_sf_value = 1.0e-100 # This SF val ensures a phase will stop refining. 
         self.reverse_order = reverse_order  
         # if you input a string for either "phases_to_disable" or "phases_to_enable": {{{
@@ -167,7 +171,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             #}}}
             # get all of the metadata data: {{{ 
             self._md = MetadataParser() # initialize the parser 
-            self._md.get_metadata() # obtain all of the metadata we need
+            #self._md.get_metadata() # obtain all of the metadata we need
             self.metadata_data = self._md.metadata_data # Store the metadata.
             #}}}
             os.chdir(self.current_dir) # return to the starting directory.
@@ -204,32 +208,50 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         # Get the data: {{{
         os.chdir(data_dir) # Go to the directory with the scans
         data = DataCollector(fileextension=self.fileextension) # Initialize the DataCollector
-        data.scrape_files() # This collects and orders the files
+        data.scrape_files() # This collects and orders the files 
+        # CHECK THE ORDER OF THE XYs: {{{
+        if check_order:
+            file_dict = data._resort_with_metadata(file_dict=data.file_dict, metadata_data=self.metadata_data)
+            data.file_dict = file_dict
+        #}}} 
         data_dict_keys = list(data.file_dict.keys()) # Filename timecodes in order
         os.chdir(template_dir) # Return to the template directory 
         
         rng_start = 1 # This is the initial start for the range
         rng_end = len(data_dict_keys) # This is the initial end for the range.
         if time_range:
-            rng_start, rng_end = self._get_time_range(metadata_data=self.metadata_data, time_range= time_range, max_idx=rng_end) # Get new range
+            rng_start, rng_end = self._get_time_range(
+                    metadata_data=self.metadata_data, 
+                    time_range= time_range, 
+                    max_idx=rng_end
+            ) # Get new range
         tmp_rng = np.linspace(rng_start, rng_end, refinements) # Gives a range over the total number of scans that we want to refine. 
-
+        
         if self.reverse_order:
             tmp_rng = tmp_rng[::-1] # This reverses the order of the array by converting it to a list slice 
         #}}}
         # If user needs to use metadata to order the refinements...: {{{
         if check_order: 
-            tmp_rng = data.check_order_against_time(tmp_rng=tmp_rng,data_dict_keys=data_dict_keys, metadata_data=self.metadata_data)
+            tmp_rng = data.check_order_against_time(
+                    tmp_rng=tmp_rng,
+                    data_dict_keys=data_dict_keys, 
+                    metadata_data=self.metadata_data
+            )
         #}}}
         # Begin the Refinements: {{{
         '''
         This part uses a range made by the selection of the user. 
         Since we don't need to pair the data with the metadata, we should be able to simply reverse the order of the range. 
         ''' 
-        rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine. 
-        for index,number in enumerate(rng):
+        
+        rng = tqdm([int(fl) for fl in tmp_rng]) # This sets the range of files we want to refine.  
+
+        for index,number in enumerate(rng):     
             file_time = data_dict_keys[number-1]
             xy_filename = data.file_dict[file_time]
+            if debug:
+                print(f'Number: {number} ')
+                print(f'file_time: {file_time}\nxy_filename: {xy_filename}')
             # Get the time (if needed): {{{
             try:
                 md_keys = list(self.metadata_data.keys())
@@ -274,43 +296,53 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             with open('Dummy.inp','w') as dummy:
                 for line in template:
                     dummy.write(line) 
-            self.refine_pattern('Dummy.inp') # Run the actual refinement
-            # Monitor Refinement Parameters: {{{
-            '''
-            If you want to monitor scale factor values, it MUST
-            happen before the Dummy file is copied to a new file. 
-
-            Likewise, if you want a phase to be added...
-
-            Both will be handled with the same function.
-            '''
-            out = 'Dummy.out' # This is the name of the file we are looking for.
-            if phases_to_disable != None or phases_to_enable != None:   
-                self._modify_out_for_monitoring(
-                        out=out, 
-                        on_phases=phases_to_enable,
-                        off_phases=phases_to_disable,
-                        threshold_for_on=threshold_for_on,
-                        threshold_for_off=threshold_for_off,
-                        current_idx=index,
-                        off_sf_value=off_sf_value,
-                        on_sf_value=on_sf_value,
-                        on_method = on_method, # This is to tell if we are working with times or not
-                        off_method = off_method, # This tells whether to look for times of scale factors
-                        current_time = time, # This is either a time or None
-                        debug=debug,
-                        time_error=time_error, # This is the +/- the time can be off to trigger the turning on of a phase.
-                    )
-
-                
-            #}}}
-            copyfile(out,f'{output}.out')
-            template = [line for line in open(out)] # Make the new template the output of the last refinement. 
-            #}}}
-            # Get the single phase patterns: {{{ 
-            if get_individual_phases:
-                self._calculate_phase_from_out(out = f'{output}.out',subtract_bkg=subtract_bkg)
-            #}}}
+            # Check the quality of the diffraction pattern first: {{{
+            skip_refinement = False
+            if snr_threshold != None:
+                xdat, ydat = self._load_raw_xy(xy_filename, data_dir) # This gets you the pattern data and also returns you to the same directory
+                snr = self.calculate_snr(ydat)
+                if snr > snr_threshold:
+                    print(f'Your SNR threshold of: {snr_threshold} triggered to prevent \npattern: "{xy_filename}" from being refined')
+                    skip_refinement = True 
+            #}}} 
+            if not skip_refinement:
+                self.refine_pattern('Dummy.inp') # Run the actual refinement
+                # Monitor Refinement Parameters: {{{
+                '''
+                If you want to monitor scale factor values, it MUST
+                happen before the Dummy file is copied to a new file. 
+    
+                Likewise, if you want a phase to be added...
+    
+                Both will be handled with the same function.
+                '''
+                out = 'Dummy.out' # This is the name of the file we are looking for.
+                if phases_to_disable != None or phases_to_enable != None:   
+                    self._modify_out_for_monitoring(
+                            out=out, 
+                            on_phases=phases_to_enable,
+                            off_phases=phases_to_disable,
+                            threshold_for_on=threshold_for_on,
+                            threshold_for_off=threshold_for_off,
+                            current_idx=index,
+                            off_sf_value=off_sf_value,
+                            on_sf_value=on_sf_value,
+                            on_method = on_method, # This is to tell if we are working with times or not
+                            off_method = off_method, # This tells whether to look for times of scale factors
+                            current_time = time, # This is either a time or None
+                            debug=debug,
+                            time_error=time_error, # This is the +/- the time can be off to trigger the turning on of a phase.
+                        )
+    
+                 
+                #}}}
+                copyfile(out,f'{output}.out')
+                template = [line for line in open(out)] # Make the new template the output of the last refinement. 
+                #}}}
+                # Get the single phase patterns: {{{ 
+                if get_individual_phases:
+                    self._calculate_phase_from_out(out = f'{output}.out',subtract_bkg=subtract_bkg)
+                #}}}
         #}}}
     #}}}
     # _get_line_info: {{{
@@ -392,12 +424,16 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                         'phase_lines':copy.deepcopy(phase_lines),
                     })
                     keep_reading=False
+                    #print(f'Should have stopped: Line: {i}')
                     phase_lines.clear() # Reset the list
                     phase_num+=1 # Move to the next phase
                 #}}}
                 # str line: {{{
                 splitline = line.strip('\t\n') # if we get rid of these modifiers, we can check if str starts the line
-                if splitline.startswith('str'):
+                str_pattern = r'^str\b'
+                #if splitline.startswith('str'):
+                if bool(re.match(str_pattern, splitline)):
+                    #print(f'New Structure: line: {i} {splitline}')
                     if not keep_reading:
                         pass # We don't need to do anything. It is the first phase. 
                     inp_dict['phases'][phase_num] = {
@@ -452,10 +488,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             inp_dict['header'] = header_lines 
         #print(f'inp_dict after: {inp_dict["phases"]}') # FAILED
         #}}}
-        # Loop through the structures: {{{ 
+        # Loop through the structures: {{{  
         for phase in inp_dict['phases']:  
             inp_file = []
-            entry = inp_dict['phases'][phase] 
+            entry = inp_dict['phases'][phase]  
             substance = entry['symbol'] 
             phase_lines = entry['phase_lines']
             header = inp_dict['header'] 

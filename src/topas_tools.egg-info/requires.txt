@@ -2,3 +2,4 @@ pymatgen
 tqdm
 plotly
 texttable
+numpy

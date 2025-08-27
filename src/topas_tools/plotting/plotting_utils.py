@@ -200,14 +200,14 @@ class GenericPlotter(UsefulUnicode):
         )
         #}}}
         # Update Layout: {{{
-        if xrange != None:
+        if xrange != None and not y2 and not y3:
             self._fig.update_layout(
                     xaxis = dict(
                         range = xrange, 
                         ticks = ticks,
                     )
             )
-        if yrange != None:
+        if yrange != None and not y2 and not y3:
             self._fig.update_layout(
                     yaxis = dict(
                         range = yrange, 
@@ -234,6 +234,10 @@ class GenericPlotter(UsefulUnicode):
                         ticks = ticks,
                     ),
             )
+            if yrange != None:
+                self._fig.update_layout(
+                    yaxis2 = dict(range=yrange)
+                )
         #}}} 
         # Y3: {{{
         if y3:
@@ -246,6 +250,12 @@ class GenericPlotter(UsefulUnicode):
                         ticks = ticks,
                     )
             )
+            if yrange != None:
+                self._fig.update_layout(
+                    yaxis3 = dict(range=yrange)
+                )
+                        
+                
         #}}}
         #}}}
         if show_figure:
@@ -345,6 +355,153 @@ class GenericPlotter(UsefulUnicode):
                 #}}}
         #}}}
     #}}}
+    # customize_axis: {{{
+    def customize_axis(self,fig:go.Figure = None, axis= 'y', scale = 'log', minor_ticks = True, minor_tick_interval = 0.1):
+        '''
+        Customize the axis of a plotly fig.
+
+        PRMS: 
+        - fig: Plotly Figure object
+        - axis: 'x' or 'y' to specify the axis
+        - scale: 'linear' or 'log' to set the axis scale
+        - minor_ticks: Bool to add minor ticks
+        - tick0: Starting point for the ticks
+        - dtick: Interval between ticks
+        '''
+        axis_key = f'{axis}axis'
+        fig.update_layout({
+            axis_key: dict(
+                type = scale, 
+            )
+        })
+        if minor_ticks:
+            fig.update_layout({
+                axis_key: dict(
+                    tickmode = 'linear',
+                    dtick = minor_tick_interval,
+                    showgrid = True,
+                    gridwidth = 0.5,
+                    gridcolor = 'LightGray'
+                )
+            })
+    #}}}
+    # plot_waterfall: {{{ 
+    def plot_waterfall(self, 
+            tth_arr = None, 
+            time_arr = None, 
+            i_arr = None, 
+            min_on_zmax = 1000, # This sets the minimum value you would like the colorscale to max out on. 
+            min_on_zmin = -1000, # This sets the max value you would like on the colorscale min
+            num_max_buttons = 5,
+            num_min_buttons = 5,
+            **kwargs
+        ):
+        '''
+        This will plot a waterfall plot 
+        You can change up the z scaling with buttons 
+
+        If you would like to adjust parameters for fitting, you can do so using kwargs: 
+
+            button_layer_1_height
+            button_layer_2_height
+            colorscale
+            height
+            width
+            title
+            time_units
+            hovertemplate
+        '''
+        # Set the attributes to plot: {{{
+        if type(tth_arr) != type(None):
+            self.tth_arr = tth_arr
+            self.time_arr = time_arr
+            self.i_arr = i_arr 
+            self.max_i = max([max(i) for i in self.i_arr])
+        #}}}
+        # kwargs: {{{
+        button_layer_1_height = kwargs.get('button_layer_1_height', 1.17)
+        button_layer_2_height = kwargs.get('button_layer_2_height', 1.1)
+        colorscale = kwargs.get('colorscale', 'viridis')
+        height = kwargs.get('height', 800)
+        width = kwargs.get('width', 1000)
+        title_text = kwargs.get('title', 'Waterfall Plot')
+        self.time_units = kwargs.get('time_units', self.time_units)
+        hovertemplate = kwargs.get('hovertemplate', f'2{self._theta}{self._degree}:'+'%{x}<br>Time/'+f'{self.time_units}: '+'%{y} <br>Intensity: %{z}')
+        #}}}
+        # Set up the min and max ranges for buttons: {{{
+        min_steps = (0 - min_on_zmin)/(num_min_buttons -1)
+        max_steps = (self.max_i - min_on_zmax)/ (num_max_buttons-1)
+ 
+        zmin_arange = np.arange(min_on_zmin, 0+min_steps,min_steps)
+        zmax_arange = np.arange(min_on_zmax, self.max_i+max_steps, max_steps)
+        #}}}
+
+        self.fig = go.Figure()
+        self.fig.add_heatmap(
+            x = self.tth_arr,
+            y = self.time_arr,
+            z = self.i_arr,
+            hovertemplate = hovertemplate,
+            colorscale = colorscale,
+        )
+        # Create the min buttons: {{{
+        zmin_buttons = [
+            dict(
+                label = f'I_min: {np.around(v,2)}',
+                method = 'restyle',
+                args = [
+                    {'zmin': v},
+                ]
+            )for v in zmin_arange
+        ]
+        #}}}
+        # Create the max buttons: {{{
+        zmax_buttons = [
+            dict(
+                label = f'I_max: {np.around(v,2)}',
+                method = 'restyle',
+                args = [
+                    {'zmax':v},
+                ]
+            )for v in zmax_arange
+        ]
+        #}}}
+        # Update the layout: {{{
+        self.fig.update_layout( 
+            height = height,
+            width = width,
+            margin = dict(t=200,b=0,l=0,r=0),
+            autosize = False,
+            title_text = title_text,
+            xaxis_title = f'2{self._theta}{self._degree}',
+            yaxis_title = f'Time/{self.time_units}',
+            updatemenus = [
+                dict(
+                    buttons = zmax_buttons,
+                    yanchor = 'top',
+                    type = 'buttons',
+                    y = button_layer_1_height,
+                    x = 0,
+                    xanchor = 'left',
+                    pad = {'r':10, 't':10},
+                    direction = 'right',
+                ),
+                dict(
+                    buttons = zmin_buttons,
+                    yanchor = 'top',
+                    type = 'buttons',
+                    y = button_layer_2_height,
+                    x=0,
+                    xanchor = 'left',
+                    pad = {'r':10,'t': 10},
+                    direction = 'right',
+                )
+            ],
+
+        )
+        #}}}
+        self.fig.show()
+    #}}} 
 #}}}
 # PlottingUtils: {{{
 class PlottingUtils(GenericPlotter):
@@ -566,37 +723,22 @@ class PlottingUtils(GenericPlotter):
     #}}}
     # _get_random_color: {{{
     def _get_random_color(self,):
-        contrasting_colors = [
-                (240,163,255),
-                (0,117,220),
-                (153,63,0),
-                (76,0,92),
-                (25,25,25),
-                (0,92,49),
-                (43,206,72),
-                (255,204,153),
-                (128,128,128),
-                (148,255,181),
-                (143,124,0),
-                (157,204,0),
-                (194,0,136),
-                (0,51,128),
-                (255,164,5),
-                (255,168,187),
-                (66,102,0),
-                (255,0,16),
-                (94,241,242),
-                (0,153,143),
-                (224,255,102),
-                (116,10,255),
-                (153,0,0),
-                (255,255,128),
-                (255,255,0),
-                (255,80,5),
+        high_contrast_colors = [
+            (0, 0, 0),       # Black
+            #(255, 0, 0),     # Red
+            (0, 0, 255),     # Blue
+            (0, 255, 0),     # Green
+            (255, 165, 0),   # Orange
+            (128, 0, 128),   # Purple
+            (255, 20, 147),  # Deep Pink
+            (139, 69, 19),   # Saddle Brown
+            (75, 0, 130),    # Indigo
+            (255, 69, 0)     # Red-Orange
         ]
-        if self.color_index == len(contrasting_colors)-1:
+
+        if self.color_index == len(high_contrast_colors)-1:
             self.color_index = 0 #Reset the color index
-        r,g,b = contrasting_colors[self.color_index]
+        r,g,b = high_contrast_colors[self.color_index]
         color = f'rgb({r},{g},{b})'
         self.color_index+=1 # This is advances through the contrasting colors
         return color

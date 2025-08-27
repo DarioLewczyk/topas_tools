@@ -316,9 +316,12 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             #}}} 
             # Work with the metadata: {{{
             os.chdir(self.meta_dir) # Go into the metadata
-            self._md = MetadataParser(metadata_data=self.metadata_data)
-            self._md.get_metadata()
-            #self.metadata_data = self._md.metadata_data
+            if mtf_version >= 3:
+                temp_key = 'thermocouple_c' 
+            else:
+                temp_key = 'element_temp'
+            self._md = MetadataParser(metadata_data=self.metadata_data,temp_key=temp_key) # Automatically calls self.get_metadata
+            self.metadata_data = self._md.metadata_data # because we sort within self._md, we need to re set it outside of that class
             #}}}
             os.chdir(self.current_dir) # Return to the original directory.
             # If you need to check the order of patterns against metadata: {{{
@@ -327,7 +330,11 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                 tmp_rng = np.linspace(1,len(self.file_dict_keys), num_scans_refined, dtype=int) # Get the original indices of each pattern. 
                 #dc = DataCollector(metadata_data=self.metadata_data) # Need to init this class to check the order.
                 self.corrected_range = self.check_order_against_time(
-                        tmp_rng=tmp_rng, data_dict_keys=self.file_dict_keys,metadata_data=self.metadata_data, mode=1) #Get a new order
+                        tmp_rng=tmp_rng, 
+                        data_dict_keys=self.file_dict_keys,
+                        metadata_data=self.metadata_data, 
+                        mode=1
+                ) #Get a new order 
                 # Correct the file lists: {{{
                 # Define temporary lists for data: {{{
                 tmp_csv = []
@@ -335,14 +342,21 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                 tmp_out = [] 
                 tmp_bkg_xy = [] 
                 #}}}
-                for rng_idx in self.corrected_range: 
-                    tmp_csv.append(self.sorted_csvs[rng_idx]) # Adds the correct csv in the correct order
-                    tmp_xy.append(self.sorted_xy[rng_idx])
-                    tmp_out.append(self.sorted_out[rng_idx])
+                missing_bkg_curves = 0
+                for rng_idx in self.corrected_range:  
+                    try: 
+                        tmp_csv.append(self.sorted_csvs[rng_idx]) # Adds the correct csv in the correct order
+                        
+                        tmp_xy.append(self.sorted_xy[rng_idx])
+                        tmp_out.append(self.sorted_out[rng_idx])
+                    except Exception as e: 
+                        print(f'There was a problem with your corrected range index {rng_idx}: {e}') 
                     try:
                         tmp_bkg_xy.append(self.sorted_bkg_xy[rng_idx])
                     except:
-                        print('Failed to correct bkg curves!')
+                        missing_bkg_curves += 1 # This counts the background curves
+                if missing_bkg_curves:
+                    print(f'Failed to correct background curves for {missing_bkg_curves} patterns.')
                 self.sorted_csvs = tmp_csv
                 self.sorted_xy = tmp_xy
                 self.sorted_out = tmp_out
@@ -359,8 +373,12 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
                             original_hkli_file_list = self._hkli[xy_key]['files']
 
                             for i in self.corrected_range:
-                                tmp_xy_file_list.append(original_xy_file_list[i]) # Add in the position corrected file.
-                                tmp_hkli_file_list.append(original_hkli_file_list[i]) # Add the position corrected file
+                                try:
+                                    tmp_xy_file_list.append(original_xy_file_list[i]) # Add in the position corrected file.
+                                    tmp_hkli_file_list.append(original_hkli_file_list[i]) # Add the position corrected file
+                                except:
+                                    tmp_hkli_file_list.append(None)
+                                    tmp_hkli_file_list.append(None)
 
                             self._phase_xy[xy_key]['files'] = tmp_xy_file_list
                             self._hkli[xy_key]['files'] = tmp_hkli_file_list
@@ -394,7 +412,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
             
            
         except:
-            print(f'failed to get all files')
+            print(f'failed to get all files (.CSVs, Phase .XYs, .OUT files)')
         
         
         #}}}
@@ -452,16 +470,14 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         metadata_keys = list(self.metadata_data.keys()) #these are the "readable times" 0th index is the first pattern of the series. 
         t0_idx = 0 # This is the default but can change if the order is messed up. 
         t0 = None
+        
         if check_order:
+            epoch_times = [] # Store the epoch times
             for i, (key, entry) in enumerate(self.metadata_data.items()):
                 epoch = entry['epoch_time']
-                if i == 0:
-                    t0 = epoch
-                else:
-                    t = epoch - t0 # Elapsed time
-                    if t < 0:
-                        t0_idx = i # This is the index of the metadata keys which is the first time point. 
-                        break    
+                epoch_times.append(epoch)
+            t0_idx = epoch_times.index(min(epoch_times)) # Get the idx of the minimum time
+            
         t0 = self.metadata_data[metadata_keys[t0_idx]]['epoch_time'] # This gives us the epoch time for the first pattern. 
         t1 = self.rietveld_data[index]['epoch_time'] # This is the time of the current pattern. 
         # Determine the appropriate divisor: {{{
@@ -480,60 +496,81 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
 
     #}}}
     # get_pattern_from_time: {{{
-    def get_pattern_from_time(self, time:float = None, units:str = 'min'):
+    def get_pattern_from_time(
+            self,  
+            time:float = None, 
+            units:str = 'min', 
+            toffset:float = 0, 
+            raw_patterns:bool = False,
+            printout = True
+        ):
         '''
         The purpose of this function is to get the number of the pattern in a time series
         by inputting the time you find from looking at a plot. 
 
         It gives the index of the pattern relative to the number of patterns you refined. 
+
+        toffset: If you have an offset, put it here so that you can correctly retrieve the pattern
+                    youre looking for on the new time scale
+        raw_patterns: Tells the program whether you would like to look at the raw data or not.
+                        Note: If you are using this mode, it will return the key for file_dict and metadata_data
         ''' 
         # Convert time to seconds: {{{
         if units == 's':
-            conv_time = time
+            conv_time = time + toffset
         elif units == 'min':
-            conv_time = time*60 # Convert minutes to seconds
+            conv_time = time*60 + toffset* 60  # Convert minutes to seconds
         elif units == 'h':
-            conv_time = time*60**2 # Convert hours to seconds
-
+            conv_time = time*60**2 + toffset*60**2# Convert hours to seconds 
         #}}}
-        closest_pattern_below = 0
-        closest_pattern_above = 0
-        pattern_above_idx = None
-        exact_pattern = None
-        # Go through the patterns and determine if the time given is greater than or less than the recorded time: {{{
-        for i, pattern in enumerate(self.rietveld_data):
-            p_time = self.rietveld_data[pattern]['corrected_time'] # This gives the time for the pattern
-            if p_time < conv_time:
-                closest_pattern_below = pattern
-            elif p_time > conv_time:
-                if not pattern_above_idx:
-                    closest_pattern_above = pattern
-                    pattern_above_idx = i
-            if p_time == conv_time:
-                exact_pattern = pattern
-                break
+        min_time_diff = float('inf') # Start with an infinite time difference. 
+        closest_pattern = None
+
+        # go through the patterns to find the closest one: {{{
+        if not raw_patterns:
+            for i, pattern in enumerate(self.rietveld_data):
+                p_time = self.rietveld_data[pattern]['corrected_time']
+                time_diff = abs(p_time - conv_time) # Gives the absolute difference 
+                if time_diff < min_time_diff:
+                    min_time_diff = time_diff
+                    closest_pattern = pattern
+
+            # Create an output printout: {{{
+            if closest_pattern != None:
+                rr_data = self.rietveld_data[closest_pattern]
+                csv_name = rr_data['csv_name']
+                orig_name = rr_data['original_name']
+                p_time = rr_data['corrected_time'] 
+                if units == 'min':
+                    p_time = p_time/60
+                if units == 'h':
+                    p_time = p_time/(60**2)
+                final_printout = f'{closest_pattern} ({np.around(p_time,2)} {units})\n\t{csv_name}\n\t{orig_name}'
+            #}}}
         #}}} 
-        # Check for the exact pattern: {{{
-        if not exact_pattern:
-            if closest_pattern_above - 1 > closest_pattern_below:
-                exact_pattern = closest_pattern_above - 1 # This will be the pattern between 
-            else:
-                exact_pattern = f'Either: {closest_pattern_below} or {closest_pattern_above}'
+        # If using raw patterns: {{{
+        else:
+            for key, entry in self.metadata_data.items():
+                p_time = entry['corrected_time']
+                time_diff = abs(p_time - conv_time) # Gives the abs difference
+                if time_diff < min_time_diff:
+                    min_time_diff = time_diff
+                    closest_pattern = key # If you are using the raw data finder, it will return the key
+            if closest_pattern != None:
+                md_entry = self.metadata_data[closest_pattern]  # This is the entry with parsed MD stuff
+                md_name = md_entry['filename']
+                temp = md_entry['temperature'] # In deg C
+                p_time = md_entry['corrected_time']
+                orig_name = self.file_dict[closest_pattern] # This is the .xy
+                if units == 'min':
+                    p_time = p_time/60
+                if units == 'h':
+                    p_time = p_time/(60**2)
+                final_printout = f'{closest_pattern} ({np.around(p_time,2)} {units})\n\t{md_name}\n\t{orig_name}' 
         #}}}
-        # Create the Output Printout: {{{ 
-        rr_data_below = self.rietveld_data[closest_pattern_below]
-        rr_data_above = self.rietveld_data[closest_pattern_above]
-        below_csv = rr_data_below['csv_name']
-        above_csv = rr_data_above['csv_name']
-        
-        below_orig = rr_data_below['original_name']
-        above_orig = rr_data_above['original_name']
-
-
-        final_printout = f'{exact_pattern}\nPoss Low IDX:\n\t{below_csv}\n\t{below_orig}\nPoss High IDX:\n\t{above_csv}\n\t{above_orig}'
-        #}}}
-        print(final_printout)
-
+        if printout:
+            print(final_printout)
+        return closest_pattern # Output the index
     #}}}
     # get_pattern_dict: {{{
     def get_pattern_dfs(self,

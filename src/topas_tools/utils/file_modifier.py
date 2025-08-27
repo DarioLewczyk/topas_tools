@@ -148,12 +148,25 @@ class FileModifier():
                     try:
                         if debug:
                             print(f'\tcurrent time: {current_time}\n\tthreshold: {threshold}\n\ttime_error: {time_error}')
+                            print(f'Time Difference: {np.around(current_time - threshold, 2)} min')
                         if np.abs(current_time - threshold) <= time_error and not stopped: 
                             # This ensures that whether you are running forward or reverse direction, you can trigger at an appropriate time. 
                             entry['stopped'] = True # We are adding the phase and can stop monitoring. 
                             self._modify_sf_line(out=out,line_idx=line_idx,str_num=str_num,replacement_value=on_sf_value,debug=debug) 
                             print(f'ENABLED {name}')
+                        elif current_time - threshold >= 0 and not stopped:
+                            # If there is a gap in data collection, you may need this. 
+                            entry['stopped'] = True # The phase is added so stop tracking.and
+                            self._modify_sf_line(out=out,
+                                    line_idx=line_idx,
+                                    str_num=str_num,
+                                    replacement_value=on_sf_value,
+                                    debug=debug)  
+                            print(f'ENABLED {name}')
+
                     except:
+                        if debug:
+                            print('Hit an Exception')
                         pass
                 #}}}
                 # Handle the Phase OFF Case: {{{
