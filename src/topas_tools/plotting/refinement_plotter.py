@@ -525,6 +525,7 @@ class RefinementPlotter(PlottingUtils):
             legend_yanchor:str = 'top',
             debug:bool = False,
             ticks:str = 'inside',
+            **kwargs
             ):
         ''' 
         plot_type: This can be any of the below. 
@@ -569,6 +570,8 @@ class RefinementPlotter(PlottingUtils):
         For each of these, we would need to know 
 
         '''
+        first_plot = False # This tracks if we have already added data to the plot or not.
+        # basic categorization: {{{
         if normalized:
             normalized_label = ' Normalized'
         else:
@@ -579,145 +582,19 @@ class RefinementPlotter(PlottingUtils):
         if not self._data_collected:
             print('You did not yet collect data. Do that now...')
             self.get_data()
-        # Determine what to look for in the data: {{{
-        yaxis_title = '' # DEfault
-        yaxis2_title = '' # Default
-        xaxis_title = f'Time / {time_units}'
-        # Lattice Params: {{{ 
-        if plot_type == 'lattice parameters' or plot_type == 'lattice' or plot_type == 'lp':
-            keys = ['a','b','c', 'al','be','ga', 'alpha', 'beta', 'gamma'] # These are the 
-            yaxis_title = f'Lattice Parameter / {self._angstrom}' # This is the a, b, c lattice parameter title
-            yaxis2_title = f'Lattice Parameter / {self._degree}' # this is the al, be, ga lattice parameter title
-            title = 'Lattice Parameters'
         #}}}
-        # Scale Factor: {{{
-        elif plot_type == 'scale factor' or plot_type == 'sf':
-            keys = ['scale_factor', 'sf','scale factor'] # These are the variations likely to be used
-            yaxis_title = 'Scale Factor'
-            title = 'Scale Factor'
-            #normalized = True
+        # Determine what to look for in the data: {{{ 
+        xaxis_title = f'Time / {time_units}' 
+        self._sort_csv_keys() # This gets self.csv_plot_data
+        # All non-rwp plots: {{{
+        if plot_type != 'rwp':
+            plot_data, yaxis_title, yaxis2_title, title =  Utils._filter_csv_dict(self, self.csv_plot_data, plot_type) # Outsource the pattern matching
         #}}}
-        # Rwp: {{{
-        elif plot_type == 'rwp':
-            keys = ['rwp']
-            yaxis_title = 'Rwp'
+        # Rwp plot: {{{
+        else:
+            plot_data = self.csv_plot_data # We don't need to do anything special for this case
             title = 'Rwp'
-        #}}}
-        # Volume: {{{
-        elif plot_type == 'volume' or plot_type == 'vol':
-            keys = ['vol', 'volume', 'cell volume', 'cell_volume']
-            yaxis_title = f'Volume / {self._angstrom}{self._cubed}'
-            title = 'Volume'
-        #}}}
-        # R Bragg: {{{
-        if plot_type == 'rbragg' or plot_type == 'rb':
-            keys = ['r bragg','r_bragg'] # this tells the code what to search for
-            yaxis_title = 'R Bragg'
-            title = 'R Bragg'
-        #}}}
-        # Weight Percent: {{{
-        if plot_type == 'weight percent' or plot_type == 'wp': 
-            keys = ['weight percent', 'weight_percent']
-            yaxis_title = 'Weight Percent'
-            title = 'Weight Percent'
-        #}}}
-        # B-values: {{{
-        if plot_type == 'b values' or plot_type == 'beq' or plot_type == 'bvals':
-            keys = ['bvals', 'beq','bval', 'b value', 'b val', 'b values', 'b_value','b_val','b_values','B', 'b'] # tells the code what the likely keywords to look for are.
-            yaxis_title = 'B-Values'
-            title = 'B-Values'
-        #}}}
-        # Size L: {{{
-        if plot_type == 'size l' or plot_type == 'csl' or plot_type == 'sizel':
-            keys = ['size_l', 'csl','lorentzian_size','Size_L','cslv']
-            yaxis_title = 'Lorentzian Size'
-            title = 'Lorentzian Size'
-        #}}}
-        # Size G: {{{
-        if plot_type == 'size g' or plot_type == 'csg' or plot_type == 'sizeg':
-            keys = ['size_g', 'csg','gaussian_size','Size_G', 'csgv']
-            yaxis_title = 'Gaussian Size'
-            title = 'Gaussian Size' 
-        #}}}
-        # Strain L: {{{ 
-        if plot_type == 'strain l' or plot_type == 'strl' or plot_type == 'strainl':
-            keys = ['strain_l', 'strl','lorentzian_strain','Strain_L','slv']
-            yaxis_title = 'Lorentzian Strain'
-            title = 'Lorentzian Strain'
-        #}}}
-        # Strain G: {{{
-        if plot_type == 'strain g' or plot_type == 'strg' or plot_type == 'straing':
-            keys = ['strain_g', 'strg','gaussian_strain','Strain_G','sgv']
-            yaxis_title = 'Gaussian Strain'
-            title = 'Gaussian Strain' 
-        #}}}
-        # Lvol: {{{ 
-        if plot_type.lower() == 'lvol':
-            keys = ['lvol']
-            yaxis_title = 'LVol'
-            title = 'LVol'
-        #}}}
-        # Lvolf: {{{
-        if plot_type.lower() == 'lvolf': 
-            keys = ['lvolf']
-            yaxis_title = 'Lvolf'
-            title = 'LVolf'
-        #}}}
-        # e0: {{{ 
-        if plot_type.lower() == 'e0':
-            keys = ['e0']
-            yaxis_title = f'e{self._subscript_zero}'
-            title = f'e{self._subscript_zero}'
-        #}}}
-        # phase_MAC: {{{
-        if plot_type.lower() == 'phase_mac':
-            keys = ['phase_MAC']
-            yaxis_title = 'Phase MAC'
-            title = 'Phase MAC'
-        #}}}
-        # cell_mass: {{{
-        if plot_type.lower() == 'cell_mass' or plot_type.lower() == 'cm' or plot_type.lower == 'mass':
-            keys = ['cell_mass']
-            yaxis_title = 'Cell Mass'
-            title = 'Cell Mass'
-        #}}}
-        # eta: {{{
-        if plot_type.lower() == 'eta':
-            keys = ['eta']
-            yaxis_title = 'Eta'
-            title = 'Eta Values'
-        #}}}
-        # stephens: {{{
-        if plot_type.lower() == 'stephens':
-            keys = [
-                'eta',
-                's400',
-                's040',
-                's004',
-                's220',
-                's202',
-                's022',
-                's310',
-                's103',
-                's031',
-                's130',
-                's301',
-                's013',
-                's211',
-                's121',
-                's112',
-            ]
-            yaxis_title = 'Stephens Parameter'
-            title = 'Stephens Parameters'
-        #}}}
-        # Occupancies: {{{
-        if plot_type.lower() == 'occupancies' or plot_type.lower() == 'occ':
-            keys = [
-                'occupancy',
-                'occ',
-            ]
-            yaxis_title  = 'Occupancy'
-            title = 'Occupancy Evolution'
+            yaxis_title = 'Rwp'
         #}}}
         #}}}
         # Update the title text: {{{
@@ -725,7 +602,7 @@ class RefinementPlotter(PlottingUtils):
             title = f'{additional_title_text} {title}' # combines what the user wrote with the original title.
         #}}}
         # For the CSV Data, we need to find the data that we care about inside of self.csv_plot_data: {{{
-        self._sort_csv_keys() # This gets self.csv_plot_data
+        # Collect relevant data to CSV_Data: {{{
         for entry in self.rietveld_data:
             if plot_temp:
                 if 'temperature' not in self.csv_plot_data:
@@ -742,224 +619,126 @@ class RefinementPlotter(PlottingUtils):
                 self.csv_plot_data['time'] = []
             self._get_time(entry,time_units, check_order = self.check_order) # This gives us the time in the units we wanted (self._current_time)
             self.csv_plot_data['time'].append(self._current_time) # Add the time
+        #}}} 
         # IF YOU WANT TO USE THE OUTPUT, Also DEFINE plot_data : {{{
         if use_out_data:
             self._sort_out_keys() # This gets self.out_plot_dict
             self.out_plot_dict['temperature'] = self.csv_plot_data['temperature']
             self.out_plot_dict['time'] = self.csv_plot_data['time']
-            plot_data = self.out_plot_dict # This local dictionary will be used to make the plot in this function. 
-        else:
-            plot_data = self.csv_plot_data # This is the local dictionary used to make the plot. 
+            #plot_data = self.out_plot_dict # This local dictionary will be used to make the plot in this function. 
+            plot_data, yaxis_title, yaxis2_title, title =  Utils._filter_csv_dict(self, self.out_plot_dict, plot_type) # Outsource the pattern matching
         #}}}
         #}}}
         # plot the data: {{{
-        fig = go.Figure()
-        second_yaxis = False
-        third_yaxis = False
-        x = plot_data['time']
-        base_ht = f'Time/{time_units}: '+'%{x}<br>' # This is the basis for all hovertemplates
-        
-        if keys == ['rwp']:
+        x =self.csv_plot_data['time'] # Since we are changing the source.
+        base_ht = f'Time/{time_units}: '+'%{x}<br>' # This is the basis for all hovertemplates 
+        # special case: Rwp: {{{
+        if plot_type == 'rwp':
             hovertemplate = base_ht+'Rwp: %{y}'
             y = plot_data['rwp']
-            fig.add_scatter(
-                    x = x,
-                    y = y,
-                    hovertemplate = hovertemplate, 
-                    yaxis = 'y1',
-                    name = 'Rwp',
-            )
-            
-
+            self.plot_data(x = x, y = y, hovertemplate = hovertemplate, name = 'Rwp',color = 'black',
+                    xaxis_title = xaxis_title, yaxis_title = yaxis_title,height = height, width = width, 
+                    font_size = font_size, legend_x = legend_x, legend_y = legend_y, legend_xanchor = legend_xanchor, 
+                    legend_yanchor = legend_yanchor, xrange = time_range, yrange = y_range,
+                    **kwargs)
+            first_plot = True
+        #}}}
+        # Plot any other type of figure: {{{
         else:
-            for substance in plot_data:
-                color = self._get_random_color() # This gives us a color
+            for substance, entry in plot_data.items():
+                ''' 
+                This section will simply loop through the plot dictionary
+                This should have only entries that we actually care about 
+                for the given plot we are trying to make, so we don't 
+                have to do any complex sorting here.
+                '''
+                color = self._get_random_color() # This gives us a color for each substance
+                # Handle where we want to plot only one substance's params: {{{ 
                 if not specific_substance:
                     usr_substance = substance.lower() # If a specific substance is not given, it is set as the current. 
                 else:
                     for sub in specific_substance:
                         if sub.lower() == substance.lower():
-                            usr_substance = sub.lower()
+                            usr_substance = sub.lower() # Set the substance to the one the user selected
                             break
                         else:
                             usr_substance = None
-                
-                if substance != 'time' and substance != 'temperature' and substance != 'rwp' and substance.lower() == usr_substance:
-                    entry = plot_data[substance] # This will be a dictionary entry with keys. 
-                    entry_keys = list(entry.keys()) # These will be the keys for the entry. 
-                    if debug:
-                        print(f'ENTRY KEYS: {entry_keys}')
-                    for plot_key in entry_keys:
-                        try:
-                            # This will be done to see if there are any matches to a value that may have a number.
-                            if debug:
-                                print(plot_key)
-                            #numerical_check = re.findall(r'(\w+\d*)*.',plot_key)[0] # This will match to anything that represents a formula.
-                            #if debug:
-                            #    print(f'Numerical Check: {numerical_check}')
-                            #numerical_check = numerical_check.strip(f'{substance}_')
+                #}}}
+                # if the user wants to plot the substance, do it: {{{
+                if substance.lower() == usr_substance:
+                    # If the user is selecting a substance, it gets its own colors for all: {{{
+                    if specific_substance:
+                        color = self._get_random_color()
+                    #}}}
+                    # Plot all of the data in the entry: {{{
+                    for plot_key, data in entry.items():
+                        name = f'{substance} {plot_key}'
+                        # Get Hovertemplate: {{{
+                        possible_angle_keys = ['al', 'alpha', 'be', 'beta', 'ga', 'gamma']
+                        if plot_key not in possible_angle_keys:
+                            hovertemplate = base_ht +f'{yaxis_title} ({substance}, {plot_key}): '+'%{y}' # HT for most things
+                            y2 = False
+                            y2_title = None
                             
-                            #if 'b_value' in numerical_check:
-                            splitkey = plot_key.split('_')
-                            if 'b_value' in plot_key:
-                                numerical_check = 'b_value'
-                            if len(splitkey) > 1:
-                                if splitkey[-1] == 'occ' or splitkey[-1] == 'occupancy':
-                                    numerical_check = 'occ'
-                                else:
-                                    numerical_check = ''
+                        else:
+                            y2 = True
+                            hovertemplate = base_ht + f'{yaxis2_title} ({substance}, {plot_key}): '+'%{y}' 
+                            y2_title = yaxis2_title
+                        #}}}
+                        # Get the y data: {{{
+                        if normalized:
+                            y = self._normalize(data) # Returns a normalized array (based on max val)
+                        else:
+                            y = data
+                        #}}}
+                        # Plot the data: {{{
+                        if not first_plot: 
+                            self.plot_data(x = x, y = y, hovertemplate = hovertemplate, name = name, mode = 'lines+markers', 
+                                color = color,xaxis_title = xaxis_title, yaxis_title = yaxis_title, title_text = title,
+                                legend_x = legend_x, legend_y = legend_y, legend_xanchor = legend_xanchor, 
+                                legend_yanchor = legend_yanchor,font_size = font_size, xrange = time_range, yrange = y_range,
+                                **kwargs
+                            )
+                            first_plot = True
+                        else:
+                            self.add_data_to_plot(
+                                x = x, y = y, name = name, mode = 'lines+markers', xrange = time_range, yrange = y_range, 
+                                color = color, hovertemplate = hovertemplate, legend_x = legend_x, legend_y = legend_y, 
+                                legend_xanchor = legend_xanchor, legend_yanchor = legend_yanchor, y2 = y2, y2_title = y2_title,
+                                y2_position = yaxis_2_position,
+                                **kwargs
+                            )
 
-                            else:
-                                numerical_check = plot_key
-                        except:
-                            numerical_check = ''
-                        if debug:
-                            print(f'Substance: {substance}')
-                            stripped_substance = plot_key.strip(f'{substance}_')
-                            print(f'Keys for plotting: {keys}')
-                            print(f'Plot key: {plot_key.lower()}\n\tStripped substance: {stripped_substance}\n\tNumerical Check: {numerical_check}')
-                            
-                            
-                        if plot_key.lower() in keys or plot_key.strip(f'{substance.lower()}_') in keys or numerical_check in keys: # Need to check if the keys we are searching for are present.
-                            if debug:
-                                print(f'PASSED TEST: \n\tplot key: {plot_key}\n\tnumerical check: {numerical_check}\n')
-                            # Handle most cases: {{{ 
-                            if plot_key != 'al' or plot_key != 'be' or plot_key != 'ga' or plot_key != 'alpha' or plot_key != 'beta' or plot_key != 'gamma':
-                                if specific_substance:
-                                    color = self._get_random_color() # Set a specific color for each lattice parameter if only one substance plotted. 
-                                # This is the default section since units should be consistent enough. 
-                                # Get the data: {{{
-                                if normalized:
-                                    y = self._normalize(entry[plot_key]) # This will normalize the plot data
-                                else:
-                                    y = entry[plot_key] # This will just give us the data
-                                #}}}
-                                hovertemplate = base_ht +f'{yaxis_title} ({substance}, {plot_key}): '+'%{y}' # This gives us the hovertemplate for this part.
-                                # Add the scatter (Y1): {{{
-                                fig.add_scatter(
-                                    x = x,
-                                    y = y,
-                                    hovertemplate = hovertemplate,
-                                    name = f'{substance} {plot_key}',
-                                    mode = 'lines+markers',
-                                    marker = dict(
-                                        color = color,
-                                    ),
-                                    line = dict(
-                                        color = color,
-                                    ),
-                                    yaxis = 'y1',
-                                )
-                                #}}}
-                             
-                            #}}}
-                            # Handle the case where we need to plot lattice angles: {{{
-                            else:
-                                # In this case, we need a second y axis for the degrees.
-                                # get the data: {{{
-                                if normalized:
-                                    y = self._normalize(entry[plot_key])
-                                else:
-                                    y = entry[plot_key]
-                                #}}}
-                                hovertemplate = base_ht + f'{yaxis2_title} ({substance}, {plot_key}): '+'%{y}'
-                                # Add the scatter (Y2):{{{
-                                fig.add_scatter(
-                                    x = x,
-                                    y = y,
-                                    hovertemplate = hovertemplate,
-                                    name = f'{substance} {plot_key}',
-                                    mode = 'lines+markers',
-                                    marker = dict(
-                                        color = color,
-                                    ),
-                                    line = dict(
-                                        color = color,
-                                    ),
-                                    yaxis = 'y2',
-                                ) 
-                                second_yaxis = True
-                                #}}}
-                            #}}}
-        # Plot temp data: {{{
+                        #}}}
+                    #}}} 
+                #}}}
+        #}}}
+        # if we are wanting to plot the temp: {{{
         if plot_temp:
-            yaxis3_title = f'{temp_label} /{self._deg_c}'
-            hovertemplate = base_ht + f'{temp_label}/{self._deg_c}: '+'%{y}'
-            fig.add_scatter(
-                x = x,
-                y = plot_data['temperature'],
-                hovertemplate = hovertemplate,
-                yaxis = 'y3',
-                name = f'{temp_label}/{self._deg_c}',
-                mode = 'lines+markers',
-                marker = dict(color = 'red'),
-                line = dict(color = 'red'),
-            )
-            third_yaxis = True
-        #}}}
-        # Update layout: {{{
-        if time_range == None:
-            time_range = [min(x), max(x)]
-        # Update the first y axis and plot: {{{
-        fig.update_layout(
-            height = height,
-            width = width,
-            title_text = f'Plot of {title} vs. Time',
-            xaxis = dict(
-                title = xaxis_title,
-                domain = [yaxis_2_position, 1], # the active area for x axis
-                range = time_range,
-                ticks = ticks,
-            ), 
-            yaxis = dict(
-                title = f'{yaxis_title}{normalized_label}',
-                ticks = ticks,
-            ),
-            font = dict(
-                size = font_size,
-            ),
-            template = 'simple_white',
-            legend = dict(
-                yanchor = legend_yanchor,
-                xanchor = legend_xanchor,
-                y = legend_y,
-                x = legend_x,
-            ),
-
-        )
-        #}}}
-        if y_range:
-            fig.update(layout_yaxis_range = y_range)
-        # if second y axis: {{{
-        if second_yaxis:
-            fig.update_layout(
-                yaxis2 = dict(
-                    title = yaxis2_title,
-                    anchor = 'free',
-                    overlaying = 'y',
-                    side = 'left',
-                    position = yaxis_2_position,
-                    ticks = ticks,
-                ),
-            )
-        #}}}
-        # if third axis: {{{
-        if third_yaxis:
-            fig.update_layout(
-                yaxis3 = dict(
-                    title = yaxis3_title,
-                    anchor = 'x',
-                    overlaying = 'y',
-                    side = 'right',
-                    ticks = ticks,
-
-                ),
-            )
+            if not first_plot:
+                print(f'This figure will be empty because your search: {plot_type}\n'+
+                        'was not found'
+                        )
+            else:
+                y3_title = f'Temperature ({self._degree}C)'
+                name = 'Thermocouple Temperature'
+                self.add_data_to_plot(
+                        x = x,
+                        y = self.csv_plot_data['temperature'],
+                        name = name,
+                        mode = 'lines+markers',
+                        color = 'red',
+                        xrange = time_range, yrange = y_range, y3 = True,
+                        y3_title = y3_title, legend_x = legend_x, legend_y = legend_y, 
+                        legend_xanchor= legend_xanchor, legend_yanchor = legend_yanchor,
+                        **kwargs
+                )
         #}}}
         #}}}
-
-        #}}}
-        fig.show()     
+        try:
+            self.show_figure()
+        except:
+            pass
     #}}}
     # plot_multiple_patterns: {{{
     def plot_multiple_patterns(self,

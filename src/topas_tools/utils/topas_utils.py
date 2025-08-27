@@ -660,6 +660,150 @@ class Utils:
         os.chdir(home)
         return x,y
     #}}}
+    # _filter_csv_dict: {{{
+    def _filter_csv_dict(self, csv_plot_data:dict = None, plot_type:str = None, debug:bool = False):
+        ''' 
+        This function is used to generate a new dictionary with only the values you care about for the specific plot.
+
+        '''
+        pattern = None
+        yaxis_title = ''
+        yaxis2_title = ''
+        title = ''
+        new_csv_dict = {} # This is the output dictionary
+        # Determine the pattern and the labels: {{{
+        # Lattice Params: {{{ 
+        if plot_type == 'lattice parameters' or plot_type == 'lattice' or plot_type == 'lp':
+            pattern = r'^(a|b|c|al|be|ga|alpha|beta|gamma)$' # This is a pattern to match only lattice parameter entries 
+            yaxis_title = f'Lattice Parameter / {self._angstrom}' # This is the a, b, c lattice parameter title
+            yaxis2_title = f'Lattice Parameter / {self._degree}' # this is the al, be, ga lattice parameter title
+            title = 'Lattice Parameters'
+        #}}}
+        # Scale Factor: {{{
+        elif plot_type == 'scale factor' or plot_type == 'sf': 
+            pattern = r'^(scale_factor|sf|scale factor)$'
+            yaxis_title = 'Scale Factor'
+            title = 'Scale Factor'
+            #normalized = True
+        #}}}
+        # Volume: {{{
+        elif plot_type == 'volume' or plot_type == 'vol': 
+            pattern = r'^vol$|^volume$|^cell_volume$|^cell volume$'
+            yaxis_title = f'Volume / {self._angstrom}{self._cubed}'
+            title = 'Volume'
+        #}}}
+        # R Bragg: {{{
+        if plot_type == 'rbragg' or plot_type == 'rb':
+            pattern = r'^r bragg$|^r_bragg$' 
+            yaxis_title = 'R Bragg'
+            title = 'R Bragg'
+        #}}}
+        # Weight Percent: {{{
+        if plot_type == 'weight percent' or plot_type == 'wp': 
+            pattern = r'^weight_percent$|^weight_percent$' 
+            yaxis_title = 'Weight Percent'
+            title = 'Weight Percent'
+        #}}}
+        # B-values: {{{
+        if plot_type == 'b values' or plot_type == 'beq' or plot_type == 'bvals':
+            pattern = r'^(bvals|beq|bval|b value|b val|b values|b_value|b_val|b_values)_\w+$' 
+            yaxis_title = 'B-Values'
+            title = 'B-Values'
+        #}}}
+        # Size L: {{{
+        if plot_type == 'size l' or plot_type == 'csl' or plot_type == 'sizel':
+            pattern = r'^(size_l|csl|lorentzian_size|Size_L|cslv)$' 
+            yaxis_title = 'Lorentzian Size'
+            title = 'Lorentzian Size'
+        #}}}
+        # Size G: {{{
+        if plot_type == 'size g' or plot_type == 'csg' or plot_type == 'sizeg':
+            pattern = r'^(size_g|csg|gaussian_size|Size_G|csgv)$'  
+            yaxis_title = 'Gaussian Size'
+            title = 'Gaussian Size' 
+        #}}}
+        # Strain L: {{{ 
+        if plot_type == 'strain l' or plot_type == 'strl' or plot_type == 'strainl':
+            pattern = r'^(strain_l|strl|lorentzian_strain|Strain_L|slv)$' 
+            yaxis_title = 'Lorentzian Strain'
+            title = 'Lorentzian Strain'
+        #}}}
+        # Strain G: {{{
+        if plot_type == 'strain g' or plot_type == 'strg' or plot_type == 'straing':
+            pattern = r'^(strain_g|strg|gaussian_strain|Strain_G|sgv)$'   
+            yaxis_title = 'Gaussian Strain'
+            title = 'Gaussian Strain' 
+        #}}}
+        # Lvol: {{{ 
+        if plot_type.lower() == 'lvol':
+            pattern = r'^lvol$'
+            yaxis_title = 'LVol'
+            title = 'LVol'
+        #}}}
+        # Lvolf: {{{
+        if plot_type.lower() == 'lvolf': 
+            pattern = r'^lvolf$' 
+            yaxis_title = 'Lvolf'
+            title = 'LVolf'
+        #}}}
+        # e0: {{{ 
+        if plot_type.lower() == 'e0':
+            pattern = r'^e0$' 
+            yaxis_title = f'e{self._subscript_zero}'
+            title = f'e{self._subscript_zero}'
+        #}}}
+        # phase_MAC: {{{
+        if plot_type.lower() == 'phase_mac':
+            pattern = r'^(phase_mac|phase_MAC)$' 
+            yaxis_title = 'Phase MAC'
+            title = 'Phase MAC'
+        #}}}
+        # cell_mass: {{{
+        if plot_type.lower() == 'cell_mass' or plot_type.lower() == 'cm' or plot_type.lower == 'mass':
+            pattern = r'^cell_mass$' 
+            yaxis_title = 'Cell Mass'
+            title = 'Cell Mass'
+        #}}}
+        # eta: {{{
+        if plot_type.lower() == 'eta':
+            pattern = r'^eta$' 
+            yaxis_title = 'Eta'
+            title = 'Eta Values'
+        #}}}
+        # stephens: {{{
+        if plot_type.lower() == 'stephens':
+            pattern = r'^(eta|s400|s040|s004|s220|s202|s022|s310|s031|s130|s301|s013|s211|s121|s112)$'
+            yaxis_title = 'Stephens Parameter'
+            title = 'Stephens Parameters'
+        #}}}
+        # Occupancies: {{{
+        if plot_type.lower() == 'occupancies' or plot_type.lower() == 'occ':
+            pattern = r'^(occupancy|occ)_\w+$|^\w+_(occupancy|occ)$'
+            yaxis_title  = 'Occupancy'
+            title = 'Occupancy Evolution'
+        #}}}
+        #}}}
+        # Return the data: {{{
+        if pattern != None: 
+            for key, old_csv in csv_plot_data.items():
+                if debug:
+                    try:
+                        print(f'Old CSV: {old_csv.keys()}')
+                    except:
+                        print(f'key: {key} does not have a dict entry!')
+                try: 
+                    pattern = re.compile(pattern) # Compile the regex
+                    filtered_dict = {k:v for k, v in old_csv.items() if pattern.match(k.lower())} # Create a copy dict with only relevant entries
+                    if debug:
+                        print(f'{key}\n\t{pattern}: {filtered_dict.keys()}')
+                    new_csv_dict[key] = filtered_dict # Add the filtered dictionary to the 
+                except:
+                    pass
+            return new_csv_dict, yaxis_title, yaxis2_title, title
+        else:
+            print(f'The plot type: {plot_type} is not defined!')
+        #}}}
+    #}}}
 #}}}
 # UsefulUnicode: {{{
 class UsefulUnicode: 
