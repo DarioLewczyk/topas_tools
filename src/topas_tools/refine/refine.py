@@ -696,6 +696,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                     added_lines += 2
 
                 #}}}    
+                # Update the output xy lines: {{{
+                idx_out_xy = inp_dict['output_xy'].get('linenumber') # If present, needs updated
+                if idx_out_xy != None and not modified_out_xy_linenumber:
+                    idx_out_xy += added_lines # Add the added lines
+                    inp_dict['output_xy']['linenumber'] = idx_out_xy
+                    modified_out_xy_linenumber = True # This should only be done once per file
+                #}}}
                 # Rename the output .xy file if present: {{{
                 try:
                     out_xy = inp_dict['output_xy']
