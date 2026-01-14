@@ -663,7 +663,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                 insert_idx = macro_blocks[max(list(macro_blocks.keys()))][1] + 2 # This gives us the index where we can insert new lines
                 for ph, entry in out_dict.items():
                     lines.insert(insert_idx, '\n') # Insert a break
-                    #insert_idx +=1
+                    insert_idx +=1
                     added_lines += 1
                     # Something important to remember is that the positioning of the WPF_IxPxSx stuff does matter
                     if 'Ph' in ph:
@@ -671,15 +671,15 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                             ph_num = int(re.search(r'(\d+)', ph).group(1)) # This will be used for making the WPF macros
                             wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro
                             lines.insert(insert_idx, wpf_macro) # Write the macro
-                            #insert_idx += 1 # Advance by 1
+                            insert_idx += 1 # Advance by 1
                             lines.insert(insert_idx, '\n')
-                            #insert_idx += 1
+                            insert_idx += 1
                             cry = cry_files[ph_num-1] # This gives the current cry file
                             
                             cry = cry.removesuffix('.out')
                             lne = f'#include {cry}.inp'
                             lines.insert(insert_idx,lne)
-                            #insert_idx += 1
+                            insert_idx += 1
                             added_lines += 3
                             
         
@@ -752,7 +752,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
             
                 #}}}
             pbar.update(1)
-            #break # THIS IS FOR TESTING IF THE CODE IS WORKING ON A SINGLE DIRECTORY
+            if debug:
+                break # THIS IS FOR TESTING IF THE CODE IS WORKING ON A SINGLE DIRECTORY
             os.chdir(home_dir)
             #}}}
         #}}}
