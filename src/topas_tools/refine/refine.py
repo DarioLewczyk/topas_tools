@@ -673,35 +673,34 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                             lines.insert(insert_idx, wpf_macro) # Write the macro
                             insert_idx += 1 # Advance by 1
                             lines.insert(insert_idx, '\n')
-                            insert_idx += 1
-                            cry = cry_files[ph_num-1] # This gives the current cry file
-                            
-                            cry = cry.removesuffix('.out')
-                            lne = f'#include {cry}.inp'
-                            lines.insert(insert_idx,lne)
-                            insert_idx += 1
-                            added_lines += 3
+                            insert_idx += 1 
+                            added_lines += 2
                             
         
                         except:
                             break
+                
 
-                out_xy_line = inp_dict['output_xy'].get('linenumber')
-                    
-                if out_xy_line and not modified_out_xy_linenumber:
-                    print(f'BEFORE: {out_xy_line}')
-                    out_xy_line += added_lines
-                        
-                    print(f'AFTER: {out_xy_line}')
-                    inp_dict['output_xy']['linenumber'] = out_xy_line  # This adds the appropriate number of lines to correct
-                    modified_out_xy_linenumber = True
-
+                
              
                 #}}}
+                # Add the include statements for the CRY: {{{
+                for cry in cry_files:
+                    cry = cry.removesuffix('.out')
+                    lne = f'#include {cry}.inp'
+
+                    lines.insert(insert_idx,lne)
+                    insert_idx += 1
+                    lines.insert(insert_idx,'\n')
+                    insert_idx += 1
+                    added_lines += 2
+
+                #}}}    
                 # Rename the output .xy file if present: {{{
                 try:
                     out_xy = inp_dict['output_xy']
-                    idx = out_xy.get('linenumber')
+                    idx = out_xy.get('linenumber') 
+                    idx += added_lines # because the line number is no longer accurate
                     prefix = out_xy.get('prefix')
                     old_temp = out_xy.get('temp')
                     old_method = out_xy.get('method')
