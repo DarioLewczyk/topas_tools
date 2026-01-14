@@ -1357,7 +1357,7 @@ def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str 
                 val = entry.get('value')
                 err = entry.get('error')
                 fixed = entry.get('fixed')
-             
+     
                 try:
                     old = lines[idx]
                     varname, old_val, old_err = parse_phase_prms(old) # in this form, it returns "variable name, value, error"
@@ -1371,11 +1371,12 @@ def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str 
                             new = old.replace(str(old_val), str(val)) # This neglects errors if they arent there.
                         else:
                             continue # In these cases, not an issue. no need to update. 
+                    lines[idx] = new                  
                 except:
                     print(f'KEY: {key} NOT UPDATED in INP')
                 #}}}
                 # print(f'OLD: {old}\nNEW: {new}') 
-                lines[idx] = new                  
+                
         #}}}
         # Specimen Displacement: {{{
         elif ph == 'Specimen_Displacement':
