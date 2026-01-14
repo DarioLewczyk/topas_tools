@@ -6,16 +6,18 @@
 import os
 import re
 import subprocess
+import time
 import copy
-
+from glob import glob
 import numpy as np
 from shutil import copyfile
+import shutil # Need this for the TOPAS8 stuff where we want to actually move files around
 from tqdm import tqdm
 from topas_tools.utils.topas_utils import Utils, UsefulUnicode, DataCollector
 from topas_tools.utils.metadata_parser import MetadataParser
 from topas_tools.utils.out_file_parser import OUT_Parser
 from topas_tools.utils.file_modifier import FileModifier
-
+import topas_tools.experimental.topas8_utils as t8_utils
 #}}}
 # TOPAS_Refinements: {{{
 class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
@@ -35,8 +37,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         topas_version: Sets what what number to use when looking for the TOPAS directory. 
         fileextension: sets the fileextension of your datafiles. Typically, ".xy" 
         '''
-        # Make attrs based on inputs: {{{ 
-        self.topas_dir = 'C:\\TOPAS%s'%topas_version # sets the directory
+        # Make attrs based on inputs: {{{  
+        self.topas_dir = f'C:\\TOPAS{topas_version}'# sets the directory
+        
         self.fileextension= fileextension# This is the extension of your data. 
         #}}}
         # Additional initialization tasks: {{{
@@ -533,6 +536,252 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
         #}}}
         #}}}
         #}}}
+    #}}}
+    # automate_ixpxsx_refinements: {{{
+    def run_auto_ixpxsx_refinements(self,mode:int = 0, home_dir:str = None, data_extension:str = 'xy', ixpxsx_types:list = ['IPS', 'xPS', 'xPx', 'xxx'],
+            debug:bool = False):
+        ''' 
+        This function allows us to automate IxPxSx refinements 
+        mode: 
+            0: Default mode. 
+                In this mode, the program will go to the home_dir you specify. 
+                From there, it will go through all of the directories and determine which ones have an .inp and .xy
+                it will then loop through all of these following the IxPxSx protocol
+
+        home_dir: This is the directory where all the other directories with INP and Data are if you are in mode 0. 
+        data_extension: The extension for the data files to look for in each of the directories
+        ixpxsx_types: The types of IxPxSx analysis you wish to run (IN ORDER)
+        '''
+        
+        os.chdir(home_dir) # This is the directory containing all of the temperatures
+        dirs = t8_utils.get_dirs_for_ixpxsx_automations(home_dir, data_extension, ixpxsx_types) # Gives us all of the dirs so we can run refinements in a loop
+
+        pbar = tqdm(dirs, position = 0, leave = True) # Make it so there is a progress bar
+        self.out_dicts = {} # This is a dictionary that will hold all the out dictionaries from all the rietveld refinements so they can be referenced later
+        # Loop through all of the main directories: {{{
+        for path in pbar:
+            pbar.set_description_str(f'Working through {path}')
+            os.chdir(path) # Enter the new path
+            ## GET TEMP: {{{
+            basename = os.path.basename(path)
+            m = re.search(r'(\d+C)', basename)
+            if m:
+                temp = m.group(1) # This should be the temperature e.g. 50C
+         
+            inp_file = glob(f'*{temp}*.inp')[0] # This will search the directory for an input file that includes the temperature
+            print(f'{temp}, {inp_file}')
+            #}}} 
+            # Get important information & Linenumbers from the INP: {{{
+            with open(inp_file) as inp:
+                lines = inp.readlines() # These are all the lines of the INP file
+             
+                topas_lines = self.get_lines_visible_to_topas(lines) # Dictionary with keys as original file linenumbers, values are lines
+             
+                inp_dict = t8_utils.parse_phase_prms(topas_lines) # Contains all phases, variable names, and values along with linenumber and if var is refining
+             
+                displacement_entry = t8_utils.parse_specimen_displacement(topas_lines) # This gives us all the information for the displacement
+                inp_dict['Specimen_Displacement'] = displacement_entry
+             
+                output_xy = t8_utils.parse_output_xy(topas_lines) # This parses the line that handles the output to XY format
+                inp_dict['output_xy'] = output_xy
+
+                # for ln, line in topas_lines.items():
+                #     print(f'{ln}: {line}')
+            #}}}
+             
+            # Now, we want to run the actual input file. 
+            inp_basename = inp_file.removesuffix('.inp') # This is just the input file name without the .inp
+            copyfile(inp_file, 'Dummy.inp') # Make a copy of the inp file so nothing is overwritten
+            # Update from previous refinements first: {{{
+            if len(self.out_dicts) > 0:
+                # retrieve the out_dict with the closest temperature to the current temp:{{{ 
+                out_dict = t8_utils.get_closest_entry_in_out_dict(temp, self.out_dicts) # This will automatically find 
+                #}}}
+                current_temp = t8_utils.extract_temp_from_string(temp)
+                recorded_temps = list(self.out_dicts.keys())
+                last_recorded_temp = t8_utils.extract_temp_from_string(recorded_temps[-1])
+                if current_temp >= last_recorded_temp:
+                    out_dict = self.out_dicts[recorded_temps[-1]]
+                else:
+                    # This is the case where we drop the temperature down by a bit and then take a scan, so probably have a temperature similar already
+                    out_dict = t8_utils.get_closest_entry_in_out_dict(temp, self.out_dicts) # This returns the out_dict closest to the current temp
+
+                with open('Dummy.inp', 'r') as f:
+                    lines = f.readlines() # Gives access to all the lines 
+                # Update the INP to have the values from the output: {{{
+                t8_utils.modify_ph_lines(lines, out_dict)  
+                #}}}
+                with open('Dummy.inp', 'w') as f:
+                    f.writelines(lines) # This updates the file with the new lines
+            #}}}
+            
+
+            pbar.set_description_str(f'Refining Rietveld {path}')
+            if not debug:
+                self.refine_pattern('Dummy.inp') # Refine the pattern
+            # Now, we need to find the _cry.out files...
+            cry_files = glob('*_cry.out') # These are the files that we need to be input files for peak lists
+            for file in cry_files:
+                copyfile(file, file.replace('.out', '.inp')) # This copies the file to an input file now  
+            # ###### IxPxSx Treatment: {{{
+            recorded_out_dict = False # Flag to tell if we have already recorded an out dict for this.
+            modified_out_xy_linenumber = False # Flag to tell this to not update more
+            for type_idx, ixpxsx in enumerate(ixpxsx_types):
+                pbar.set_description_str(f'Working on {ixpxsx} for {path}')
+                '''
+                The ixpxsx variable will be the string
+                of the type of refinement we want to do. 
+                '''
+                I = ixpxsx[0]
+                P = ixpxsx[1]
+                S = ixpxsx[2]
+                # Parse the output to get Ph info and specimen displacement: {{{ 
+                with open('Dummy.out') as out:
+                    lines = out.readlines()
+                    topas_lines = self.get_lines_visible_to_topas(lines)
+                    out_dict = t8_utils.parse_phase_prms(topas_lines) # Contains all phases, variable names, and values along with linenumber and if var is refining
+             
+                    displacement_entry = t8_utils.parse_specimen_displacement(topas_lines) # This gives us all the information for the displacement
+                    out_dict['Specimen_Displacement'] = displacement_entry
+                    if not recorded_out_dict:
+                        self.out_dicts[temp] = out_dict # Record the information under the temperature
+                        recorded_out_dict = True
+
+                #}}} 
+                copyfile(inp_file, 'Dummy.inp') # Make a copy of the input file and throw it to a dummy
+                # Manipulate the Dummy.inp file: {{{
+                with open('Dummy.inp', 'r') as f:
+                    lines = f.readlines() # Gives access to all the lines 
+                # Update the INP to have the values from the output: {{{
+                t8_utils.modify_ph_lines(lines, out_dict, I, P, S)  
+                #}}}
+                # Get the WPF_IxPxSx Macro: {{{
+                macro_blocks = t8_utils.find_ixpxsx_macro_blocks(lines) # Returns dict with phase nums as keys and vals = (start_idx, end_idx)
+                #}}}
+                # Now, write the WPF IxPxSx stuff: {{{
+                added_lines = 0 # Keep track of the lines added so that the linenumber for how many lines were added to add the IxPxSx 
+                insert_idx = macro_blocks[max(list(macro_blocks.keys()))][1] + 2 # This gives us the index where we can insert new lines
+                for ph, entry in out_dict.items():
+                    lines.insert(insert_idx, '\n') # Insert a break
+                    #insert_idx +=1
+                    added_lines += 1
+                    # Something important to remember is that the positioning of the WPF_IxPxSx stuff does matter
+                    if 'Ph' in ph:
+                        try:
+                            ph_num = int(re.search(r'(\d+)', ph).group(1)) # This will be used for making the WPF macros
+                            wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro
+                            lines.insert(insert_idx, wpf_macro) # Write the macro
+                            #insert_idx += 1 # Advance by 1
+                            lines.insert(insert_idx, '\n')
+                            #insert_idx += 1
+                            cry = cry_files[ph_num-1] # This gives the current cry file
+                            
+                            cry = cry.removesuffix('.out')
+                            lne = f'#include {cry}.inp'
+                            lines.insert(insert_idx,lne)
+                            #insert_idx += 1
+                            added_lines += 3
+                            
+        
+                        except:
+                            break
+
+                out_xy_line = inp_dict['output_xy'].get('linenumber')
+                    
+                if out_xy_line and not modified_out_xy_linenumber:
+                    print(f'BEFORE: {out_xy_line}')
+                    out_xy_line += added_lines
+                        
+                    print(f'AFTER: {out_xy_line}')
+                    inp_dict['output_xy']['linenumber'] = out_xy_line  # This adds the appropriate number of lines to correct
+                    modified_out_xy_linenumber = True
+
+             
+                #}}}
+                # Rename the output .xy file if present: {{{
+                try:
+                    out_xy = inp_dict['output_xy']
+                    idx = out_xy.get('linenumber')
+                    prefix = out_xy.get('prefix')
+                    old_temp = out_xy.get('temp')
+                    old_method = out_xy.get('method')
+                 
+                    old_name = f'{prefix}_{old_temp}_{old_method}'
+                    new_name = f'{prefix}_{temp}_{ixpxsx}'
+                    #print(old_name, new_name)
+                    old = lines[idx]
+                    new = old.replace(old_name, new_name)
+                    lines[idx] = new
+                except:
+                    new_name = None
+                 
+                #}}} 
+                # Write the updates to the Dummy file: {{{
+                with open('Dummy.inp', 'w') as f:
+                    f.writelines(lines)
+                #}}} 
+                #    break # THIS IS TO TEST IF THE DUMMY IS UPDATING WELL
+                #}}} 
+                pbar.set_description_str(f'Refining {ixpxsx} for {path}')
+                if not debug:
+                    self.refine_pattern('Dummy.inp') # Refine the pattern with the selected IxPxSx method.  
+                # Rename the OUT and Move Relevant Files to the IxPxSx Dir:  {{{ 
+                new_out_name = f'{inp_basename}_{ixpxsx}.out'
+                copyfile('Dummy.out', new_out_name) # This is the new name for the output file
+                profile_data = glob('*_profiles.out') # This gets all of the profile.out files generated
+             
+                files_to_move = profile_data
+                files_to_move.append(new_out_name)
+                if new_name:
+                    new_xy = f'{new_name}.xy'
+                    files_to_move.append(new_xy)
+                    with open(new_xy, 'w') as f:
+                        f.write('xy')
+             
+                pbar2 = tqdm(files_to_move, position = 1, leave = True)
+                for f in pbar2:
+                    current_dir = os.path.join(home_dir, path)
+                    dest = os.path.join(current_dir, ixpxsx)
+                    pbar2.set_description_str(f'Moving {f} to {ixpxsx}')
+
+                    if os.path.exists(os.path.join(dest,f)):
+                        os.remove(os.path.join(dest,f)) # If the file already exists in the directory, it is removed
+                    time.sleep(1)
+                    shutil.move(f, dest)
+                    pbar2.update(1)
+            
+                #}}}
+            pbar.update(1)
+            #break # THIS IS FOR TESTING IF THE CODE IS WORKING ON A SINGLE DIRECTORY
+            os.chdir(home_dir)
+            #}}}
+        #}}}
+    #}}}
+    # get_lines_visible_to_topas: {{{
+    def get_lines_visible_to_topas(self,lines:list = None):
+        '''
+        This function's purpose is to remove all comments and comment blocks from the input file
+        This way we just are searching on things that are actually visible to TOPAS.
+     
+        it creates a dictionary so that all of the line numbers from the original file are preserved
+        '''
+        # we are going to remove all of the comment blocks and lines starting with comments: 
+        block = False
+        skip = False
+        topas_lines = {} # dictionary where the keys are the original line numbers and the values are the lines 
+        for i, line in enumerate(lines): 
+            cleanline = line.strip()
+            if cleanline.startswith('/*'):
+                block = True
+            if cleanline.startswith('*/'):
+                block = False
+            if cleanline.startswith('\''):
+                skip = True
+            else:
+                skip = False
+            if not skip and not block:
+                topas_lines[i] = cleanline
+        return topas_lines
     #}}}
 #}}}
 

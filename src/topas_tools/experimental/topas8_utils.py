@@ -11,11 +11,17 @@ module of topas_tools
 # imports: {{{
 from topas_tools.plotting.plotting_utils import GenericPlotter as gp
 import os
+import bisect
 from glob import glob
+import re
 import numpy as np
 import plotly.graph_objects as go
 import pandas as pd
 from scipy.optimize import minimize
+from math import gcd
+from functools import reduce
+from topas_tools.utils.topas_utils import Utils 
+utils = Utils()
 plt = gp()
 #}}}
 # Basic functions{{{ 
@@ -56,8 +62,56 @@ def go_to_dir_and_get_xy(base_folder, subfolder_idx, subfolders:list = ['IPS', '
     xy_file = glob('*.xy')[0] # Get the xy file
     return parse_xy(xy_file)
 #}}}
+# profile_data_parser: {{{
+def profile_data_parser(base_dir:str = None, subdirs:list = None):
+    ''' 
+    This function will go through a directory with subdirectories for each of the 
+    types of refinement that you did to return a dict with entries for the 
+    relevant information
+    '''
+    profile_data = {}
+    num_subdirs = len(subdirs)
+    previous_dir = os.getcwd()
+
+        
+    for idx in range(num_subdirs):
+        try:
+            go_to_dir(base_dir, idx, subdirs)
+            if os.getcwd() != previous_dir:
+                previous_dir = os.getcwd()
+            else:
+                pass
+                #break
+
+            method = os.path.basename(os.getcwd())
+            base = os.path.basename(base_dir)
+            identifier = '_'.join([base,method]) # This is the identifier that gets added to the name of the file and the column headers.  
+            profile_data[identifier] = {} # Initialize a dictionary for the specific identifier.
+     
+            out_files = glob('*.out') 
+            for f in out_files:
+                if '_profiles.out' in f: 
+                    substance = f.removesuffix('_profiles.out') # This gives us the identifier       
+                    profile_data[identifier][substance] = {}  # This is to allow for multi-IxPxSx refinements
+
+                    loaded_data = pd.read_csv(f, delimiter = ',', index_col = False) 
+                    loaded_data.columns = loaded_data.columns.str.strip() # This gets rid of any unexpected spaces  
+                
+                    for key, entry in loaded_data.items():
+                        key = str(key)
+                        entry = list(entry)     
+                        try:
+                            data = np.array(entry)
+                        except:
+                            data = entry
+                        profile_data[identifier][substance][key] = data
+
+        except:
+            pass #break
+    return profile_data
+#}}}
 # get_profile_data: {{{
-def get_profile_data(directories:list = None, num_subdirs:int = 4, subdirs:list = ['IPS', 'xPS', 'xPx', 'IPx']):
+def get_profile_data(directories:list = None, subdirs:list = ['IPS', 'xPS', 'xPx', 'IPx'], debug:bool = False):
     ''' 
     This function gives a dictionary with nice labels 
     to separate each of the files nicely for you.
@@ -65,59 +119,40 @@ def get_profile_data(directories:list = None, num_subdirs:int = 4, subdirs:list 
     It also automatically calculates the error for IBs by using the 
     TOPAS calculated error for IBd
     '''
+    num_subdirs = len(subdirs)
     profile_data = {} # This will house the profile data. 
     # Import the data from the file as is: {{{
     for base_dir in directories:
-        previous_dir = os.getcwd()
-        for idx in range(num_subdirs):
-            try:
-                go_to_dir(base_dir, idx, subdirs)
-                if os.getcwd() != previous_dir:
-                    previous_dir = os.getcwd()
-                else:
-                    break
-
-                method = os.path.basename(os.getcwd())
-                base = os.path.basename(base_dir)
-                identifier = '_'.join([base,method]) # This is the identifier that gets added to the name of the file and the column headers.
-             
-                profile_data[identifier] = {} # Initialize a dictionary for the specific identifier.
-     
-                out_files = glob('*.out')
-                profile = [f for f in out_files if '_profiles.out' in f][0] # This specifies the unmodified file. 
-                with open(profile, 'r') as f:
-                    header_line = f.readlines()[0].strip('\n').strip('').strip(' ').split(',') # This makes a list of just the header words.
-                    loaded_data = np.loadtxt(profile, skiprows=1, delimiter=',') # Should load the numerical data
-                    for i, header in enumerate(header_line):
-                        profile_data[identifier][header.strip(' ')] = loaded_data[:,i]
-                f.close()
-            except:
-                break
+        pd_update = profile_data_parser(base_dir, subdirs) # This returns a dictionary to update the profile date
+        profile_data.update(pd_update)
     #}}} 
+    if debug:
+        return profile_data
     # Calculate the errors + Get Hovertemplates: {{{
-    for identifier, entry in profile_data.items():
-        for key, arr in entry.items():
-            if key == 'IZTF_IBs_e':
-                IZTF_IBs_e = (entry['IZTF_IBd_e']/entry['IZTF_IBd']) * entry['IZTF_IBs'] # Calculate a scale factor for calculating the IBs errors
-                profile_data[identifier][key] = IZTF_IBs_e
-            if key == 'hkl':
-                hkls = []
-                for i, v in enumerate(arr):
-                    h = int(entry['H'][i])
-                    k = int(entry['K'][i])
-                    l = int(entry['L'][i])
-                    hkls.append(f'{h}_{k}_{l}')
-                profile_data[identifier][key] =np.array( hkls) # This fixes the hkls to be strings again
-        # Make hovertemplates: {{{ 
-        hs = entry['H']
-        ks = entry['K']
-        ls = entry['L']
-        s = entry['s_nm']
-        iztf = entry['IZTF_IBs']
-        iztf_e = entry['IZTF_IBs_e']
-        ht = make_hovertemplate(s, iztf, iztf_e, hs, ks, ls) # Gives a full list of hovertemplates
-        profile_data[identifier]['hovertemplate'] = np.array(ht)
-        #}}} 
+    for identifier, substances in profile_data.items():
+        for substance, entry in substances.items():
+            for key, arr in entry.items():
+                if key == 'IZTF_IBs_e':
+                    IZTF_IBs_e = (entry['IZTF_IBd_e']/entry['IZTF_IBd']) * entry['IZTF_IBs'] # Calculate a scale factor for calculating the IBs errors
+                    profile_data[identifier][substance][key] = IZTF_IBs_e
+                if key == 'hkl':
+                    hkls = []
+                    for i, v in enumerate(arr):
+                        h = int(entry['H'][i])
+                        k = int(entry['K'][i])
+                        l = int(entry['L'][i])
+                        hkls.append(f'{h}_{k}_{l}')
+                    profile_data[identifier][substance][key] =np.array( hkls) # This fixes the hkls to be strings again
+            # Make hovertemplates: {{{ 
+            hs = entry['H']
+            ks = entry['K']
+            ls = entry['L']
+            s = entry['s_nm']
+            iztf = entry['IZTF_IBs']
+            iztf_e = entry['IZTF_IBs_e']
+            ht = make_hovertemplate(s, iztf, iztf_e, hs, ks, ls) # Gives a full list of hovertemplates
+            profile_data[identifier][substance]['hovertemplate'] = np.array(ht)
+            #}}} 
     #}}}
     return profile_data
 #}}}
@@ -132,22 +167,34 @@ def filter_by_duplicate_s(data_dict:dict):
     uses profile_data to do all the filtering at once.
     '''
     filtered_dict = {}
-    for name, entry in data_dict.items():
+    try:
+        for name, entry in data_dict.items():
         
-        s_nm = entry['s_nm']
-        # Find the unique values
-        unique_vals, counts = np.unique(s_nm, return_counts=True)
-        duplicate_vals = unique_vals[counts>1]
-        duplicate_mask = np.isin(s_nm, duplicate_vals)
+            s_nm = entry['s_nm']
+            # Find the unique values
+            unique_vals, counts = np.unique(s_nm, return_counts=True)
+            duplicate_vals = unique_vals[counts>1]
+            duplicate_mask = np.isin(s_nm, duplicate_vals)
         
 
-        # Filter out the values at the duplicate indices
-        filtered_dict[name] = {key:val[~duplicate_mask] for key, val in entry.items()}
-    return filtered_dict
+            # Filter out the values at the duplicate indices
+            filtered_dict[name] = {key:val[~duplicate_mask] for key, val in entry.items()}
+        return filtered_dict
+    except:
+        for name, s_dict in data_dict.items():
+            filtered_dict[name] = {}
+            for substance, entry in s_dict.items():
+                s_nm = entry['s_nm']
+                unique_vals, counts = np.unique(s_nm, return_counts=True)
+                duplicate_vals = unique_vals[counts>1]
+                duplicate_mask = np.isin(s_nm, duplicate_vals)
+                # Filter the values at the duplicate indices
+                filtered_dict[name][substance] = {key:val[~duplicate_mask] for key, val in entry.items()}
+        return filtered_dict
 
 #}}}
 # filter_by_pct_error: {{{
-def filter_by_pct_error(data_dict:dict, threshold:float = 10,base_ib_key:str = 'IZTF_IBs'):
+def filter_by_pct_error(data_dict:dict, threshold:float = 10, mode = 0, base_ib_key:str = 'IZTF_IBs'):
     '''
     This function filters by the error in the IZTF (s)
     If the error is below the threshold percentage of the point, it is included
@@ -155,21 +202,34 @@ def filter_by_pct_error(data_dict:dict, threshold:float = 10,base_ib_key:str = '
 
     We should also think about the fact that when peaks are right on top of each other, they are unreliable even if 
     perceived errors are low. 
+
+    mode = 0:  "pct" - Percent error
+    mode = 1:  "abs" - Absolute numerical error
     '''
     filter_key = f'filtered_{threshold}'
     data_dict[filter_key] = {}
     for identifier, entry in data_dict.items():
         try:
             IZTF_s = entry[base_ib_key]
-            IZTF_s_e = entry[f'{base_ib_key}_e']
+            IZTF_s_e = entry[f'{base_ib_key}_e'] # This is the error numerically 
             pct_e = (IZTF_s_e/IZTF_s)*100 # These are a list of all the percent errors
             data_dict[filter_key][identifier] = {} 
             for label, arr in entry.items():
                 data_dict[filter_key][identifier][label] = []
                 for i, val in enumerate(arr):
                     pct_e_at_idx = pct_e[i] # This is the current error for the entry. 
-                    if pct_e_at_idx < threshold:
-                        data_dict[filter_key][identifier][label].append(val)
+                    err_at_idx = IZTF_s_e[i] # This is absolute error at an index
+                    # % error mode: {{{
+                    if mode == 0:
+                        if pct_e_at_idx < threshold:
+                            data_dict[filter_key][identifier][label].append(val)
+                    #}}}
+                    #  numerical error mode: {{{ 
+                    elif mode == 1: 
+                        if err_at_idx < threshold:
+                            data_dict[filter_key][identifier][label].append(val)
+                    #}}}
+
         except:
             pass
     for identifier, entry in data_dict[filter_key].items():
@@ -307,14 +367,15 @@ def get_size_dataset(datasets:list = None, params:list = None, unscaled_idx:int 
         1 - This will return the inverted IBs for size calculations
     '''
     num_datasets = len(datasets)
-    num_params = len(params)
+    num_params = len(params) 
     # get epsilons: {{{
     if num_datasets == num_params:
         epsilons = params[0]
         scale_factors = params[1:]
     else:
-        epsilons = params[:num_datasets-1] # The first half are epsilons
-        scale_factors = params[num_datasets-1:] # The second half are scale factors
+        epsilons = params[:num_datasets] # The first half are epsilons
+        scale_factors = params[num_datasets:] # The second half are scale factors
+    #print(f'epsilons: {epsilons}\nScales: {scale_factors}')
     #}}}
     size_datasets = []
     # Generate new datasets: {{{
@@ -329,9 +390,10 @@ def get_size_dataset(datasets:list = None, params:list = None, unscaled_idx:int 
         h = dataset['H']
         k = dataset['K']
         l = dataset['L']
+        #print(f'Length of s: {len(s)}\nLength of b: {len(b)}\nLength of berror: {len(berr)}')
         #}}}
         # scale factor: {{{
-        if i < unscaled_idx:
+        if i < unscaled_idx or i == unscaled_idx:
             try:
                 epsilon = epsilons[i]
             except:
@@ -343,12 +405,9 @@ def get_size_dataset(datasets:list = None, params:list = None, unscaled_idx:int 
             except:
                 epsilon = epsilons
             scale_factor = scale_factors[i-1]
-        else:
-            if guess_for_unscaled_beta:
-                epsilon = guess_for_unscaled_beta
-            else:
-                epsilon = epsilons
+        
             scale_factor = 1
+       # print(f'Epsilon: {epsilon}\nScale factor: {scale_factor}')
 
         #}}}
         if apply_scale:
@@ -564,6 +623,56 @@ def get_profile_output(
     #}}}
     return profile_output
 #}}}
+# convert_str_hkl_to_tuple{{{
+def convert_str_hkl_to_tuple(hkl_str:str):
+    return  tuple(int(v) for v in hkl_str.split('_'))
+#}}}
+# normalize_hkl: {{{
+def normalize_hkl(hkl:tuple):
+    h,k,l = hkl
+    g = reduce(gcd, (abs(h), abs(k), abs(l)))
+    return (h//g, k//g, l//g) # returns the GCD reduced hkl
+#}}}
+# get_reflection_harmonics: {{{
+def get_reflection_harmonics(parsed_data:dict, additional_keys:list = None):
+    ''' 
+    This function takes parsed data produced elsewhere by this code. 
+    The function will automatically categorize harmonics within a dictionary along with
+    their s-value and beta value. Also includes 2theta and whatever else you would like to store. 
+    '''
+    basic_keys_to_save = [
+            'hkl','IZTF_IBs', 'IZTF_IBs_e',
+            's_nm','tth_deg'
+            ]
+    try:
+        basic_keys_to_save.extend(additional_keys)
+        keys_to_save = basic_keys_to_save
+    except:
+        keys_to_save = basic_keys_to_save
+    
+
+    harmonics = {}
+    # Loop through all recorded HKL: {{{
+    for i, hkl_str in enumerate(parsed_data['hkl']):
+        hkl = convert_str_hkl_to_tuple(hkl_str)
+        norm = normalize_hkl(hkl) # This gets the base family for the reflection
+        ht = f'hkl: {str(hkl)}<br>'+ '%{x}<br>%{y}' 
+        # Create entries for the harmonics: {{{
+        if norm not in harmonics:
+            harmonics[norm] = {}
+            for key in keys_to_save:
+                harmonics[norm][key] = [] # Initialize the entries with lists
+                harmonics[norm]['ht'] = [] # Initialize a list for the hover templates
+        #}}}
+        # Loop through the keys of interest: {{{
+        for j, key in enumerate(keys_to_save):
+            value = parsed_data[key][i]
+            harmonics[norm][key].append(value)
+        #}}} 
+        harmonics[norm]['ht'].append(ht) # Add the hovertemplate last
+    #}}}
+    return harmonics
+#}}}
 #}}}
 # Optimization Functions: {{{
 # williamson_hall_optimization:{{{ 
@@ -600,15 +709,15 @@ def williamson_hall_optimization(
     #}}}
     # Objective function: {{{
     def objective(params):
-        num_datasets = len(datasets) -1
+        num_datasets = len(datasets) 
         num_prms = len(params) # If we know how many parameters are passed, we can deduce intent (single epsilon or one for each dataset)
         # Single epsilon case: {{{
-        if num_prms == num_datasets+1:
+        if num_prms == num_datasets:
             epsilons = params[0] # A single epsilon
             scale_factors = params[1:]
         #}}}
         # Multiple epsilon case: {{{
-        elif num_prms == 2*(num_datasets+1) - 2:
+        elif num_prms == 2*(num_datasets) - 1: # If each dataset has its own epsilon, then there will be 1 less prm than 2x datasets
             epsilons = params[:num_datasets] # a list of epsilons for each dataset should be 1 less than all datasets
             scale_factors = params[num_datasets:] # list of scale factors  should be 1 less than all datasets
         #}}} 
@@ -636,6 +745,11 @@ def williamson_hall_optimization(
                     epsilon = epsilons
                 # If this is the case, we have already passed the idx to skip
                 scale_factor = scale_factors[i - 1] 
+            else:
+                try:
+                    epsilon = epsilons[unscaled_idx]
+                except:
+                    epsilon = epsilons
             #}}} 
             # calculate the size: {{{ 
             if i != unscaled_idx:
@@ -663,7 +777,7 @@ def williamson_hall_optimization(
             elif i > unscaled_idx:
                 scale_factor = scale_factors[i-1]
             #}}} 
-            if i != unscaled_idx:  
+            if i != unscaled_idx:   
                 rmse = np.sqrt(np.mean(((size - avg_size)/ (berr * scale_factor))**2)) 
             else:
                 rmse = np.sqrt(np.mean(((size - avg_size)/ berr)**2)) 
@@ -674,7 +788,7 @@ def williamson_hall_optimization(
     # Plot the data you are optimizing: 
     plot_datasets_with_error(datasets, legend_x=legend_x, legend_y=legend_y, yaxis_range=yaxis_range) # This just plots the raw data
     result = minimize(objective, params)
-    # plot the result of fitting: {{{
+    # plot the result of fitting: {{{  
     size_dataset = get_size_dataset(datasets, result.x, unscaled_idx, guess_for_unscaled_beta)
     plot_datasets_with_error(size_dataset, title_text='Strain corrected IBs', yaxis_title='IZF IB (s, nm)', legend_x = legend_x, legend_y = legend_y, yaxis_range=yaxis_range)
     #}}}
@@ -795,6 +909,10 @@ def plot_datasets_with_error(
         height = height,
         width = width
     )
+    fig.update_xaxes(ticks = 'inside')
+    fig.update_yaxes(ticks = 'inside')
+    fig.update_xaxes(mirror= True)
+    fig.update_yaxes(mirror= True)
     fig.show()
 #}}}
 #}}}
@@ -971,5 +1089,393 @@ def write_output_data_to_excel(
                 df.to_excel(writer, sheet_name=dist_id, startcol=start_col, index=False)
                 start_col+=len(df.T)
     #}}}
+#}}}
+# write_harmonics_to_excel: {{{
+def write_harmonics_to_excel(
+        harmonics:dict,
+        filename:str,
+        out_dir,
+    ):
+    '''
+    This uses the harmonics dictionary to output data to excel
+
+    '''
+    current_dir = os.getcwd()
+    os.chdir(out_dir)
+    with pd.ExcelWriter(f'{filename}.xlsx') as writer:
+        for key, entry in harmonics.items():
+            num_entries = len(entry['s_nm'])
+            if num_entries > 1:
+                new_entry = {} # We need to reformat some things for using IGOR.
+                # Get sheet name: {{{
+                sheet_name = str(key).strip('()')
+                sheet_name = sheet_name.split(' ')
+                sheet_name = ''.join(sheet_name)
+                sheet_name = sheet_name.replace(',','_')
+                #}}}
+                #print(sheet_name)
+                for col, v in entry.items():
+                    col = str(col)
+                    col = col.strip('()')
+                    col = col.replace(',', '_')
+                    if 'hkl' in col:
+                        new_hkl = []
+                        for hkl in v:
+                            hkl = str(hkl).strip('()')
+                            hkl = hkl.replace(',','_')
+                            new_hkl.append(hkl)
+                        new_entry[f'{col}_{sheet_name}'] = new_hkl
+                    if 'ht' not in col and 'hkl' not in col:
+                        new_entry[f'{col}_{sheet_name}'] = v 
+                entry_df = pd.DataFrame(new_entry ) 
+                entry_df.to_excel(writer, index = False, sheet_name = sheet_name)
+    full_path_written = os.path.join(out_dir, f'{filename}.xlsx')
+    print(f'Excel file written to: {full_path_written}')
+    os.chdir(current_dir)
+#}}}
+#}}}
+# TOPAS8 Automation Functions: {{{
+# get_dirs_for_ixpxsx_automations: {{{
+def get_dirs_for_ixpxsx_automations(home_dir:str = None, data_extension:str = 'xy', ixpxsx_types:list = ['IPS', 'xPS', 'xPx', 'xxx']):
+    '''
+    This function will return a list of directories sorted in order if 
+    the directories contain both a .inp and the extension of whatever your data files have
+    
+    It will also make sure that each of the directories has appropriate subdirectories for each of the ixpxsx types you want to run
+    '''
+    valid_dirs = []
+    os.chdir(home_dir)
+    
+    for entry in os.scandir(home_dir):
+        if entry.is_dir():
+            files = os.listdir(entry.path)
+            
+            has_inp = any(f.endswith('.inp') for f in files)
+            has_data = any(f.endswith(f'.{data_extension}') for f in files)
+            
+            if has_inp and has_data:
+                valid_dirs.append(entry.name)
+            for path in ixpxsx_types:
+                if not os.path.exists(os.path.join(entry, path)):
+                    os.makedirs(os.path.join(entry, path)) # This ensures that each directory is primed for the IxPxSx analysis
+    sorted_dirs = sorted(valid_dirs, key = lambda d: int(d.split('_')[0]))
+    return sorted_dirs
+#}}}
+# parse_phase_prms: {{{
+def parse_phase_prms(topas_lines:dict = None):
+    '''
+    If run with just a single line, it returns the variable name, value, error in a tuple form. 
+    
+    This function takes the topas_lines dictionary: 
+        This contains only lines visible to TOPAS
+        The keys are the line numbers in the original file
+        
+    This function will search the lines of a file for the tags: 
+    prm Ph1(varname) # It will be able to pull out the Ph1 and the varname 
+    separately so that they can be used in building a dictionary
+    
+    It will also grab the values and errors for the definitions if given
+    It will also grab min and max limits
+    
+    The code will also be aware of if the variable is fixed or not. 
+    
+    Along with all of this inormation, it will keep track of the line number 
+    '''
+    # RE Expressions and Patterns: {{{
+    re_tag = re.compile(r"prm\s*(Ph\d+)\(\s*!?(\w+)\s*\)")
+    float_re = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"
+
+    re_val_err = re.compile(rf"({float_re})`_({float_re})")
+    re_value   = re.compile(rf"({float_re})")
+    re_min     = re.compile(rf"min\s+({float_re})")
+    re_max     = re.compile(rf"max\s+({float_re})")
+    result = {}
+    #}}}    
+    # If the input data are in the form of a dictionary: {{{
+    try:
+        for linenumber, line in topas_lines.items():
+            # Find a line for a parameter definition of Ph#: {{{
+            m = re_tag.search(line)
+            if not m:
+                continue
+
+            phase = m.group(1)     # e.g. "Ph1"
+            var   = m.group(2)     # e.g. "lp_a"
+
+            if '!' in line:
+                fixed = True
+            else:
+                fixed = False
+
+            #}}}
+            # Skip assignment lines like "= Ph1(lp_a)": {{{
+            if "=" in line and "`_" not in line and "min" not in line:
+                continue
+
+            if phase not in result:
+                result[phase] = {}
+            #}}}
+            entry = {"linenumber":linenumber, "value": None, "error": None, "min": None, "max": None, "fixed": fixed}
+            # Value + Error: {{{
+            ve = re_val_err.search(line)
+            if ve:
+                entry["value"] = float(ve.group(1))
+                entry["error"] = float(ve.group(2))
+            else:
+                # Standalone value (first float after the tag)
+                after = line[m.end():]
+                v = re_value.search(after)
+                if v:
+                    entry["value"] = float(v.group(1))
+            #}}} 
+            # Min/ Max: {{{ 
+            mn = re_min.search(line)
+            if mn:
+                entry["min"] = float(mn.group(1))
+
+            mx = re_max.search(line)
+            if mx:
+                entry["max"] = float(mx.group(1))
+            #}}}
+            result[phase][var] = entry
+    #}}}
+    # If the input data are just a string: {{{
+    except:
+        m = re_tag.search(topas_lines)
+        
+        var = None
+        value = None
+        error = None
+        # Find the Ph and its variable name: {{{
+        if not m:
+            return None
+
+        phase = m.group(1)     # e.g. "Ph1"
+        var   = m.group(2)     # e.g. "lp_a" 
+        #}}}
+        # Value + Error: {{{
+        ve = re_val_err.search(topas_lines)
+        if ve:
+            value = float(ve.group(1))
+            error = float(ve.group(2))
+        else:
+            # Standalone value (first float after the tag)
+            after = topas_lines[m.end():]
+            v = re_value.search(after)
+            if v:
+                value = float(v.group(1))
+        #}}}
+        result = (var, value, error)
+
+    #}}}
+    return result
+#}}}
+# parse_specimen_displacement: {{{
+def parse_specimen_displacement(topas_lines:dict = None):
+    '''
+    Can also pass a single line if you need to. 
+    
+    If only a single line: returns a tuple (value, error)
+    
+    If a dictionary, then it returns a dictionary
+    '''
+    # RE Pattern: {{{
+
+    float_re = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"
+    pattern = re.compile(
+        rf"Specimen_Displacement\(\s*(@)?\s*,\s*({float_re})`_({float_re})\s*\)"
+    )
+    #}}}
+    # If passing a dictionary: {{{
+    try:
+        for linenumber, line in topas_lines.items():
+            m = pattern.search(line)
+            if not m:
+                continue
+
+            has_at = m.group(1) is not None
+            value = float(m.group(2))
+            error = float(m.group(3))
+
+            return {
+                "linenumber": linenumber,
+                "value": value,
+                "error": error,
+                "fixed": not has_at # This reverses the bool of has_at
+            }
+        return None
+    #}}}
+    # If passing a string: {{{
+    except:
+        m = pattern.search(topas_lines)
+        if m:
+            value = float(m.group(2))
+            error = float(m.group(3))
+            return value, error
+    #}}}
+#}}}
+# parse_output_xy: {{{
+def parse_output_xy(topas_lines:dict = None):
+    '''
+    This will parse the output xy lines so that you can make new filenames easily
+    
+    It will return the linenumber of the line as well as the prefix for the filename
+    '''
+    pattern = re.compile(
+    r'Out_X_Yobs_Ycalc_Ydiff\("([A-Za-z0-9_]+)_(\d+C)_([A-Za-z0-9]+)\.xy"\)'
+    )
+    for linenumber, line in topas_lines.items():
+        m = pattern.search(line)
+        if m:
+
+            return {
+                "linenumber": linenumber,
+                "line": m.group(0),
+                "prefix": m.group(1),
+                "temp": m.group(2),
+                "method": m.group(3)
+            }
+        else:
+            continue
+    return None
+#}}}
+# modify_ph_lines: {{{
+def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str = "P", S:str = "S"):
+    ''' 
+    This function serves the purpose to neatly edit the lines of an INP 
+    related to Ph# for IxPxSx type refinements. 
+
+    It specifically edits the prm definitions
+    '''
+    # Loop through the out_dict: {{{
+    for ph, var_entry in out_dict.items():
+        # For each of the phase parts, fix the LPs: {{{
+        if 'Ph' in ph:
+            relevant_keys = ['lp_a', 'lp_b', 'lp_c', 'lp_al', 'lp_be', 'lp_ga'] 
+            for key, entry in var_entry.items(): 
+                idx = entry.get('linenumber')
+                val = entry.get('value')
+                err = entry.get('error')
+                fixed = entry.get('fixed')
+             
+                old = lines[idx]
+                varname, old_val, old_err = parse_phase_prms(old) # in this form, it returns "variable name, value, error"
+                # Conditional for the P being x: {{{
+                if P == 'x' and key in relevant_keys and not fixed:
+                    new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err),str(err))
+                else:
+                    if old_val and old_err:
+                        new = old.replace(str(old_val), str(val)).replace(str(old_err),str(err))
+                    elif old_val:
+                        new = old.replace(str(old_val), str(val)) # This neglects errors if they arent there.
+                    else:
+                        continue # In these cases, not an issue. no need to update. 
+                #}}}
+                # print(f'OLD: {old}\nNEW: {new}') 
+                lines[idx] = new                  
+        #}}}
+        # Specimen Displacement: {{{
+        elif ph == 'Specimen_Displacement':
+            try:
+                idx = var_entry.get('linenumber')
+                val = var_entry.get('value')
+                err = var_entry.get('error')
+                fixed = var_entry.get('fixed')
+                #print(f'Output: {val}, {fixed}')
+                if not fixed:
+                    old = lines[idx]
+                    old_val, old_err = parse_specimen_displacement(old)
+                    if P == 'x':
+                        new = old.replace(f'{old_val}', f'{val}').replace(f'{old_err}', f'{err}').replace('@', '') # Replace the values and turn off the refinement
+                    else:
+                        new = old.replace(f'{old_val}', f'{val}').replace(f'{old_err}', f'{err}')
+                    lines[idx] = new 
+            except:
+                continue
+        #}}}
+    #}}}
+    return lines
+
+#}}}
+# extract_temp_from_string: {{{
+def extract_temp_from_string(s):
+    m = re.search(r"(\d+)C", s)
+    return int(m.group(1)) if m else None
+
+#}}}
+# get_closest_entry_in_out_dict: {{{
+def get_closest_entry_in_out_dict(s:str = None, out_dicts:dict = None):
+    '''
+    s = the string temperature
+    out_dicts = This is the dictionary that contains out_dicts based on the folder name
+
+    This allows you to find the closest entry in the out dictionary generated by the 
+    run_auto_ixpxsx_refinements() command
+    '''
+
+    # Build numeric temp list + mapping
+    temps = sorted(extract_temp_from_string(k) for k in out_dicts.keys())
+    temp_to_key = {extract_temp_from_string(k): k for k in out_dicts.keys()}
+    
+    # Current T
+    current = extract_temp_from_string(s) # This is the current temperature
+    
+    # Find closest lower
+    idx = bisect.bisect_left(temps, current)
+    if idx == 0:
+        target_temp = temps[idx]
+    else:
+        target_temp = temps[idx - 1] 
+    return out_dicts[temp_to_key[target_temp]]
+#}}}
+
+#}}}
+# find_ixpxsx_macro_blocks: {{{
+def find_ixpxsx_macro_blocks(lines):
+    '''
+    This function is important because it matters that the WPF_IxPxSx() calls happen before the definition of the skip cases
+    For this reason, we need to map out inside of the INP, where are the macros that define WPF_IxPxSx 
+
+    This function will return a dictionary where the indices of the phases are the keys
+
+    the entries of the dictionary are tuples: (start_idx, end_idx)
+    '''
+    wpf_re = re.compile(r"^\s*macro\s+WPF_[A-Za-z0-9]+_(\d+)\s*\(")
+    blocks = {}
+    inside = False
+    start_line = None
+    phase = None
+
+    for i, line in enumerate(lines):
+        m = wpf_re.match(line)
+
+        if m:
+            # This line is a WPF macro line
+            p = int(m.group(1))
+
+            if not inside:
+                # Start a new block
+                inside = True
+                start_line = i
+                phase = p
+            else:
+                # Already inside a block
+                # If phase changes, still treat as same block
+                pass
+
+        else:
+            # This line is NOT a WPF macro line
+            if inside:
+                # Close the block
+                blocks[phase] = (start_line, i-1)
+                inside = False
+                start_line = None
+                phase = None
+
+    # If file ends while inside a block
+    if inside:
+        blocks[phase] = (start_line, len(lines)-1)
+
+    return blocks 
 #}}}
 #}}}

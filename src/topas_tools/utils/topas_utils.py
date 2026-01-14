@@ -12,6 +12,7 @@ from scipy.optimize import fsolve
 #from PIL import Image
 import fabio
 from scipy.signal import savgol_filter
+from topas_tools.IO import IO
 #}}}
 # Utils: {{{
 class Utils: 
@@ -584,20 +585,24 @@ class Utils:
         return new_x, dydx
     #}}}
     # calculate_toffset_for_isotherm: {{{
-    def calculate_toffset_for_isotherm(self, x, y, tolerance:float = 0.1, print_delta_x:bool = False):
+    def calculate_toffset_for_isotherm(self, x, y, tolerance:float = 0.1, start_idx:int = 0,  print_delta_x:bool = False):
         ''' 
         This function will print out a time offset placing the start of your isotherm at 
         t = 0. It will  also return the corrected time range. 
 
         currently, this only matches a value in the range 
         This uses the derivative to determine when the temperature has settled
-        '''
-        x = np.array(x)
-        y = np.array(y)
-        newx, dydx = self.calculate_derivative(x,y, 1, mode = 1)
-        settling_idx = np.where(np.abs(dydx) <= tolerance)[0][0]
-        settling_x = x[settling_idx]
         
+        If you are working with some datasets, you may need to exclude some indices. 
+        If this is the case, then use start_idx to change that. 
+        '''
+        tmp_x = np.array(x[start_idx:])
+        tmp_y = np.array(y[start_idx:])
+        newx, dydx = self.calculate_derivative(tmp_x,tmp_y, 1, mode = 1)
+        settling_idx = np.where(np.abs(dydx) <= tolerance)[0][0]
+        settling_x = tmp_x[settling_idx]
+
+        x = np.array(x)
         if print_delta_x:
             print(f'∆x = {np.around(settling_x - x[0],2)}')
         return x - settling_x
@@ -803,6 +808,10 @@ class Utils:
         else:
             print(f'The plot type: {plot_type} is not defined!')
         #}}}
+    #}}}
+    # export_xy_with_hkl: {{{
+    def export_xy_with_hkl(self, idx, rietveld_data, excel_dir, fn):
+        return IO.export_xy_with_hkl(idx, rietveld_data, excel_dir, fn)
     #}}}
 #}}}
 # UsefulUnicode: {{{

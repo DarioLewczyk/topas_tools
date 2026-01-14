@@ -27,17 +27,28 @@ class MetadataParser:
         fileextension:str = 'yaml',
         voltage_key:str = 'Voltage_percent',
         metadata_data:dict = None,
+        mode = 0,
         ):
         if metadata_data == None:
             self.metadata_data = {}
         else:
             self.metadata_data = metadata_data
-        md = DataCollector(fileextension=fileextension, metadata_data = self.metadata_data)
+        md = DataCollector(fileextension=fileextension, metadata_data = self.metadata_data, mode = mode)
         md.scrape_files() # This gives us the yaml files in order in data_dict
         self.metadata = md.file_dict # This is the dictionary with all of the files.
-        self.get_metadata(time_key=time_key, temp_key=temp_key, setpoint_key=setpoint_key, det_z_key=det_z_key, voltage_key=voltage_key) 
-        self._sort_metadata_by_epoch_time() # Sort the metadata 
-        self._calculate_time_from_start_of_run() # Get the corrected times.
+        try:
+            self.get_metadata(time_key=time_key, temp_key=temp_key, setpoint_key=setpoint_key, det_z_key=det_z_key, voltage_key=voltage_key) 
+        except:
+            print('Failed to get metadata')
+        try:
+            self._sort_metadata_by_epoch_time() # Sort the metadata 
+        except:
+            print('Failed to sort by epoch time')
+        try:
+            self._calculate_time_from_start_of_run() # Get the corrected times.
+        except:
+            print('Failed to calculate corrected times')
+        
         #os.chdir(self._data_dir) # Returns us to the original directory.
     #}}}
     # get_metadata: {{{
@@ -101,18 +112,27 @@ class MetadataParser:
                         try:
                             exposure_time = float(re.findall(r'\d+\.\d?', line)[0])
                         except:
-                            exposure_time = float(splitline[-1])
+                            try:
+                                exposure_time = float(splitline[-1])
+                            except:
+                                exposure_time = 0
                     if frame_num_key in line:
                         try:
                             num_frames = float(re.findall(r'\d+\.\d?', line)[0])
                         except:
-                            num_frames = float(splitline[-1])
+                            try:
+                                num_frames = float(splitline[-1])
+                            except:
+                                num_frames = 0
 
                     if time_per_frame_key in line:
                         try:
                             subframe_exposure = float(re.findall(r'\d+\.\d?', line)[0])
                         except:
-                            subframe_exposure = float(splitline[-1])
+                            try:
+                                subframe_exposure = float(splitline[-1])
+                            except:
+                                subframe_exposure = 0
                     #}}}
                         
                 f.close() 

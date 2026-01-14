@@ -27,6 +27,7 @@ class GenericPlotter(UsefulUnicode):
     def plot_data(self,
         x = None,
         y = None,
+        y_err = None, 
         name = 'series',
         show_in_legend:bool = True,
         mode:str = 'markers',
@@ -71,6 +72,7 @@ class GenericPlotter(UsefulUnicode):
         self._fig.add_scatter(
                 x = x,
                 y = y,
+                error_y=dict(type='data', array=y_err, visible=True) if y_err is not None else None,
                 mode = mode,
                 marker = dict(
                     symbol = symbol,
@@ -131,6 +133,7 @@ class GenericPlotter(UsefulUnicode):
     def add_data_to_plot(self,
             x:list = None,
             y:list = None,
+            y_err:list = None,
             name:str = 'series',
             show_in_legend:bool = True,
             mode = 'markers',
@@ -179,6 +182,7 @@ class GenericPlotter(UsefulUnicode):
         self._fig.add_scatter(
             x = x,
             y = y,
+            error_y=dict(type='data', array=y_err, visible=True) if y_err is not None else None,
             name = name,
             mode = mode,
             marker = dict(
@@ -264,6 +268,105 @@ class GenericPlotter(UsefulUnicode):
     # show_figure: {{{
     def show_figure(self):
         self._fig.show()
+    #}}}
+    # plot_histogram: {{{
+    def plot_histogram(self, 
+            x, 
+            nbins, 
+            color = None, 
+            opacity = 0.7,
+            name:str = 'Data',
+            xaxis_title:str = 'X',
+            yaxis_title:str = 'Counts',
+            title_text:str = 'Data Histogram',
+            bargap:float = 0.05,
+            show_figure:bool = False,
+            template:str = 'simple_white',
+            *args,
+            **kwargs,
+            ):
+
+        '''
+        Allows you to quickly plot data in a histogram form
+        
+        *args allows you to pass arguments through to plotly's
+        "update_layout" function.
+        '''
+        if color == None:
+            color = self._get_random_color()
+        self._fig = go.Figure()
+        
+        # Add the histogram: {{{
+        self._fig.add_histogram(
+            x = x, 
+            nbinsx = nbins,
+            marker_color = color,
+            opacity = opacity,
+            name = name,
+        )
+        #}}} 
+        # Update the layout: {{{
+        self._fig.update_layout(
+            title = title_text,
+            xaxis_title = xaxis_title,
+            yaxis_title = yaxis_title,
+            bargap = bargap,
+            template = 'simple_white',
+            *args,
+            **kwargs,
+        )
+        #}}}
+        if show_figure:
+            self.show_figure()
+
+    #}}}
+    # add_data_to_histogram: {{{
+    def add_data_to_histogram(self, 
+            x, 
+            nbins, 
+            color = None,
+            opacity = 0.7,
+            name:str = 'Data',
+            bargap:float = 0.05,
+            show_figure:bool = False,
+            barmode = 'group',
+            *args,
+            **kwargs,
+        ):
+        '''
+        Allows you to add additional series to the histogram
+
+        barmode: 
+            "group": bars for different traces side by side
+            "stack": bars are stacked on top of each other
+            "relative": like stack but + / - are opposites
+            "overlay": bars drawn on top of each other... opacity determines visibility
+
+        *args: 
+            can pass though any arguments to the "update_layout"
+        '''
+        if color == None:
+            color = self._get_random_color()
+        # add data to histogram: {{{
+        self._fig.add_histogram(
+            x = x, 
+            nbinsx = nbins,
+            marker_color = color,
+            opacity = opacity,
+            name = name,
+        )
+        #}}}
+        # update layout: {{{
+        self._fig.update_layout(
+            bargap = bargap,
+            barmode = barmode, 
+            *args,
+            **kwargs,
+        )
+        
+        #}}}
+        if show_figure:
+            self.show_figure()
     #}}}
     # _get_random_color: {{{
     def _get_random_color(self,):

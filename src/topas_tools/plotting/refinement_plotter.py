@@ -637,6 +637,7 @@ class RefinementPlotter(PlottingUtils):
             hovertemplate = base_ht+'Rwp: %{y}'
             y = plot_data['rwp']
             self.plot_data(x = x, y = y, hovertemplate = hovertemplate, name = 'Rwp',color = 'black',
+                    mode = 'lines+markers',title_text = 'Rwp Plot',
                     xaxis_title = xaxis_title, yaxis_title = yaxis_title,height = height, width = width, 
                     font_size = font_size, legend_x = legend_x, legend_y = legend_y, legend_xanchor = legend_xanchor, 
                     legend_yanchor = legend_yanchor, xrange = time_range, yrange = y_range,
@@ -687,7 +688,12 @@ class RefinementPlotter(PlottingUtils):
                         #}}}
                         # Get the y data: {{{
                         if normalized:
-                            y = self._normalize(data) # Returns a normalized array (based on max val)
+                            y = self._normalize(data) # Returns a normalized array (based on max val) 
+                            yaxis_title = f'Normalized {yaxis_title}'
+                            try:
+                                y2_title = f'Normalized {yaxis2_title}'
+                            except:
+                                pass
                         else:
                             y = data
                         #}}}

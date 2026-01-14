@@ -205,6 +205,12 @@ class OUT_Parser:
                     # e0_from_Strain: {{{
                     elif 'e0_from_Strain' in line:
                         #key = 'e0_from_Strain'
+                        pattern = r'=\s*If\([^)]*\);\:' # This will match an if statement if you use one. 
+                        if_stmt = re.search(pattern, line) 
+                        
+                        if if_stmt:
+                            clean_line = re.sub(pattern, '', line)
+                            line = clean_line # replace the line to get rid of the if
                         split = line.split(',')
                         macro_vars = ['e0', 'sgc', 'sgv','slc', 'slv'] # These are the parameters separated by commas for this macro
                         # Figure Out what needs to be recorded: {{{
@@ -212,7 +218,7 @@ class OUT_Parser:
                             macro_var = macro_vars[j] # Tells the program what to look for. 
                             rec = None
                             ints,floats,words = self._get_ints_floats_words(value)
-                            if macro_var == 'e0' or macro_var == 'sgv' or macro_var == 'slv':
+                            if macro_var == 'e0' or macro_var == 'sgv' or macro_var == 'slv': 
                                 if ints and not floats:
                                     rec = int(ints[0])
                                 elif floats:
