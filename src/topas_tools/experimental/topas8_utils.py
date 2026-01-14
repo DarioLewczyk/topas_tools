@@ -1358,20 +1358,21 @@ def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str 
                 err = entry.get('error')
                 fixed = entry.get('fixed')
              
-                old = lines[idx]
-                print(f'key: {key}, idx: {idx}, val: {val}, err: {err}, fixed: {fixed}')
-                print(f'Old: {old}')
-                varname, old_val, old_err = parse_phase_prms(old) # in this form, it returns "variable name, value, error"
-                # Conditional for the P being x: {{{
-                if P == 'x' and key in relevant_keys and not fixed:
-                    new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err),str(err))
-                else:
-                    if old_val and old_err:
-                        new = old.replace(str(old_val), str(val)).replace(str(old_err),str(err))
-                    elif old_val:
-                        new = old.replace(str(old_val), str(val)) # This neglects errors if they arent there.
+                try:
+                    old = lines[idx]
+                    varname, old_val, old_err = parse_phase_prms(old) # in this form, it returns "variable name, value, error"
+                    # Conditional for the P being x: {{{
+                    if P == 'x' and key in relevant_keys and not fixed:
+                        new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err),str(err))
                     else:
-                        continue # In these cases, not an issue. no need to update. 
+                        if old_val and old_err:
+                            new = old.replace(str(old_val), str(val)).replace(str(old_err),str(err))
+                        elif old_val:
+                            new = old.replace(str(old_val), str(val)) # This neglects errors if they arent there.
+                        else:
+                            continue # In these cases, not an issue. no need to update. 
+                except:
+                    print(f'KEY: {key} NOT UPDATED in INP')
                 #}}}
                 # print(f'OLD: {old}\nNEW: {new}') 
                 lines[idx] = new                  
