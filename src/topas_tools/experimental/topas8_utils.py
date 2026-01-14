@@ -1359,6 +1359,8 @@ def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str 
                 fixed = entry.get('fixed')
              
                 old = lines[idx]
+                print(f'key: {key}, idx: {idx}, val: {val}, err: {err}, fixed: {fixed}')
+                print(f'Old: {old}')
                 varname, old_val, old_err = parse_phase_prms(old) # in this form, it returns "variable name, value, error"
                 # Conditional for the P being x: {{{
                 if P == 'x' and key in relevant_keys and not fixed:
@@ -1427,8 +1429,6 @@ def get_closest_entry_in_out_dict(s:str = None, out_dicts:dict = None):
     else:
         target_temp = temps[idx - 1] 
     return out_dicts[temp_to_key[target_temp]]
-#}}}
-
 #}}}
 # find_ixpxsx_macro_blocks: {{{
 def find_ixpxsx_macro_blocks(lines):
