@@ -611,23 +611,42 @@ class GenericPlotter(UsefulUnicode):
         Allows you to quickly plot the xy output file from TOPAS
         where it outputs 2theta, yobs, ycalc, ydiff
         '''
+        # Default stuff for this plot: {{{
+        if not xy_file:
+            kwargs.setdefault('title_text', "TOPAS_REFINED_PATTERN")
+        else:
+            kwargs.setdefault('title_text', f"xy_file")
+        kwargs.setdefault('xaxis_title', f'2{self._theta}{self._degree}')
+        kwargs.setdefault('yaxis_title', f'Intensity')
+        kwargs.setdefault('mode', 'lines') 
+        #}}}
+        # Check if xy file: {{{
         if xy_file != None:
             try:
                 xy_data = np.loadtxt(xy_file) # This should load the xy file if it is present
             except:
                 raise ValueError(f'XY File: {xy_file} not found... or invalid format')
-        elif xy_data != None:
+        #}}}
+        # Check if xy data: {{{
+        elif type(xy_data) != type(None):
             try:
                 tth = xy_data[:,0]
                 yobs = xy_data[:,1]
                 ycalc = xy_data[:,2]
                 ydiff = xy_data[:,3]
             except:
-                print(f'Expected 4 columns, got {len(xy_data)}')
+                cols = len(xy_data[0,:]) 
+                print(f'Expected 4 columns, got {cols}')
                 raise ValueError(f'XY Data Not Valid Format: \n{xy_data}')
 
-
-
+        #}}}
+        # Plot the data: {{{
+        self.plot_data(tth, yobs, name = 'Observed', color = 'blue', *args, **kwargs)
+        self.add_data_to_plot(tth, ycalc, name = 'Calculated', color = 'red',*args, **kwargs)
+        self.add_data_to_plot(tth, ydiff, name = 'Difference', color = 'grey', *args, **kwargs)
+        #}}}
+        self.show_figure()
+       
     #}}}
 #}}}
 # PlottingUtils: {{{
