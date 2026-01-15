@@ -12,7 +12,12 @@ from glob import glob
 import numpy as np
 from shutil import copyfile
 import shutil # Need this for the TOPAS8 stuff where we want to actually move files around
-from tqdm import tqdm
+if __name__ == "__main__":
+    # In this case, import regular tqdm because running from CLI
+    from tqdm import tqdm
+else:
+    # If running as a module, import notebook version
+    from tqdm.notebook import tqdm
 from topas_tools.utils.topas_utils import Utils, UsefulUnicode, DataCollector
 from topas_tools.utils.metadata_parser import MetadataParser
 from topas_tools.utils.out_file_parser import OUT_Parser
@@ -577,7 +582,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
              
                 topas_lines = self.get_lines_visible_to_topas(lines) # Dictionary with keys as original file linenumbers, values are lines
              
-                inp_dict = t8_utils.parse_phase_prms(topas_lines) # Contains all phases, variable names, and values along with linenumber and if var is refining
+                inp_dict = t8_utils.parse_phase_prms(topas_lines, debug) # Contains all phases, variable names, and values along with linenumber and if var is refining
              
                 displacement_entry = t8_utils.parse_specimen_displacement(topas_lines) # This gives us all the information for the displacement
                 inp_dict['Specimen_Displacement'] = displacement_entry
@@ -609,7 +614,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                 with open('Dummy.inp', 'r') as f:
                     lines = f.readlines() # Gives access to all the lines 
                 # Update the INP to have the values from the output: {{{
-                t8_utils.modify_ph_lines(lines, out_dict)  
+                t8_utils.modify_ph_lines(lines, out_dict, debug = debug)  
                 #}}}
                 with open('Dummy.inp', 'w') as f:
                     f.writelines(lines) # This updates the file with the new lines
@@ -639,7 +644,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                 with open('Dummy.out') as out:
                     lines = out.readlines()
                     topas_lines = self.get_lines_visible_to_topas(lines)
-                    out_dict = t8_utils.parse_phase_prms(topas_lines) # Contains all phases, variable names, and values along with linenumber and if var is refining
+                    out_dict = t8_utils.parse_phase_prms(topas_lines, debug) # Contains all phases, variable names, and values along with linenumber and if var is refining
              
                     displacement_entry = t8_utils.parse_specimen_displacement(topas_lines) # This gives us all the information for the displacement
                     out_dict['Specimen_Displacement'] = displacement_entry
@@ -653,7 +658,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                 with open('Dummy.inp', 'r') as f:
                     lines = f.readlines() # Gives access to all the lines 
                 # Update the INP to have the values from the output: {{{
-                t8_utils.modify_ph_lines(lines, out_dict, I, P, S)  
+                t8_utils.modify_ph_lines(lines, out_dict, I, P, S, debug = debug)  
                 #}}}
                 # Get the WPF_IxPxSx Macro: {{{
                 macro_blocks = t8_utils.find_ixpxsx_macro_blocks(lines) # Returns dict with phase nums as keys and vals = (start_idx, end_idx)
@@ -748,7 +753,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                     with open(new_xy, 'w') as f:
                         f.write('xy')
              
-                pbar2 = tqdm(files_to_move, position = 1, leave = True)
+                pbar2 = tqdm(files_to_move, position = 1, leave = False)
                 for f in pbar2:
                     current_dir = os.path.join(home_dir, path)
                     dest = os.path.join(current_dir, ixpxsx)
@@ -758,10 +763,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                         os.remove(os.path.join(dest,f)) # If the file already exists in the directory, it is removed
                     time.sleep(1)
                     shutil.move(f, dest)
-                    pbar2.update(1)
+                    
             
                 #}}}
-            pbar.update(1)
+            
             if debug:
                 break # THIS IS FOR TESTING IF THE CODE IS WORKING ON A SINGLE DIRECTORY
             os.chdir(home_dir)

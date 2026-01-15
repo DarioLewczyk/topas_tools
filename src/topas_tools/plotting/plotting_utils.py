@@ -605,6 +605,30 @@ class GenericPlotter(UsefulUnicode):
         #}}}
         self.fig.show()
     #}}} 
+    # plot_topas_xy_output: {{{
+    def plot_topas_xy_output(self, xy_file:str = None, xy_data = None, tth = None, yobs = None, ycalc = None, ydiff = None, *args, **kwargs):
+        ''' 
+        Allows you to quickly plot the xy output file from TOPAS
+        where it outputs 2theta, yobs, ycalc, ydiff
+        '''
+        if xy_file != None:
+            try:
+                xy_data = np.loadtxt(xy_file) # This should load the xy file if it is present
+            except:
+                raise ValueError(f'XY File: {xy_file} not found... or invalid format')
+        elif xy_data != None:
+            try:
+                tth = xy_data[:,0]
+                yobs = xy_data[:,1]
+                ycalc = xy_data[:,2]
+                ydiff = xy_data[:,3]
+            except:
+                print(f'Expected 4 columns, got {len(xy_data)}')
+                raise ValueError(f'XY Data Not Valid Format: \n{xy_data}')
+
+
+
+    #}}}
 #}}}
 # PlottingUtils: {{{
 class PlottingUtils(GenericPlotter):

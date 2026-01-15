@@ -1156,13 +1156,14 @@ def get_dirs_for_ixpxsx_automations(home_dir:str = None, data_extension:str = 'x
             if has_inp and has_data:
                 valid_dirs.append(entry.name)
             for path in ixpxsx_types:
-                if not os.path.exists(os.path.join(entry, path)):
-                    os.makedirs(os.path.join(entry, path)) # This ensures that each directory is primed for the IxPxSx analysis
+                desired_ixpxsx_path = os.path.join(home_dir, os.path.join(entry, path))
+                if not os.path.exists(desired_ixpxsx_path):
+                    os.makedirs(desired_ixpxsx_path) # This ensures that each directory is primed for the IxPxSx analysis
     sorted_dirs = sorted(valid_dirs, key = lambda d: int(d.split('_')[0]))
     return sorted_dirs
 #}}}
 # parse_phase_prms: {{{
-def parse_phase_prms(topas_lines:dict = None):
+def parse_phase_prms(topas_lines:dict = None, debug:bool = False):
     '''
     If run with just a single line, it returns the variable name, value, error in a tuple form. 
     
@@ -1340,7 +1341,7 @@ def parse_output_xy(topas_lines:dict = None):
     return None
 #}}}
 # modify_ph_lines: {{{
-def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str = "P", S:str = "S"):
+def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str = "P", S:str = "S", debug:bool = False):
     ''' 
     This function serves the purpose to neatly edit the lines of an INP 
     related to Ph# for IxPxSx type refinements. 
@@ -1357,10 +1358,14 @@ def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str 
                 val = entry.get('value')
                 err = entry.get('error')
                 fixed = entry.get('fixed')
+                if debug:
+                    print(f'Current values for {ph} {key}: IDX: {idx}, VAL: {val}, ERR: {err}, FIXED: {fixed}')
      
                 try:
                     old = lines[idx]
                     varname, old_val, old_err = parse_phase_prms(old) # in this form, it returns "variable name, value, error"
+                    if debug:
+                        print(f'OLD LINE: {old}\n\tVARNAME: {varname}, VAL: {old_val}, ERR: {old_err}')
                     # Conditional for the P being x: {{{
                     if P == 'x' and key in relevant_keys and not fixed:
                         new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err),str(err))
@@ -1373,7 +1378,8 @@ def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str 
                             continue # In these cases, not an issue. no need to update. 
                     lines[idx] = new                  
                 except:
-                    print(f'KEY: {key} NOT UPDATED in INP')
+                    if debug:
+                        print(f'KEY: {key} NOT UPDATED in INP')
                 #}}}
                 # print(f'OLD: {old}\nNEW: {new}') 
                 
@@ -1385,7 +1391,9 @@ def modify_ph_lines(lines:list = None, out_dict:dict = None, I:str = "I", P:str 
                 val = var_entry.get('value')
                 err = var_entry.get('error')
                 fixed = var_entry.get('fixed')
-                #print(f'Output: {val}, {fixed}')
+                if debug:
+                    print(f'Current values for {ph}: IDX: {idx}, VAL: {val}, ERR: {err}, FIXED: {fixed}')
+               
                 if not fixed:
                     old = lines[idx]
                     old_val, old_err = parse_specimen_displacement(old)
