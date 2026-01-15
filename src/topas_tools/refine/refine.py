@@ -699,15 +699,19 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier):
                 # Update the output xy lines: {{{
                 idx_out_xy = inp_dict['output_xy'].get('linenumber') # If present, needs updated
                 if idx_out_xy != None and not modified_out_xy_linenumber:
+                    if debug:
+                        print(f'Original out XY Line:{idx_out_xy}')
+                        print(f'Adding {added_lines}')
                     idx_out_xy += added_lines # Add the added lines
+                    if debug:
+                        print(f'Modified out XY Line: {idx_out_xy}')
                     inp_dict['output_xy']['linenumber'] = idx_out_xy
                     modified_out_xy_linenumber = True # This should only be done once per file
                 #}}}
                 # Rename the output .xy file if present: {{{
                 try:
                     out_xy = inp_dict['output_xy']
-                    idx = out_xy.get('linenumber') 
-                    idx += added_lines # because the line number is no longer accurate
+                    idx = out_xy.get('linenumber')  
                     prefix = out_xy.get('prefix')
                     old_temp = out_xy.get('temp')
                     old_method = out_xy.get('method')
