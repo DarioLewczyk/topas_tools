@@ -6,6 +6,7 @@ Date: 01/16/2026
 #}}}
 # imports: {{{
 from topas_tools.utils.topas_parser import TOPAS_Parser
+import re
 #}}}
 # TOPAS_Modifier: {{{
 class TOPAS_Modifier(TOPAS_Parser):
@@ -173,7 +174,7 @@ class TOPAS_Modifier(TOPAS_Parser):
                     insert_idx += 1 
                     added_lines += 2 
                 except:
-                    break  
+                    continue
             #}}} 
         #}}}
         # Add the include statements for the CRY: {{{
@@ -188,13 +189,14 @@ class TOPAS_Modifier(TOPAS_Parser):
             added_lines += 2
         #}}}    
         return lines, added_lines
-    #}}}
-    
+    #}}}    
     # update_output_xy_line: {{{
-    def update_output_xy_line(self, lines:list = None, inp_dict:dict = None, debug:bool = False):
+    def update_output_xy_line(self, lines:list = None, new_suffix:str = None,  inp_dict:dict = None, debug:bool = False):
         '''
         This allows you to quickly update the lines of an INP file to change the 
         filename of the XY file output by TOPAS.
+
+        new_suffix: This will generally be: {temp}_{ixpxsx_mode}
 
         returns the lines of the file and the new name created (does not contain the extension)
         '''
@@ -207,7 +209,7 @@ class TOPAS_Modifier(TOPAS_Parser):
             old_method = out_xy.get('method')
                  
             old_name = f'{prefix}_{old_temp}_{old_method}'
-            new_name = f'{prefix}_{temp}_{ixpxsx}'
+            new_name = f'{prefix}_{new_suffix}'
             if debug:
                 print(f'Renaming:\n\t{old_name} -> {new_name}')
                 

@@ -7,6 +7,7 @@ Date: 01/16/2026
 # Imports: {{{
 import os
 import re
+import bisect
 #}}}
 # TOPAS_Parser: {{{
 # Do not want to have an initializer because 
@@ -233,11 +234,11 @@ class TOPAS_Parser:
         '''
     
         # Build numeric temp list + mapping
-        temps = sorted(extract_temp_from_string(k) for k in out_dicts.keys())
-        temp_to_key = {extract_temp_from_string(k): k for k in out_dicts.keys()}
+        temps = sorted(self.extract_temp_from_string(k) for k in out_dicts.keys())
+        temp_to_key = {self.extract_temp_from_string(k): k for k in out_dicts.keys()}
      
         # Current T
-        current = extract_temp_from_string(s) # This is the current temperature
+        current = self.extract_temp_from_string(s) # This is the current temperature
      
         # Find closest lower
         idx = bisect.bisect_left(temps, current)
