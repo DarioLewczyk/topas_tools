@@ -453,13 +453,14 @@ class TOPAS_Parser:
         '''
         if not modified_linenumber:
             linenumber = entry['linenumber']
-            new_linenumber = linenumber += added_lines
+            linenumber += added_lines
+            
 
             if debug:
                 print(f'Original Line Number: {linenumber}')
                 print(f'Adding {added_lines} Lines')
-                print(f'Modified Line Number: {new_linenumber}')
-            entry['linenumber'] = new_linenumber
+                print(f'Modified Line Number: {linenumber}')
+            entry['linenumber'] = linenumber
             modified_linenumber = True
             
         return entry, modified_linenumber
