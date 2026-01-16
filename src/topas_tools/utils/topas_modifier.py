@@ -77,9 +77,9 @@ class TOPAS_Modifier(TOPAS_Parser):
                             new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err),str(err))
                         #}}} 
                         # Conditional for the S being x: {{{
-                        elif S == 'x' and not fixed and self.match_shape_parameters(key):
-                            # In this case, the parameter has been flagged as being a shape parameter
-                            new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err), str(err)) 
+                        #elif S == 'x' and not fixed and self.match_shape_parameters(key):
+                        #    # In this case, the parameter has been flagged as being a shape parameter
+                        #    new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err), str(err)) 
                         #}}}
                         else:
                             if old_val and old_err:
