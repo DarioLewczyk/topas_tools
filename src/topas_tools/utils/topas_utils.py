@@ -813,6 +813,53 @@ class Utils:
     def export_xy_with_hkl(self, idx, rietveld_data, excel_dir, fn):
         return IO.export_xy_with_hkl(idx, rietveld_data, excel_dir, fn)
     #}}}
+    # get_dirs_for_ixpxsx_automations: {{{
+    def get_dirs_for_ixpxsx_automations(self,home_dir:str = None, data_extension:str = 'xy', ixpxsx_types:list = ['IPS', 'xPS', 'xPx', 'xxx']):
+        '''
+        This function will return a list of directories sorted in order if 
+        the directories contain both a .inp and the extension of whatever your data files have
+     
+        It will also make sure that each of the directories has appropriate subdirectories for each of the ixpxsx types you want to run
+        '''
+        valid_dirs = []
+        os.chdir(home_dir)
+     
+        for entry in os.scandir(home_dir):
+            if entry.is_dir():
+                files = os.listdir(entry.path)
+             
+                has_inp = any(f.endswith('.inp') for f in files)
+                has_data = any(f.endswith(f'.{data_extension}') for f in files)
+             
+                if has_inp and has_data:
+                    valid_dirs.append(entry.name)
+                for path in ixpxsx_types:
+                    desired_ixpxsx_path = os.path.join(home_dir, os.path.join(entry, path))
+                    if not os.path.exists(desired_ixpxsx_path):
+                        os.makedirs(desired_ixpxsx_path) # This ensures that each directory is primed for the IxPxSx analysis
+        sorted_dirs = sorted(valid_dirs, key = lambda d: int(d.split('_')[0]))
+        return sorted_dirs
+    #}}}
+    # clean_directory: {{{
+    def clean_directory(self, exclude:list = None, path = "."):
+        ''' 
+        This function will clean a directory so it is properly prepared
+        This may be particularly useful for running TOPAS automations since 
+        it ensures that the directory is always in a pristine state each time
+        the automation is run
+
+        exclude: What files would you like to exclude? 
+        path: path to the directory
+        '''
+        exclude = set(exclude or [])
+
+        with os.scandir(path) as entries:
+            for entry in entries:
+                if entry.is_file():
+                    if entry.name not in exclude:
+                        os.remove(entry.path)
+            # entry.is_dir() → ignored automatically
+    #}}}
 #}}}
 # UsefulUnicode: {{{
 class UsefulUnicode: 
