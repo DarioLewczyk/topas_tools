@@ -641,12 +641,28 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 with open('Dummy.out') as out:
                     lines = out.readlines()
                 out_dict = self.get_inp_out_dict(lines, fileextension=data_extension, record_output_xy = False, debug = debug) # Gets the out dict with all relevant information
-                previous_rwp =out_dict['fit_metrics'].get('r_wp') # This will tell the rwp for the run
 
-                if not recorded_out_dict:
-                    # By putting an Rwp threshold, this may prevent bad refinements from getting through.
+                # This gives us the Rwp for the previous refinement
+                current_rwp =out_dict['fit_metrics'].get('r_wp') # This will tell the rwp for the run
+                # Get the previous Rwp: {{{
+                try:
+                    previous_out_dict = self.get_closest_entry_in_out_dict(temp, self.out_dicts) # This returns the out_dict closest to the current temp
+                except:
+                    previous_out_dict = None
+
+                if type(previous_out_dict) == dict:
+                    previous_rwp = previous_out_dict['fit_metrics'].get('r_wp')
+                else:
+                    previous_rwp = current_rwp + 5
+
+                #}}}
+                # Update the out_dicts for the temperature: {{{
+                if not recorded_out_dict or current_rwp < previous_rwp and P != 'x':
+                    # This will ensure that something like xxx where the lattice parameters arent refined is not put as a template
+                    # If the previous Rwp is greater than the current one, then we will overwrite the entry
                     self.out_dicts[temp] = out_dict # Record the information under the temperature
                     recorded_out_dict = True
+                #}}}
                 #}}} 
                 copyfile(inp_file, 'Dummy.inp') # Make a copy of the input file and throw it to a dummy
                 # Manipulate the Dummy.inp file: {{{

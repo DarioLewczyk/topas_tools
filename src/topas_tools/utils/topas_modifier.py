@@ -97,7 +97,7 @@ class TOPAS_Modifier(TOPAS_Parser):
                     # print(f'OLD: {old}\nNEW: {new}') 
                  
             #}}}
-            break
+            continue
         #}}}
         return lines 
     #}}}

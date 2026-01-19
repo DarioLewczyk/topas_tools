@@ -63,7 +63,7 @@ class TOPAS_Parser:
         re_tag = re.compile(r"prm\s*(Ph\d+)\(\s*!?(\w+)\s*\)")
         float_re = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"
     
-        re_val_err = re.compile(rf"({float_re})`_({float_re})")
+        re_val_err = re.compile(rf"({float_re})`?_({float_re})")
         re_value   = re.compile(rf"({float_re})")
         re_min     = re.compile(rf"min\s+({float_re})")
         re_max     = re.compile(rf"max\s+({float_re})")
@@ -161,26 +161,26 @@ class TOPAS_Parser:
     
         float_re = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"
         pattern = re.compile(
-            rf"Specimen_Displacement\(\s*(@)?\s*,\s*({float_re})`_({float_re})\s*\)"
+            rf"Specimen_Displacement\(\s*(@)?\s*,\s*({float_re})`?_({float_re})\s*\)"
         )
         #}}}
         # If passing a dictionary: {{{
         try:
             for linenumber, line in topas_lines.items():
+                #print(linenumber, line)
                 m = pattern.search(line)
-                if not m:
-                    continue
+                if m:
+                    has_at = m.group(1) is not None
+                    value = float(m.group(2))
+                    error = float(m.group(3))
+                    #print(has_at, value, error)
     
-                has_at = m.group(1) is not None
-                value = float(m.group(2))
-                error = float(m.group(3))
-    
-                return {
-                    "linenumber": linenumber,
-                    "value": value,
-                    "error": error,
-                    "fixed": not has_at # This reverses the bool of has_at
-                }
+                    return {
+                        "linenumber": linenumber,
+                        "value": value,
+                        "error": error,
+                        "fixed": not has_at # This reverses the bool of has_at
+                    } 
             return None
         #}}}
         # If passing a string: {{{
