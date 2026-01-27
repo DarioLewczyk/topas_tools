@@ -226,17 +226,23 @@ class TOPAS_Modifier(TOPAS_Parser):
         #  modify the line: {{{ 
         if out_xy:
             idx = out_xy.get('linenumber')  
-            prefix = out_xy.get('prefix')
-            old_temp = out_xy.get('temp')
-            old_method = out_xy.get('method')
+            old = lines[idx] # This is the linenumber we modify
+
+            old_entry = self.parse_output_xy_line(old)  # This parses the line
+            prefix = old_entry.get('prefix')
+            old_temp = old_entry.get('temp')
+            old_method = old_entry.get('method')
+            #print(prefix, old_temp, old_method)
                  
             old_name = f'{prefix}_{old_temp}_{old_method}'
             new_name = f'{prefix}_{new_suffix}'
+            #print(old_name, new_name)
             if debug:
                 print(f'Renaming:\n\t{old_name} -> {new_name}')
                 
-            old = lines[idx]
+             
             new = old.replace(old_name, new_name)
+           
             lines[idx] = new
         else:
             new_name = None

@@ -722,7 +722,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         modify_bkg = True,
                         write_ixpxsx_lines = True,
                         update_output_xy_line = True,
-                        new_suffix = f'{temp}_{ixpxsx}', # This is the new suffix we will add to the filename
+                        new_suffix = f'{temp}_{I}{P}{S}', # This is the new suffix we will add to the filename
                 )
                 
                 # Write the updates to the Dummy file: {{{
@@ -741,8 +741,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         out_filename = 'Dummy.out',
                         output_xy = new_name,
                     )
-                    #if ixpxsx == 'xPS':
-                    #    return out_dict
+                    if ixpxsx == 'xPx':
+                        return out_dict
                 else:
                     self.logger.debug(f'Refining Dummy.inp for {ixpxsx} Method...')
                     self.refine_pattern('Dummy.inp') # Refine the pattern with the selected IxPxSx method.  
