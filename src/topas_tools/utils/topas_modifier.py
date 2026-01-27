@@ -7,6 +7,7 @@ Date: 01/16/2026
 # imports: {{{
 from topas_tools.utils.topas_parser import TOPAS_Parser
 import re
+import logging
 #}}}
 # TOPAS_Modifier: {{{
 class TOPAS_Modifier(TOPAS_Parser):
@@ -16,6 +17,7 @@ class TOPAS_Modifier(TOPAS_Parser):
     with the TOPAS_Parser class which does a better job of parsing 
     the inp files than some of my previous attempts. 
     '''
+    logger = logging.getLogger(__name__) # Make a logger for this
     # match_shape_parameters: {{{
     def match_shape_parameters(self, s:str = None):
         '''
@@ -55,9 +57,13 @@ class TOPAS_Modifier(TOPAS_Parser):
         It specifically edits the prm definitions
         '''
         # Loop through the out_dict: {{{
+        if debug: 
+            print('MODIFYING THE PRM ENTRIES')
+        self.logger.debug('MODIFYING PRM ENTRIES')
         for ph, var_entry in out_dict.items():
             # For each of the phase parts, fix the LPs: {{{
             if 'Ph' in ph:
+                self.logger.debug(f'FOUND {ph}')
                 relevant_keys = ['lp_a', 'lp_b', 'lp_c', 'lp_al', 'lp_be', 'lp_ga'] 
                 for key, entry in var_entry.items(): 
                     idx = entry.get('linenumber')
@@ -65,13 +71,20 @@ class TOPAS_Modifier(TOPAS_Parser):
                     err = entry.get('error')
                     fixed = entry.get('fixed')
                     if debug:
-                        print(f'Current values for {ph} {key}: IDX: {idx}, VAL: {val}, ERR: {err}, FIXED: {fixed}')
+                        print(f'\tCurrent values for {ph} {key}: IDX: {idx}, VAL: {val}, ERR: {err}, FIXED: {fixed}')
+                    self.logger.debug(f'Current values for {ph} {key}: IDX: {idx}, VAL: {val}, ERR: {err}, FIXED: {fixed}')
                     # try to replace lines in the INP: {{{
-                    try:
-                        old = lines[idx]
-                        varname, old_val, old_err = self.parse_phase_prms(old) # in this form, it returns "variable name, value, error"
+                    self.logger.debug('Trying to find for the old lines:')
+                    old = lines[idx]
+                    old_parsed_prms = self.parse_phase_prm_line(old) # We are just parsing a line here.
+                    self.logger.debug(f'Old Parsed Prms: {old_parsed_prms}')
+                    varname = old_parsed_prms.get('var')
+                    if old_parsed_prms and varname != 'keepS': 
+                        old_val = old_parsed_prms.get('value')
+                        old_err = old_parsed_prms.get('error')
+                        
                         if debug:
-                            print(f'OLD LINE: {old}\n\tVARNAME: {varname}, VAL: {old_val}, ERR: {old_err}')
+                            print(f'\tOLD LINE: {old}\n\tVARNAME: {varname}, VAL: {old_val}, ERR: {old_err}')
                         # Conditional for the P being x: {{{
                         if P == 'x' and key in relevant_keys and not fixed:
                             new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err),str(err))
@@ -83,14 +96,19 @@ class TOPAS_Modifier(TOPAS_Parser):
                         #}}}
                         else:
                             if old_val and old_err:
+                                self.logger.debug(f'Updating old values: {varname}')
                                 new = old.replace(str(old_val), str(val)).replace(str(old_err),str(err))
                             elif old_val:
+                                self.logger.debug('Neglecting errors...')
                                 new = old.replace(str(old_val), str(val)) # This neglects errors if they arent there.
                             else:
+                                self.logger.debug('Triggered the case where we do not update')
                                 continue # In these cases, not an issue. no need to update. 
                         lines[idx] = new                  
+                        self.logger.debug(f'Updated {varname} line {idx}')
                     
-                    except:
+                    else:
+                        self.logger.debug(f'DID NOT UPDATE {key} in INP')
                         if debug:
                             print(f'KEY: {key} NOT UPDATED in INP')
                     #}}}
@@ -111,24 +129,26 @@ class TOPAS_Modifier(TOPAS_Parser):
 
         '''
         specimen_displacement = out_dict.get('Specimen_Displacement') # This is the only relevant entry
-        # Try modifying lines: {{{
-        try:
-            idx = var_entry.get('linenumber')
-            val = var_entry.get('value')
-            err = var_entry.get('error')
-            fixed = var_entry.get('fixed')
+        # Try modifying lines: {{{ 
+        if specimen_displacement is not None: 
+            idx = specimen_displacement.get('linenumber')
+            val = specimen_displacement.get('value')
+            err = specimen_displacement.get('error')
+            fixed = specimen_displacement.get('fixed')
             if debug:
-                print(f'Current values for {ph}: IDX: {idx}, VAL: {val}, ERR: {err}, FIXED: {fixed}')
+                print(f'Current values for Specimen_Displacement: IDX: {idx}, VAL: {val}, ERR: {err}, FIXED: {fixed}')
          
             if not fixed:
                 old = lines[idx]
-                old_val, old_err = self.parse_specimen_displacement(old)
+                sd = self.parse_specimen_displacement_line(old)
+                old_val = sd.get('value')
+                old_err = sd.get('error') 
                 if P == 'x':
                     new = old.replace(f'{old_val}', f'{val}').replace(f'{old_err}', f'{err}').replace('@', '') # Replace the values and turn off the refinement
                 else:
                     new = old.replace(f'{old_val}', f'{val}').replace(f'{old_err}', f'{err}')
                 lines[idx] = new 
-        except:
+        else:
             if debug:
                 print('No lines altered for Specimen_Displacement in your INP')
             pass
@@ -151,9 +171,8 @@ class TOPAS_Modifier(TOPAS_Parser):
         P: designation of P
         S: designation of S
 
-        returns: 
-            A tuple with the lines of the file (modified) first and the number of lines added second
-            (lines, added_lines)
+        Returns: 
+            lines 
         '''
         added_lines = 0 # Keep track of the lines added so that the linenumber for how many lines were added to add the IxPxSx 
         # Now, write the WPF IxPxSx stuff: {{{ 
@@ -165,16 +184,14 @@ class TOPAS_Modifier(TOPAS_Parser):
             # Something important to remember is that the positioning of the WPF_IxPxSx stuff does matter
             # Write a macro for each phase: {{{
             if 'Ph' in ph:
-                try:
-                    ph_num = int(re.search(r'(\d+)', ph).group(1)) # This will be used for making the WPF macros
-                    wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro
-                    lines.insert(insert_idx, wpf_macro) # Write the macro
-                    insert_idx += 1 # Advance by 1
-                    lines.insert(insert_idx, '\n')
-                    insert_idx += 1 
-                    added_lines += 2 
-                except:
-                    continue
+                
+                ph_num = int(re.search(r'(\d+)', ph).group(1)) # This will be used for making the WPF macros
+                wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro
+                lines.insert(insert_idx, wpf_macro) # Write the macro
+                insert_idx += 1 # Advance by 1
+                lines.insert(insert_idx, '\n')
+                insert_idx += 1 
+                added_lines += 2 
             #}}} 
         #}}}
         # Add the include statements for the CRY: {{{
@@ -188,7 +205,12 @@ class TOPAS_Modifier(TOPAS_Parser):
             insert_idx += 1
             added_lines += 2
         #}}}    
-        return lines, added_lines
+        # Freeze the updates to the output_xy after it is updated: {{{
+        if "output_xy" in out_dict and out_dict.get('output_xy') is not None:
+            self.apply_line_offset(out_dict['output_xy'], added_lines) # This offsets the lines by the number necessary
+            self.freeze_updates(out_dict['output_xy']) # This applies a freeze to the updates for the lifetime of this input file
+        #}}} 
+        return lines
     #}}}    
     # update_output_xy_line: {{{
     def update_output_xy_line(self, lines:list = None, new_suffix:str = None,  inp_dict:dict = None, debug:bool = False):
@@ -220,5 +242,111 @@ class TOPAS_Modifier(TOPAS_Parser):
             new_name = None
         #}}}
         return lines, new_name
+    #}}}
+    # modify_out_dict_linenumber: {{{
+    def modify_out_dict_linenumber(self, entry:dict = None, added_lines:int = 0, modified_linenumber:bool = False):
+        ''' 
+        Allows you to modify the linenumber of an entry in a dictionary
+
+        entry: The entry in your dictionary that contains the keyword: "linenumber"
+        added_lines: The number of lines to be added (or subtracted) from the linenumber
+        modified_linenumber: An external variable that you probably will be tracking that tells if this code should run or not
+
+        returns a tuple, 
+            (entry, modified_linenumber)
+        '''
+        if not modified_linenumber:
+            linenumber = entry['linenumber']
+            linenumber += added_lines
+            self.logger.debug(f'Original Line Number: {linenumber}')
+            self.logger.debug(f'Adding {added_lines} Lines')
+            self.logger.debug(f'Modified Line Number: {linenumber}')
+
+            entry['linenumber'] = linenumber 
+            modified_linenumber = True
+            
+        return entry, modified_linenumber
+    #}}}
+    # modify_bkg: {{{
+    def modify_bkg(self,lines, out_dict):
+        '''
+        Replaces the background with whatever was refined before. 
+        Should give a better starting point for refinement
+        ''' 
+        
+        bkg_entry = out_dict['bkg']
+        bkg_line = bkg_entry.get('line')
+        bkg_idx = bkg_entry.get('linenumber')
+        lines[bkg_idx] = f'{bkg_line}\n'
+        return lines
+
+    #}}}
+    # modify_inp_lines: {{{
+    def modify_inp_lines(self, 
+            lines = None,
+            out_dict:dict = None,
+            I:str = 'I',
+            P:str = 'P',
+            S:str = 'S', 
+            cry_files:list = None,
+            modify_ph:bool = True, 
+            modify_specimen_displacement:bool = True, 
+            modify_bkg:bool = True,
+            write_ixpxsx_lines:bool = True,
+            update_output_xy_line:bool = True,
+            new_suffix:str = None,
+        ):
+        ''' 
+        This function wraps all the line modification lines
+        This has the advantage that if the input file changes 
+        in a fundamental way during the refinement 
+        (e.g. your template is not the same throughout)
+        this is able to capture that change and work with it.
+
+        This function returns the following: 
+            1. lines
+            2. new_name
+        ''' 
+        # 1.  Re-parse the INP to detect drift: {{{ 
+        inp_dict = self.get_inp_out_dict(
+                lines, 
+                record_fit_metrics = False, 
+                record_xdd = False
+        ) # This gives us the INP dictionary 
+        #}}}
+        # 2. Refresh out_dict to match INP: {{{
+        self.refresh_out_dict(out_dict, inp_dict) # IF there are differences, this will resolve them
+        #}}}
+        # 3. Modify_ph: {{{
+        if modify_ph:
+            lines = self.modify_ph_lines(lines=lines, out_dict=out_dict, I=I,P=P,S=S)
+        #}}} 
+        # 4. Modify_specimen_displacement_lines: {{{
+        if modify_specimen_displacement:
+            lines = self.modify_specimen_displacement_lines(lines=lines, out_dict=out_dict,P=P)
+        #}}}
+        # 5. Modify background: {{{
+        if modify_bkg:
+            lines = self.modify_bkg(lines, out_dict)
+        #}}}
+        # 7. Write_ixpxsx_lines: {{{
+        if write_ixpxsx_lines:
+            macro_blocks = self.find_ixpxsx_macro_blocks(lines) # This returns a dict. Keys == phase num, vals == (start, end)
+            lines = self.write_ixpxsx_lines(
+                    lines=lines, 
+                    cry_files=cry_files,
+                    out_dict=out_dict,
+                    macro_blocks=macro_blocks
+            ) 
+        #}}}
+        # 7. Update outuput_xy filename: {{{
+        if update_output_xy_line:
+            lines, new_name = self.update_output_xy_line(lines = lines, inp_dict = out_dict, new_suffix = new_suffix)
+        else:
+            new_name = None
+        #}}}
+
+        return (lines, new_name)
+
     #}}}
 #}}}

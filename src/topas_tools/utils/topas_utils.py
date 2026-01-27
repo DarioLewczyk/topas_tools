@@ -853,12 +853,27 @@ class Utils:
         '''
         exclude = set(exclude or [])
 
-        with os.scandir(path) as entries:
-            for entry in entries:
+        with os.scandir(path) as entries: 
+            for entry in entries: 
                 if entry.is_file():
-                    if entry.name not in exclude:
+                    if entry.name not in exclude: 
                         os.remove(entry.path)
+            
             # entry.is_dir() → ignored automatically
+    #}}}
+    # make_unique_dir: {{{
+    def make_unique_dir(self,base):
+        if not os.path.exists(base):
+            os.makedirs(base)
+            return base
+        i = 1
+        while True:
+            new_name = f'{base}_{i}'
+            if not os.path.exists(new_name):
+                os.makedirs(new_name)
+                return new_name
+            i+=1
+        
     #}}}
 #}}}
 # UsefulUnicode: {{{

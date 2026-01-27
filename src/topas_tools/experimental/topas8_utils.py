@@ -13,6 +13,8 @@ from topas_tools.plotting.plotting_utils import GenericPlotter as gp
 import os
 import bisect
 from glob import glob
+import shutil
+from shutil import copyfile
 import re
 import numpy as np
 import plotly.graph_objects as go
@@ -1133,4 +1135,64 @@ def write_harmonics_to_excel(
     print(f'Excel file written to: {full_path_written}')
     os.chdir(current_dir)
 #}}}
+#}}}
+# inp_generator_for_auto_ixpxsx: {{{
+def inp_generator_for_auto_ixpxsx(
+        template_dir:str = None,
+        data_dir:str = None,
+        data_extension:str = 'xy',
+        output_dir:str = None,
+        IxPxSx_dirs = ['IPS', 'xPS', 'xPx', 'xxx'],
+        new_inp_basename = 'Si_Al2O3',
+        starting_idx = 0,
+        delete_old_dir:bool = False,
+    ):
+    ''' 
+    This generates input files in directories for you to run automated refinements on
+    # Uses a template INP to make all the files
+    
+    starting_idx: This is the index that comes before the temperature in the dirname for sorting
+    '''
+    if delete_old_dir:
+        if os.path.exists(output_dir):
+            print(f'Removing: {os.path.basename(output_dir)}')
+            shutil.rmtree(output_dir)
+    home = os.getcwd()
+    os.chdir(template_dir)
+    template = glob('*.inp')[0]
+
+    # starting_idx = 34
+    os.chdir(data_dir)
+    xy_files = glob(f'*.{data_extension}')
+    
+    xy_files.sort()
+    for i, xy in enumerate(xy_files):
+        if starting_idx:
+            i += starting_idx # This adds an offset so that the numbering coninues as normal after the IOC reboot
+        os.chdir(data_dir)
+        m = re.search(r'(\d+)C', xy)
+        if m:
+            temp = int(m.group(1))
+            os.chdir(template_dir)
+            new_inp = f'{new_inp_basename}_{temp}C_MTF.inp'
+            print(f'Making INP: {new_inp}')
+            with open(template) as fin, open(new_inp, 'w') as fout:
+                for line in fin:
+                    if line.lstrip().startswith('xdd'):
+                        fout.write(f'xdd {xy}\n') # Write the new xy file to the name
+                    else:
+                        fout.write(line)
+            # Now that we have the new input file, let's move it to it's new home.
+            inp_dest = os.path.join(output_dir, f'{i}_{temp}C') # This is the directory where we will be sending things
+            inp_dest = utils.make_unique_dir(inp_dest) # This ensures that the directory is always updated to be the correct one (if there are duplicate temps)
+         
+            for dirname in IxPxSx_dirs:
+                os.mkdir(os.path.join(inp_dest, dirname))
+            shutil.move(new_inp, inp_dest)
+            print(f'\tMoving {new_inp} to {os.path.basename(inp_dest)}')
+            os.chdir(data_dir)
+            copyfile(xy, os.path.join(inp_dest, xy))
+            print(f'\tCopying {xy} to {os.path.basename(inp_dest)}')
+
+
 #}}}

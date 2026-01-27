@@ -5,6 +5,8 @@
 # Imports: {{{
 import os
 import re
+import logging # This is so that I can quickly debug my code.
+from pprint import pformat
 import subprocess
 import time
 import copy
@@ -35,6 +37,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
 
     It also allows for the automation of in and out points of phases with thresholds.
     '''
+    logger = logging.getLogger(__name__) # This creates a logger
     # __init__: {{{
     def __init__(self,
             topas_version:int = 6,
@@ -564,14 +567,18 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
         data_extension: The extension for the data files to look for in each of the directories
         ixpxsx_types: The types of IxPxSx analysis you wish to run (IN ORDER)
         '''
-        
+        previous_inp_dict = None # This will store the base inp_dict
+
+        self._inp_file_version = 0 # This counts different types of input file
         os.chdir(home_dir) # This is the directory containing all of the temperatures
         dirs = self.get_dirs_for_ixpxsx_automations(home_dir, data_extension, ixpxsx_types) # Gives us all of the dirs so we can run refinements in a loop
-
+        
         pbar = tqdm(dirs, position = 0, leave = True) # Make it so there is a progress bar
         self.out_dicts = {} # This is a dictionary that will hold all the out dictionaries from all the rietveld refinements so they can be referenced later
         # Loop through all of the main directories: {{{
+        
         for path in pbar:
+            self.logger.debug(f'Working through {path}')
             pbar.set_description_str(f'Working through {path}')
             os.chdir(path) # Enter the new path
             ## GET TEMP: {{{
@@ -586,48 +593,70 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
             # Get important information & Linenumbers from the INP: {{{
             with open(inp_file) as inp:
                 lines = inp.readlines() # These are all the lines of the INP file
-
+            self.logger.debug(f'Loading {inp_file} into a dict')
             inp_dict = self.get_inp_out_dict(lines, record_fit_metrics = False, record_xdd = True, fileextension = data_extension) # This gives us the INP dictionary 
+            self.logger.debug(f'Inp Dict: \n{pformat(inp_dict)}')
+            # Check for a fundamental change to the INP: {{{
+            if previous_inp_dict is not None:
+                if self._inp_fundamentally_changed(previous_inp_dict, inp_dict):
+                    self.bump_inp_file_version() # Only if there is a fundamental change in the base inp
+                    self.propagate_inp_file_version(inp_dict) # This makes sure that the inp_dict has the correct file version attached
+     
+            previous_inp_dict = inp_dict
             #}}}
-            refined_xy_file = inp_dict['xdd'].get('filename')
-            
-            self.clean_directory([inp_file, refined_xy_file], home_dir) # This prepares the home directory so that it is clean  
+            #}}}
+            refined_xy_file = inp_dict['xdd'].get('filename') 
+            # Clean up the directory before beginning: {{{
+            if not debug:
+                self.clean_directory(exclude = [inp_file, refined_xy_file],path = os.path.join(home_dir, path)) # This prepares the home directory so that it is clean  
+            #}}}
             # Now, we want to run the actual input file. 
             inp_basename = inp_file.removesuffix('.inp') # This is just the input file name without the .inp
             copyfile(inp_file, 'Dummy.inp') # Make a copy of the inp file so nothing is overwritten
-            # Update from previous refinements first: {{{
+            # IF OUT DICTS RECORDED, READ THEM: {{{
+            self.logger.debug('Looking to see if we match an out dict')
             if len(self.out_dicts) > 0:
                 # retrieve the out_dict with the closest temperature to the current temp:{{{ 
                 out_dict = self.get_closest_entry_in_out_dict(temp, self.out_dicts) # This will automatically find 
-                #}}}
-                current_temp = self.extract_temp_from_string(temp)
-                recorded_temps = list(self.out_dicts.keys())
-                last_recorded_temp = self.extract_temp_from_string(recorded_temps[-1])
-                if current_temp >= last_recorded_temp:
-                    out_dict = self.out_dicts[recorded_temps[-1]]
-                else:
-                    # This is the case where we drop the temperature down by a bit and then take a scan, so probably have a temperature similar already
-                    out_dict = self.get_closest_entry_in_out_dict(temp, self.out_dicts) # This returns the out_dict closest to the current temp
+                self.logger.debug(f'Reading OUT Dict closest to {temp}: \n{pformat(out_dict)}')
+                # We need to make sure that these file versions match
+                self.refresh_out_dict(out_dict, inp_dict) 
+                self.logger.debug('Ensuring that the lines from INP dict and OUT dict match')
 
                 with open('Dummy.inp', 'r') as f:
                     lines = f.readlines() # Gives access to all the lines 
                 # Update the INP to have the values from the output: {{{
-                lines = self.modify_ph_lines(lines, out_dict, debug = debug)  # This modifies prms related to the Phases
-                lines = self.modify_specimen_displacement_lines(lines, out_dict, debug = debug)  # Modifies the specimen_displacement line if it exists
-                #}}}
+                lines, _ = self.modify_inp_lines(
+                        lines, 
+                        out_dict, 
+                        I, 
+                        P, 
+                        S, 
+                        cry_files = None,
+                        modify_ph=True, 
+                        modify_specimen_displacement = True, 
+                        modify_bkg = True,
+                        write_ixpxsx_lines = False,
+                        update_output_xy_line = False,
+                        new_suffix = None,
+                )
+                self.logger.debug('Writing lines to Dummy.inp')
                 with open('Dummy.inp', 'w') as f:
                     f.writelines(lines) # This updates the file with the new lines
+                #}}}
             #}}}
-            pbar.set_description_str(f'Refining Rietveld {path}')
+            pbar.set_description_str(f'Refining Rietveld {path}') 
             if not debug:
+                self.logger.debug(f'Refining Dummy.inp for the first time at {temp}')
                 self.refine_pattern('Dummy.inp') # Refine the pattern
+                self.logger.debug('Finished refinement of Dummy.inp')
             # Now, we need to find the _cry.out files...
+            self.logger.debug('Finding CRY.OUT files')
             cry_files = glob('*_cry.out') # These are the files that we need to be input files for peak lists
             for file in cry_files:
+                self.logger.debug(f'Converting {file} to an INP')
                 copyfile(file, file.replace('.out', '.inp')) # This copies the file to an input file now  
-            # ###### IxPxSx Treatment: {{{
-            recorded_out_dict = False # Flag to tell if we have already recorded an out dict for this.
-            modified_out_xy_linenumber = False # Flag to tell this to not update more
+            # ###### IxPxSx Treatment: {{{ 
             for type_idx, ixpxsx in enumerate(ixpxsx_types):
                 pbar.set_description_str(f'Working on {ixpxsx} for {path}')
                 '''
@@ -637,73 +666,105 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 I = ixpxsx[0]
                 P = ixpxsx[1]
                 S = ixpxsx[2]
-                # Parse the output to get Ph info and specimen displacement: {{{ 
-                with open('Dummy.out') as out:
-                    lines = out.readlines()
-                out_dict = self.get_inp_out_dict(lines, fileextension=data_extension, record_output_xy = False, debug = debug) # Gets the out dict with all relevant information
-
-                # This gives us the Rwp for the previous refinement
-                current_rwp =out_dict['fit_metrics'].get('r_wp') # This will tell the rwp for the run
-                # Get the previous Rwp: {{{
-                try:
-                    previous_out_dict = self.get_closest_entry_in_out_dict(temp, self.out_dicts) # This returns the out_dict closest to the current temp
-                except:
-                    previous_out_dict = None
-
-                if type(previous_out_dict) == dict:
-                    previous_rwp = previous_out_dict['fit_metrics'].get('r_wp')
+                self.logger.debug(f'Starting {ixpxsx} Refinement for {temp}')
+                
+                # Check to see if we already have an out dict recorded: {{{
+                self.logger.debug('Making an OUT dictionary for Dummy.out')
+                if len(self.out_dicts) > 0 and type_idx != 0:
+                    # retrieve the out_dict with the closest temperature to the current temp:{{{ 
+                    out_dict = self.get_closest_entry_in_out_dict(temp, self.out_dicts) # This will automatically find 
+                    self.refresh_out_dict(out_dict, inp_dict) # Make sure that the recorded dict is okay to use.
+                    self.logger.debug(f'Reading OUT Dict closest to {temp}: \n{pformat(out_dict)}')
+                    #}}}
                 else:
-                    previous_rwp = current_rwp + 5
+                    # Parse the output to get Ph info and specimen displacement: {{{ 
+                    with open('Dummy.out', 'r') as out:
+                        lines = out.readlines()
+                    # Since we are retrieving data from the .out file created after running the .inp file, if the inp file was changed
+                    # in a fundamental way, the basic structure would be captured here
+                    out_dict = self.get_inp_out_dict(lines, fileextension=data_extension, record_output_xy = False, debug = debug) 
+                    self.logger.debug('Finished making OUT dictionary for Dummy.out: \n{pformat(out_dict)}')
 
-                #}}}
+                    #}}}
+                #}}} 
                 # Update the out_dicts for the temperature: {{{
-                if not recorded_out_dict or current_rwp < previous_rwp and P != 'x':
+                if not recorded_out_dict: 
+                    self.logger.debug('Recording out dict because we have not yet recorded anything')
                     # This will ensure that something like xxx where the lattice parameters arent refined is not put as a template
                     # If the previous Rwp is greater than the current one, then we will overwrite the entry
                     self.out_dicts[temp] = out_dict # Record the information under the temperature
                     recorded_out_dict = True
                 #}}}
-                #}}} 
+                
+                self.logger.debug(f'Copying {inp_file} to Dummy.inp')
                 copyfile(inp_file, 'Dummy.inp') # Make a copy of the input file and throw it to a dummy
                 # Manipulate the Dummy.inp file: {{{
                 with open('Dummy.inp', 'r') as f:
                     lines = f.readlines() # Gives access to all the lines 
                 # Update the INP to have the values from the output: {{{
-                lines = self.modify_ph_lines(lines, out_dict, I, P, S, debug = debug)  
-                lines = self.modify_specimen_displacement_lines(lines, out_dict, P, debug = debug)
-                #}}}
-                # Get the WPF_IxPxSx Macro: {{{
-                macro_blocks = self.find_ixpxsx_macro_blocks(lines) # Returns dict with phase nums as keys and vals = (start_idx, end_idx)
-                #}}}
-                # Write IxPxSx Stuff: {{{
-                lines, added_lines = self.write_ixpxsx_lines(lines=lines, cry_files=cry_files, out_dict=out_dict, macro_blocks=macro_blocks,
-                        I=I, P=P, S=S)
-                #}}}
-                # Update the output xy lines: {{{
-                out_xy_entry = inp_dict.get('output_xy') # If it is present, we will modify the linenumber
-                if out_xy_entry:
-                    out_xy_entry, modified_out_xy_linenumber = self.modify_linenumber(out_xy_entry, added_lines = added_lines, modified_linenumber = modified_out_xy_linenumber, debug = debug)
-                    inp_dict['output_xy'] = out_xy_entry 
-                #}}}
-                # Rename the output .xy file if present: {{{
-                new_suffix = f'{temp}_{ixpxsx}' # This is the new suffix we will add to the filename
-                lines, new_name = self.update_output_xy_line(lines = lines, inp_dict = inp_dict, new_suffix = new_suffix, debug = debug) 
-                #}}} 
+                lines, new_name = self.modify_inp_lines(
+                        lines, 
+                        out_dict, 
+                        I, 
+                        P, 
+                        S, 
+                        cry_files = None,
+                        modify_ph=True, 
+                        modify_specimen_displacement = True, 
+                        modify_bkg = True,
+                        write_ixpxsx_lines = True,
+                        update_output_xy_line = True,
+                        new_suffix = f'{temp}_{ixpxsx}', # This is the new suffix we will add to the filename
+                )
+
                 # Write the updates to the Dummy file: {{{
+                self.logger.debug('Writing to Dummy.inp')
                 with open('Dummy.inp', 'w') as f:
                     f.writelines(lines)
                 #}}} 
                 #    break # THIS IS TO TEST IF THE DUMMY IS UPDATING WELL
                 #}}} 
+                # Refine the IxPxSx Pattern: {{{ 
                 pbar.set_description_str(f'Refining {ixpxsx} for {path}')
                 if not debug:
+                    self.logger.debug(f'Refining Dummy.inp for {ixpxsx} Method...')
                     self.refine_pattern('Dummy.inp') # Refine the pattern with the selected IxPxSx method.  
-
+                    self.logger.debug(f'Finished refining Dummy.inp for {ixpxsx} Method...')
+                #}}}
+                # Get current and previous Rwps: {{{
+                self.logger.debug(f'Reading the OUT file for {ixpxsx}')
+                with open('Dummy.out', 'r') as f:
+                    lines = f.readlines()
+                current_out_dict = self.get_inp_out_dict(lines, fileextension = data_extension, record_output_xy=False, debug = debug)
+                self.logger.debug(f'Out Dict for {ixpxsx}:\n{pformat(current_out_dict)}')
+                current_rwp = current_out_dict['fit_metrics'].get('r_wp') # This is the Rwp for the current iteration
+                if debug:
+                    current_rwp = 0 # This makes sure that we always do everything
+                previous_rwp =out_dict['fit_metrics'].get('r_wp') # This will tell the rwp for the run
+                self.logger.debug(f'Current Rwp: {current_rwp} Previous Rwp: {previous_rwp} ∆Rwp: {current_rwp - previous_rwp}')
+                #}}}
+                
+                # AFTER REFINEMENT Update Out Dict if meeting criteria: {{{
+                self.logger.debug('Checking to see if we should update the self.out_dicts')
+                if current_rwp < previous_rwp and P != 'x':
+                    self.logger.debug(f'Replacing out_dicts entry for {temp}')
+                    # This will ensure that something like xxx where the lattice parameters arent refined is not put as a template
+                    # If the previous Rwp is greater than the current one, then we will overwrite the entry
+                    self.out_dicts[temp] = current_out_dict #  Overwrite the previous entry of out_dict with the new one. 
+                    recorded_out_dict = True
+                elif current_rwp > previous_rwp and P != 'x':
+                    # May need to update just in case. 
+                    self.logger.debug(f'Replacing out_dicts entry for {temp}')
+                    self.out_dicts[temp] = out_dict
+                    recorded_out_dict = True
+                #}}}
                 # Rename the OUT and Move Relevant Files to the IxPxSx Dir:  {{{ 
                 new_out_name = f'{inp_basename}_{ixpxsx}.out'
+                self.logger.debug(f'Copying Dummy.out to {new_out_name}')
                 copyfile('Dummy.out', new_out_name) # This is the new name for the output file
                 time.sleep(0.1) # Give TOPAS some time to get the profile data together 
                 profile_data_files = glob('*_profiles.out') # This gets all of the profile.out files generated
+                self.logger.debug(f'Getting profile data: {profile_data_files}')
              
                 files_to_move = profile_data_files
                 files_to_move.append(new_out_name)
@@ -711,17 +772,21 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 # Check that TOPAS Properly Output your XY if you output one: {{{
                 if new_name:
                     new_name = f'{new_name}.xy'
+                    self.logger.debug(f'Expecting to move {new_name}.xy')
                     try:
                         new_name = glob(new_name)[0]
                         files_to_move.append(new_name)
                     except:
-                        print('LAST OUTPUT DICTIONARY FOR REFERENCE: ')
-                        print(f'out_dict:\n{out_dict}')
-                        raise ValueError(f'Expected TOPAS to create {new_name} but it failed!')
+                        self.logger.debug(f'Failed to find {new_name}.xy')
+                        if not debug:
+                            print('LAST OUTPUT DICTIONARY FOR REFERENCE: ')
+                            print(f'out_dict:\n{out_dict}')
+                            raise ValueError(f'Expected TOPAS to create {new_name} but it failed!')
                 #}}}
              
                 pbar2 = tqdm(files_to_move, position = 1, leave = False)
                 for f in pbar2:
+                    self.logger.debug(f'Moving {f} to {os.path.join(home_dir, path)}')
                     current_dir = os.path.join(home_dir, path)
                     dest = os.path.join(current_dir, ixpxsx)
                     pbar2.set_description_str(f'Moving {f} to {ixpxsx}')
