@@ -26,8 +26,9 @@ from topas_tools.utils.out_file_parser import OUT_Parser
 from topas_tools.utils.file_modifier import FileModifier
 #from topas_tools.utils.topas_parser import TOPAS_Parser # Don't need this anymore since it is subclassed by TOPAS_Modifier
 from topas_tools.utils.topas_modifier import TOPAS_Modifier
-
+from topas_tools.refine.topas_simulator import FakeTOPAS
 #}}}
+topas = FakeTOPAS(noise = 0.02)
 # TOPAS_Refinements: {{{
 class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Modifier):
     '''
@@ -646,7 +647,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 #}}}
             #}}}
             pbar.set_description_str(f'Refining Rietveld {path}') 
-            if not debug:
+            if debug:
+                topas.simulate(lines = lines,
+                        inp_dict = inp_dict,
+                        out_filename = 'Dummy.out',
+                        output_xy = None
+                )
+            else:
                 self.logger.debug(f'Refining Dummy.inp for the first time at {temp}')
                 self.refine_pattern('Dummy.inp') # Refine the pattern
                 self.logger.debug('Finished refinement of Dummy.inp')
@@ -657,6 +664,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 self.logger.debug(f'Converting {file} to an INP')
                 copyfile(file, file.replace('.out', '.inp')) # This copies the file to an input file now  
             # ###### IxPxSx Treatment: {{{ 
+            recorded_out_dict = False
             for type_idx, ixpxsx in enumerate(ixpxsx_types):
                 pbar.set_description_str(f'Working on {ixpxsx} for {path}')
                 '''
@@ -682,7 +690,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         lines = out.readlines()
                     # Since we are retrieving data from the .out file created after running the .inp file, if the inp file was changed
                     # in a fundamental way, the basic structure would be captured here
-                    out_dict = self.get_inp_out_dict(lines, fileextension=data_extension, record_output_xy = False, debug = debug) 
+                    out_dict = self.get_inp_out_dict(lines, fileextension=data_extension, record_output_xy = True, debug = debug) 
                     self.logger.debug('Finished making OUT dictionary for Dummy.out: \n{pformat(out_dict)}')
 
                     #}}}
@@ -705,10 +713,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 lines, new_name = self.modify_inp_lines(
                         lines, 
                         out_dict, 
-                        I, 
-                        P, 
-                        S, 
-                        cry_files = None,
+                        I=I, 
+                        P=P, 
+                        S=S, 
+                        cry_files = cry_files,
                         modify_ph=True, 
                         modify_specimen_displacement = True, 
                         modify_bkg = True,
@@ -716,7 +724,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         update_output_xy_line = True,
                         new_suffix = f'{temp}_{ixpxsx}', # This is the new suffix we will add to the filename
                 )
-
+                
                 # Write the updates to the Dummy file: {{{
                 self.logger.debug('Writing to Dummy.inp')
                 with open('Dummy.inp', 'w') as f:
@@ -726,7 +734,16 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 #}}} 
                 # Refine the IxPxSx Pattern: {{{ 
                 pbar.set_description_str(f'Refining {ixpxsx} for {path}')
-                if not debug:
+                if debug:
+                    topas.simulate(
+                        lines = lines, 
+                        inp_dict = out_dict, 
+                        out_filename = 'Dummy.out',
+                        output_xy = new_name,
+                    )
+                    #if ixpxsx == 'xPS':
+                    #    return out_dict
+                else:
                     self.logger.debug(f'Refining Dummy.inp for {ixpxsx} Method...')
                     self.refine_pattern('Dummy.inp') # Refine the pattern with the selected IxPxSx method.  
                     self.logger.debug(f'Finished refining Dummy.inp for {ixpxsx} Method...')
@@ -735,7 +752,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 self.logger.debug(f'Reading the OUT file for {ixpxsx}')
                 with open('Dummy.out', 'r') as f:
                     lines = f.readlines()
-                current_out_dict = self.get_inp_out_dict(lines, fileextension = data_extension, record_output_xy=False, debug = debug)
+                current_out_dict = self.get_inp_out_dict(lines, fileextension = data_extension, record_output_xy=True, debug = debug)
                 self.logger.debug(f'Out Dict for {ixpxsx}:\n{pformat(current_out_dict)}')
                 current_rwp = current_out_dict['fit_metrics'].get('r_wp') # This is the Rwp for the current iteration
                 if debug:
@@ -803,8 +820,6 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
             
                 #}}}
             
-            if debug:
-                break # THIS IS FOR TESTING IF THE CODE IS WORKING ON A SINGLE DIRECTORY
             os.chdir(home_dir)
             #}}}
         #}}}

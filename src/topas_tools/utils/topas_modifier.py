@@ -178,15 +178,15 @@ class TOPAS_Modifier(TOPAS_Parser):
         # Now, write the WPF IxPxSx stuff: {{{ 
         insert_idx = macro_blocks[max(list(macro_blocks.keys()))][1] + 2 # This gives us the index where we can insert new lines
         for ph, entry in out_dict.items():
-            lines.insert(insert_idx, '\n') # Insert a break
-            insert_idx +=1
-            added_lines += 1
             # Something important to remember is that the positioning of the WPF_IxPxSx stuff does matter
             # Write a macro for each phase: {{{
             if 'Ph' in ph:
+                lines.insert(insert_idx, '\n') # Insert a break
+                insert_idx +=1
+                added_lines += 1
                 
                 ph_num = int(re.search(r'(\d+)', ph).group(1)) # This will be used for making the WPF macros
-                wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro
+                wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro 
                 lines.insert(insert_idx, wpf_macro) # Write the macro
                 insert_idx += 1 # Advance by 1
                 lines.insert(insert_idx, '\n')
@@ -336,7 +336,10 @@ class TOPAS_Modifier(TOPAS_Parser):
                     lines=lines, 
                     cry_files=cry_files,
                     out_dict=out_dict,
-                    macro_blocks=macro_blocks
+                    macro_blocks=macro_blocks,
+                    I = I, 
+                    P = P,
+                    S = S,
             ) 
         #}}}
         # 7. Update outuput_xy filename: {{{
