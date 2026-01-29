@@ -5,7 +5,6 @@ Date: 01/16/2026
 '''
 #}}}
 # Imports: {{{
-import os
 import re
 import bisect
 #}}}
@@ -26,6 +25,7 @@ def xdd_pattern(ext):
     if not ext.startswith('.'):
         ext = '.' + ext
     ext = re.escape(ext)
+
     return rf'^\s*xdd\s+"?(?:[^"\s]*?([A-Za-z0-9._-]+{ext}))"?\s*$'
 #}}}
 float_re = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?" # Important for the specimen_displacement
@@ -302,7 +302,8 @@ class TOPAS_Parser(LineNumberManager):
         # we are going to remove all of the comment blocks and lines starting with comments: 
         block = False
         skip = False
-        topas_lines = {} # dictionary where the keys are the original line numbers and the values are the lines 
+        # dictionary keys original line numbers, values are lines 
+        topas_lines = {} 
         for i, line in enumerate(lines): 
             cleanline = line.strip()
             if cleanline.startswith('/*'):
@@ -319,7 +320,7 @@ class TOPAS_Parser(LineNumberManager):
     #}}}
     # parse_phase_prm_line: {{{
     @line_parser(
-        rf"prm\s*(?P<phase>Ph\d+)\(\s*!?(?P<var>\w+)\s*\)(?P<body>.*)$"
+        r"prm\s*(?P<phase>Ph\d+)\(\s*!?(?P<var>\w+)\s*\)(?P<body>.*)$"
     )
     def parse_phase_prm_line(self, m):
         '''
@@ -409,7 +410,8 @@ class TOPAS_Parser(LineNumberManager):
     ) 
     def parse_specimen_displacement_line(self,m):
         '''
-        This parser works to parse an individual line and get the parameters for specimen displacement
+        This parser works to parse an individual line 
+        and get the parameters for specimen displacement
         '''
         value = float(m.group("value"))
         error = float(m.group("error")) if m.group("error") else None
@@ -435,12 +437,12 @@ class TOPAS_Parser(LineNumberManager):
         '''
         # loop through the topas_lines: {{{
         for lineno, line in topas_lines.items():
-           entry = self.parse_specimen_displacement_line(line)
-           if entry:
-               entry['linenumber'] = lineno
-               entry['line'] = line 
-               entry['_meta'] = self._default_meta()
-               return entry
+            entry = self.parse_specimen_displacement_line(line)
+            if entry:
+                entry['linenumber'] = lineno
+                entry['line'] = line 
+                entry['_meta'] = self._default_meta()
+                return entry
         return None 
         #}}} 
     #}}}
@@ -499,7 +501,7 @@ class TOPAS_Parser(LineNumberManager):
             return None
         #}}} 
     # parse_bkg_line: {{{
-    @line_parser(rf"^bkg\s*(?P<at>@)?\s*(?P<body>.*)$", flags=re.IGNORECASE) # Throw the match criteria to the wrapper
+    @line_parser(r"^bkg\s*(?P<at>@)?\s*(?P<body>.*)$", flags=re.IGNORECASE) # Throw the match criteria to the wrapper
     def parse_bkg_line(self, m):
         ''' 
         Takes the m output of the line_parser. 
