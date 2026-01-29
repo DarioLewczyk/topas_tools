@@ -22,8 +22,32 @@ class RefinementPlotter(PlottingUtils):
     '''
     # __init__: {{{
     def __init__(self,rietveld_data:dict ={}):
+        # default kwargs: {{{
         self.rietveld_data = rietveld_data 
-        super().__init__(rietveld_data=self.rietveld_data)
+        # Initializing the super class gives us self._default_kwargs
+        super().__init__(rietveld_data=self.rietveld_data) 
+        self._default_kwargs = {
+            'template' : 'simple_white',
+            'tth_range' : None,
+            'yrange' :None,
+            'height':800,
+            'width':1000,
+            'show_legend':True,
+            'legend_x':None,
+            'legend_y':None,
+            'legend_xanchor':None,
+            'legend_yanchor':None,
+            'font_size':20,
+            'button_xanchor':'right',
+            'button_yanchor':'top',
+            'button_x':1.45,
+            'button_y':1.05,
+            'showgrid':False,
+            'dtick':1,
+            'ticks':'inside',
+            'phase_colors': None,
+        }
+        #}}}   
     #}}} 
     # plot_pattern: {{{
     def plot_pattern(self,
@@ -71,29 +95,6 @@ class RefinementPlotter(PlottingUtils):
         19. phase_colors # If you choose to give colors for each of the individual phases
         '''
         # assign variables from kwargs: {{{
-        # default kwargs: {{{
-        self._default_kwargs = {
-            'template' : 'simple_white',
-            'tth_range' : None,
-            'yrange' :None,
-            'height':800,
-            'width':1000,
-            'show_legend':True,
-            'legend_x':None,
-            'legend_y':None,
-            'legend_xanchor':None,
-            'legend_yanchor':None,
-            'font_size':20,
-            'button_xanchor':'right',
-            'button_yanchor':'top',
-            'button_x':1.45,
-            'button_y':1.05,
-            'showgrid':False,
-            'dtick':1,
-            'ticks':'inside',
-            'phase_colors': None,
-        }
-        #}}}  
         # Apply any kwarg updates: {{{
         alternates = {
             'tth_range': ['tth_range', 'xrange', 'x_range'], 

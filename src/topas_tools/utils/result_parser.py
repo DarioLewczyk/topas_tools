@@ -18,10 +18,6 @@ class ResultParser:
     .csv
     .hkli 
     '''
-    # __init__: {{{
-    def __init__(self,):
-        pass
-    #}}}
     # _replace_nan_with_previous: {{{
     def _replace_nan_with_previous(self,):
         '''

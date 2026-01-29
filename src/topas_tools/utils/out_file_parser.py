@@ -11,10 +11,6 @@ class OUT_Parser:
     This class has all of the tools necessary to find relevant 
     information to Rietveld refinement inside of TOPAS .out files
     '''
-    # __init__:{{{ 
-    def __init__(self):
-        pass
-    #}}} 
     #_get_ints_floats_words: {{{
     def _get_ints_floats_words(self,txt:str = None): 
         '''

@@ -19,7 +19,14 @@ from topas_tools.plotting.refinement_plotter import RefinementPlotter
 from topas_tools.plotting.plotting_utils import GenericPlotter, PlottingUtils
 #}}}
 # RefinementAnalyzer: {{{ 
-class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,RefinementPlotter):
+class RefinementAnalyzer(
+        Utils,
+        DataCollector, 
+        OUT_Parser, 
+        ResultParser, 
+        TCal,
+        RefinementPlotter
+    ):
     '''
     RefinementAnalyzer is designed to provide the user with 
     quick access to TOPAS Rietveld Refinement data at scale.
@@ -37,9 +44,7 @@ class RefinementAnalyzer(Utils,DataCollector, OUT_Parser, ResultParser, TCal,Ref
         self._metadata_data = {} # This holds all the metadata data for the data
 
         self.current_dir = os.getcwd() # Save the directory where the function is called. 
-        DataCollector.__init__(self,metadata_data=self.metadata_data) # Initialize DataCollector with default values. 
-        OUT_Parser.__init__(self)
-        ResultParser.__init__(self)
+        DataCollector.__init__(self,metadata_data=self.metadata_data) # Initialize DataCollector with default values.  
         TCal.__init__(self) 
         RefinementPlotter.__init__(self, rietveld_data=self.rietveld_data) 
     #}}}

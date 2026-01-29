@@ -52,8 +52,7 @@ class ImagePlotter(Utils, DataCollector,GenericPlotter, BkgsubUtils):
         file_time_units = kwargs.get('file_time_units','sec')
         skiprows = kwargs.get('skiprows',1)
         #}}}
-        GenericPlotter.__init__(self) # Initialize the Plotting utilities
-        Utils.__init__(self) # Initialize the utilities
+        GenericPlotter.__init__(self) # Initialize the Plotting utilities 
         BkgsubUtils.__init__(self) # Initialize the bkgsub_utils to get peak finding ability
         self.home_dir = os.getcwd()
         self.metadata_data = metadata

@@ -55,9 +55,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
         #}}}
         # Additional initialization tasks: {{{
         self.current_dir = os.getcwd() # This saves the original location
-        Utils.__init__(self)
-        UsefulUnicode.__init__(self)
-        OUT_Parser.__init__(self)
+        
+        UsefulUnicode.__init__(self) 
         FileModifier.__init__(self)
         #GenericPlotter.__init__(self) # Possible we dont need this here. 
         self._data_collected = False # This tracks if the "get_data" function was run
@@ -561,22 +560,33 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
         mode: 
             0: Default mode. 
                 In this mode, the program will go to the home_dir you specify. 
-                From there, it will go through all of the directories and determine which ones have an .inp and .xy
-                it will then loop through all of these following the IxPxSx protocol
+                From there, it will go through all of the directories and 
+                determine which ones have an .inp and .xy
+                it will then loop through all of these following the 
+                IxPxSx protocol
 
-        home_dir: This is the directory where all the other directories with INP and Data are if you are in mode 0. 
-        data_extension: The extension for the data files to look for in each of the directories
+        home_dir: This is the directory where all the other 
+                    directories with INP and Data are if you 
+                    are in mode 0. 
+        data_extension: The extension for the data files to look 
+                        for in each of the directories
         ixpxsx_types: The types of IxPxSx analysis you wish to run (IN ORDER)
         '''
-        previous_inp_dict = None # This will store the base inp_dict
-
-        self._inp_file_version = 0 # This counts different types of input file
-        os.chdir(home_dir) # This is the directory containing all of the temperatures
-        dirs = self.get_dirs_for_ixpxsx_automations(home_dir, data_extension, ixpxsx_types) # Gives us all of the dirs so we can run refinements in a loop
+        previous_inp_dict = None # Store the base inp_dict
+        self._inp_file_version = 0 # Counts different types of input file
+        self.out_dicts = {} # holds out dicts
+        os.chdir(home_dir) 
+        # Gives us all of the dirs so we can run refinements in a loop
         
-        pbar = tqdm(dirs, position = 0, leave = True) # Make it so there is a progress bar
-        self.out_dicts = {} # This is a dictionary that will hold all the out dictionaries from all the rietveld refinements so they can be referenced later
+        #########################
+        # Main Code
+        #########################
         # Loop through all of the main directories: {{{
+        dirs = self.get_dirs_for_ixpxsx_automations(
+                home_dir, data_extension, ixpxsx_types
+        ) 
+        
+        pbar = tqdm(dirs, position = 0, leave = True) 
         
         for path in pbar:
             self.logger.debug(f'Working through {path}')
@@ -588,20 +598,26 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
             if m:
                 temp = m.group(1) # This should be the temperature e.g. 50C 
             #}}} 
-            inp_file = glob(f'*{temp}*.inp')[0] # This will search the directory for an input file that includes the temperature
+            # search the directory for input file including temperature
+            inp_file = glob(f'*{temp}*.inp')[0] 
             if debug:
                 print(f'{temp}, {inp_file}')
             # Get important information & Linenumbers from the INP: {{{
             with open(inp_file) as inp:
                 lines = inp.readlines() # These are all the lines of the INP file
             self.logger.debug(f'Loading {inp_file} into a dict')
-            inp_dict = self.get_inp_out_dict(lines, record_fit_metrics = False, record_xdd = True, fileextension = data_extension) # This gives us the INP dictionary 
+            inp_dict = self.get_inp_out_dict(
+                    lines, record_fit_metrics = False, 
+                    record_xdd = True, fileextension = data_extension
+            ) # This gives us the INP dictionary 
             self.logger.debug(f'Inp Dict: \n{pformat(inp_dict)}')
             # Check for a fundamental change to the INP: {{{
             if previous_inp_dict is not None:
                 if self._inp_fundamentally_changed(previous_inp_dict, inp_dict):
-                    self.bump_inp_file_version() # Only if there is a fundamental change in the base inp
-                    self.propagate_inp_file_version(inp_dict) # This makes sure that the inp_dict has the correct file version attached
+                    # Only if there is a fundamental change in the base inp
+                    self.bump_inp_file_version() 
+                    # Ensure correct inp version attached
+                    self.propagate_inp_file_version(inp_dict) 
      
             previous_inp_dict = inp_dict
             #}}}
@@ -609,16 +625,21 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
             refined_xy_file = inp_dict['xdd'].get('filename') 
             # Clean up the directory before beginning: {{{
             if not debug:
-                self.clean_directory(exclude = [inp_file, refined_xy_file],path = os.path.join(home_dir, path)) # This prepares the home directory so that it is clean  
+                # This prepares the home directory so that it is clean  
+                self.clean_directory(exclude = [inp_file, refined_xy_file],
+                                     path = os.path.join(home_dir, path)
+                ) 
             #}}}
-            # Now, we want to run the actual input file. 
-            inp_basename = inp_file.removesuffix('.inp') # This is just the input file name without the .inp
-            copyfile(inp_file, 'Dummy.inp') # Make a copy of the inp file so nothing is overwritten
+            # Now, we want to run the actual input file.  
+            inp_basename = inp_file.removesuffix('.inp') 
+            copyfile(inp_file, 'Dummy.inp') 
             # IF OUT DICTS RECORDED, READ THEM: {{{
             self.logger.debug('Looking to see if we match an out dict')
             if len(self.out_dicts) > 0:
-                # retrieve the out_dict with the closest temperature to the current temp:{{{ 
-                out_dict = self.get_closest_entry_in_out_dict(temp, self.out_dicts) # This will automatically find 
+                
+                out_dict = self.get_closest_entry_in_out_dict(
+                        temp, self.out_dicts
+                ) 
                 self.logger.debug(f'Reading OUT Dict closest to {temp}: \n{pformat(out_dict)}')
                 # We need to make sure that these file versions match
                 self.refresh_out_dict(out_dict, inp_dict) 
@@ -646,6 +667,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                     f.writelines(lines) # This updates the file with the new lines
                 #}}}
             #}}}
+            #  REFINE RIETVELD: {{{ 
             pbar.set_description_str(f'Refining Rietveld {path}') 
             if debug:
                 topas.simulate(lines = lines,
@@ -654,16 +676,21 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         output_xy = None
                 )
             else:
-                self.logger.debug(f'Refining Dummy.inp for the first time at {temp}')
+                self.logger.debug(f'Rietveld Dummy.inp at {temp}')
                 self.refine_pattern('Dummy.inp') # Refine the pattern
                 self.logger.debug('Finished refinement of Dummy.inp')
-            # Now, we need to find the _cry.out files...
+            #}}}
+            #  Manage CRY Files: {{{ 
             self.logger.debug('Finding CRY.OUT files')
-            cry_files = glob('*_cry.out') # These are the files that we need to be input files for peak lists
+            cry_files = glob('*_cry.out') 
             for file in cry_files:
                 self.logger.debug(f'Converting {file} to an INP')
-                copyfile(file, file.replace('.out', '.inp')) # This copies the file to an input file now  
-            # ###### IxPxSx Treatment: {{{ 
+                copyfile(file, file.replace('.out', '.inp')) 
+            #}}} 
+            #######################################
+            # IxPxSx Refinements
+            #######################################
+            # Loop through IxPxSx Modes: {{{ 
             recorded_out_dict = False
             for type_idx, ixpxsx in enumerate(ixpxsx_types):
                 pbar.set_description_str(f'Working on {ixpxsx} for {path}')
@@ -679,33 +706,35 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 # Check to see if we already have an out dict recorded: {{{
                 self.logger.debug('Making an OUT dictionary for Dummy.out')
                 if len(self.out_dicts) > 0 and type_idx != 0:
-                    # retrieve the out_dict with the closest temperature to the current temp:{{{ 
-                    out_dict = self.get_closest_entry_in_out_dict(temp, self.out_dicts) # This will automatically find 
-                    self.refresh_out_dict(out_dict, inp_dict) # Make sure that the recorded dict is okay to use.
+                    # retrieve out_dict closest to current temp:{{{ 
+                    out_dict = self.get_closest_entry_in_out_dict(
+                            temp, self.out_dicts
+                    ) 
+                    # Make sure that the recorded dict is okay to use.
+                    self.refresh_out_dict(out_dict, inp_dict) 
                     self.logger.debug(f'Reading OUT Dict closest to {temp}: \n{pformat(out_dict)}')
                     #}}}
                 else:
-                    # Parse the output to get Ph info and specimen displacement: {{{ 
+                    # if not, get new out_dict: {{{ 
                     with open('Dummy.out', 'r') as out:
                         lines = out.readlines()
-                    # Since we are retrieving data from the .out file created after running the .inp file, if the inp file was changed
-                    # in a fundamental way, the basic structure would be captured here
-                    out_dict = self.get_inp_out_dict(lines, fileextension=data_extension, record_output_xy = True, debug = debug) 
+                 
+                    out_dict = self.get_inp_out_dict(
+                            lines, fileextension=data_extension, 
+                            record_output_xy = True, debug = debug
+                    ) 
                     self.logger.debug('Finished making OUT dictionary for Dummy.out: \n{pformat(out_dict)}')
 
                     #}}}
                 #}}} 
                 # Update the out_dicts for the temperature: {{{
                 if not recorded_out_dict: 
-                    self.logger.debug('Recording out dict because we have not yet recorded anything')
-                    # This will ensure that something like xxx where the lattice parameters arent refined is not put as a template
-                    # If the previous Rwp is greater than the current one, then we will overwrite the entry
-                    self.out_dicts[temp] = out_dict # Record the information under the temperature
+                    self.logger.debug('Recording out dict first time') 
+                    self.out_dicts[temp] = out_dict #
                     recorded_out_dict = True
-                #}}}
-                
+                #}}} 
                 self.logger.debug(f'Copying {inp_file} to Dummy.inp')
-                copyfile(inp_file, 'Dummy.inp') # Make a copy of the input file and throw it to a dummy
+                copyfile(inp_file, 'Dummy.inp') 
                 # Manipulate the Dummy.inp file: {{{
                 with open('Dummy.inp', 'r') as f:
                     lines = f.readlines() # Gives access to all the lines 
@@ -732,7 +761,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 #}}} 
                 #    break # THIS IS TO TEST IF THE DUMMY IS UPDATING WELL
                 #}}} 
-                # Refine the IxPxSx Pattern: {{{ 
+                #}}}
+                # RUN IxPxSx REFINEMENT: {{{ 
                 pbar.set_description_str(f'Refining {ixpxsx} for {path}')
                 if debug:
                     topas.simulate(
@@ -744,30 +774,34 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                     if ixpxsx == 'xPx':
                         return out_dict
                 else:
-                    self.logger.debug(f'Refining Dummy.inp for {ixpxsx} Method...')
-                    self.refine_pattern('Dummy.inp') # Refine the pattern with the selected IxPxSx method.  
-                    self.logger.debug(f'Finished refining Dummy.inp for {ixpxsx} Method...')
+                    self.logger.debug(f'Refining Dummy.inp using {ixpxsx}...')
+                    self.refine_pattern('Dummy.inp') 
+                    self.logger.debug(f'Finished  {ixpxsx} refinement...')
                 #}}}
                 # Get current and previous Rwps: {{{
                 self.logger.debug(f'Reading the OUT file for {ixpxsx}')
                 with open('Dummy.out', 'r') as f:
                     lines = f.readlines()
-                current_out_dict = self.get_inp_out_dict(lines, fileextension = data_extension, record_output_xy=True, debug = debug)
-                self.logger.debug(f'Out Dict for {ixpxsx}:\n{pformat(current_out_dict)}')
-                current_rwp = current_out_dict['fit_metrics'].get('r_wp') # This is the Rwp for the current iteration
+                current_out_dict = self.get_inp_out_dict(
+                        lines, fileextension = data_extension, 
+                        record_output_xy=True, debug = debug
+                ) 
+                current_rwp = current_out_dict['fit_metrics'].get('r_wp') 
                 if debug:
                     current_rwp = 0 # This makes sure that we always do everything
-                previous_rwp =out_dict['fit_metrics'].get('r_wp') # This will tell the rwp for the run
-                self.logger.debug(f'Current Rwp: {current_rwp} Previous Rwp: {previous_rwp} ∆Rwp: {current_rwp - previous_rwp}')
-                #}}}
-                
+                previous_rwp =out_dict['fit_metrics'].get('r_wp') 
+                self.logger.debug(f'Current Rwp: {current_rwp} ' + 
+                                  f'Previous Rwp: {previous_rwp} '+
+                                  f'∆Rwp: {current_rwp - previous_rwp}'
+                )
+                #}}} 
                 # AFTER REFINEMENT Update Out Dict if meeting criteria: {{{
-                self.logger.debug('Checking to see if we should update the self.out_dicts')
+                self.logger.debug('Update the self.out_dicts?')
                 if current_rwp < previous_rwp and P != 'x':
                     self.logger.debug(f'Replacing out_dicts entry for {temp}')
-                    # This will ensure that something like xxx where the lattice parameters arent refined is not put as a template
-                    # If the previous Rwp is greater than the current one, then we will overwrite the entry
-                    self.out_dicts[temp] = current_out_dict #  Overwrite the previous entry of out_dict with the new one. 
+
+                     #  Overwrite the previous entry of out_dict 
+                    self.out_dicts[temp] = current_out_dict 
                     recorded_out_dict = True
                 elif current_rwp > previous_rwp and P != 'x':
                     # May need to update just in case. 
@@ -776,13 +810,11 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                     recorded_out_dict = True
                 #}}}
                 # Rename the OUT and Move Relevant Files to the IxPxSx Dir:  {{{ 
-                new_out_name = f'{inp_basename}_{ixpxsx}.out'
-                self.logger.debug(f'Copying Dummy.out to {new_out_name}')
-                copyfile('Dummy.out', new_out_name) # This is the new name for the output file
-                time.sleep(0.1) # Give TOPAS some time to get the profile data together 
-                profile_data_files = glob('*_profiles.out') # This gets all of the profile.out files generated
-                self.logger.debug(f'Getting profile data: {profile_data_files}')
-             
+                new_out_name = f'{inp_basename}_{ixpxsx}.out' 
+                copyfile('Dummy.out', new_out_name) 
+                time.sleep(0.1) # Give TOPAS some time 
+                profile_data_files = glob('*_profiles.out') 
+                 
                 files_to_move = profile_data_files
                 files_to_move.append(new_out_name)
                 
@@ -802,27 +834,25 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 #}}}
              
                 pbar2 = tqdm(files_to_move, position = 1, leave = False)
-                for f in pbar2:
-                    self.logger.debug(f'Moving {f} to {os.path.join(home_dir, path)}')
+                for f in pbar2: 
                     current_dir = os.path.join(home_dir, path)
                     dest = os.path.join(current_dir, ixpxsx)
                     pbar2.set_description_str(f'Moving {f} to {ixpxsx}')
 
                     if os.path.exists(os.path.join(dest,f)):
-                        os.remove(os.path.join(dest,f)) # If the file already exists in the directory, it is removed
+                        # If file already exists in the directory, removed
+                        os.remove(os.path.join(dest,f)) 
                     time.sleep(0.5)
                     try:
                         shutil.move(f, dest)
                     except:
+                        # Give topas some extra time
                         time.sleep(1)
-                        shutil.move(f, dest)
-                    
-            
-                #}}}
-            
+                        shutil.move(f, dest) 
+                #}}} 
             os.chdir(home_dir)
             #}}}
         #}}}
-    #}}}
+        #}}}
 #}}}
 

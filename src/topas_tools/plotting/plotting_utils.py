@@ -657,6 +657,7 @@ class PlottingUtils(GenericPlotter):
     '''
     # __init__: {{{
     def __init__(self,rietveld_data:dict = {}):
+        self._update_default_kwargs = {} # Blank to start
         self.rietveld_data = rietveld_data
         self.color_index = 0 # Initialize the color as the default
         super().__init__()
@@ -998,5 +999,43 @@ class PlottingUtils(GenericPlotter):
                                         self.out_plot_dict[phase_name][bval_label].append(bval)      
                             #}}}
         #}}}
+    #}}}
+    # _update_default_kwargs: {{{
+    def _update_default_kwargs(self,kwargs:dict = None, alternates:dict = None):
+        '''
+        This function allows you to update a
+        dictionary of internal keyword arguments 
+        which is particularly useful for the plotting
+        utilities which have lots of kwargs.
+        '''  
+        # Update the keyword arguments: {{{ 
+        for key, val in kwargs.items(): 
+            if key in self._default_kwargs:
+                self._default_kwargs[key] = val
+            else:
+                try: 
+                    found = False
+                    for k2, v2 in alternates.items(): 
+                        if key in v2:
+                            self._default_kwargs[k2] = val 
+                            found = True
+                            break
+                    if not found:
+                        raise ValueError(f'Your key {key} is invalid!')
+                except:
+                    raise ValueError(f'No alternate keys defined! Your key: {key} is invalid.')
+        #}}} 
+    #}}}
+    # _get_kwarg: {{{
+    def _get_kwarg(self, key:str = None):
+        '''
+        This function acts on self._default_kwargs
+        pass a string to get the value if it exists.
+        '''
+        try:
+            val = self._default_kwargs[key] 
+        except:
+            val = None
+        return val
     #}}}
 #}}}
