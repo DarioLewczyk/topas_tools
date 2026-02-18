@@ -16,10 +16,6 @@ from topas_tools.IO import IO
 #}}}
 # Utils: {{{
 class Utils: 
-    # __init__: {{{
-    def __init__(self):
-    
-    #}}}
     # generate_table: {{{
     def generate_table(self,
         iterable:list = None,
@@ -631,8 +627,8 @@ class Utils:
         os.chdir(home)
         return x,y
     #}}}
-    # parse_xy: {{{
-    def parse_output_xy(self, fn):
+    # load_output_xy: {{{
+    def load_output_xy(self, fn):
         """ 
         Simple function to load an xy file
         produced as output from TOPAS using my macro
@@ -794,31 +790,50 @@ class Utils:
         return IO.export_xy_with_hkl(idx, rietveld_data, excel_dir, fn)
     #}}}
     # get_dirs_for_ixpxsx_automations: {{{
-    def get_dirs_for_ixpxsx_automations(self,home_dir:str = None, data_extension:str = 'xy', ixpxsx_types:list = ['IPS', 'xPS', 'xPx', 'xxx']):
-        '''
-        This function will return a list of directories sorted in order if 
-        the directories contain both a .inp and the extension of whatever your data files have
-     
-        It will also make sure that each of the directories has appropriate subdirectories for each of the ixpxsx types you want to run
-        '''
+    def get_dirs_for_ixpxsx_automations(
+        self,
+        home_dir: str = None,
+        data_extension: str = 'xy',
+        ixpxsx_types: list = ['IPS', 'xPS', 'xPx', 'xxx']
+    ):
+        """
+        Return a list of directories under home_dir that contain:
+            - at least one .inp file
+            - at least one data file with the given extension
+            - all required IxPxSx subdirectories
+        """
         valid_dirs = []
-        os.chdir(home_dir)
-     
+    
+        # Loop through entries without changing directories
         for entry in os.scandir(home_dir):
-            if entry.is_dir():
-                files = os.listdir(entry.path)
-             
-                has_inp = any(f.endswith('.inp') for f in files)
-                has_data = any(f.endswith(f'.{data_extension}') for f in files)
-             
-                if has_inp and has_data:
-                    valid_dirs.append(entry.name)
-                for path in ixpxsx_types:
-                    desired_ixpxsx_path = os.path.join(home_dir, os.path.join(entry, path))
-                    if not os.path.exists(desired_ixpxsx_path):
-                        os.makedirs(desired_ixpxsx_path) # This ensures that each directory is primed for the IxPxSx analysis
-        sorted_dirs = sorted(valid_dirs, key = lambda d: int(d.split('_')[0]))
-        return sorted_dirs
+            if not entry.is_dir():
+                continue
+    
+            entry_path = entry.path
+            files = os.listdir(entry_path)
+    
+            has_inp = any(f.endswith('.inp') for f in files)
+            has_data = any(f.endswith(f'.{data_extension}') for f in files)
+    
+            if not (has_inp and has_data):
+                continue
+    
+            # Check required IxPxSx subdirectories
+            all_subdirs_exist = True
+            for sub in ixpxsx_types:
+                sub_path = os.path.join(entry_path, sub)
+                if not os.path.isdir(sub_path):
+                    all_subdirs_exist = False
+                    break
+    
+            if all_subdirs_exist:
+                valid_dirs.append(entry_path)
+        # Because now we have full paths, need to sort with a lambda func
+        valid_dirs = sorted(
+                valid_dirs,
+                key = lambda p: int(os.path.basename(p).split('_')[0])
+        )
+        return valid_dirs
     #}}}
     # clean_directory: {{{
     def clean_directory(self, exclude:list = None, path = "."):
@@ -855,6 +870,24 @@ class Utils:
             i+=1
         
     #}}}
+    # get_dict_entry: {{{ 
+    def get_dict_entry(self, d:dict, *keys):
+        """ 
+        helps to quickly get an entry from a large 
+        nested dictionary. 
+        Can use as many keys as you want
+        keys are applied sequentially
+
+        e.g. 
+
+            d[key1][key2][key3]...[keyn]
+        """
+        for k in keys:
+            if not isinstance(d, dict) or k not in d:
+                return None
+            d = d[k]
+        return d
+    #}}}
 #}}}
 # UsefulUnicode: {{{
 class UsefulUnicode: 
@@ -884,6 +917,10 @@ class UsefulUnicode:
         self._theta = u'\u03b8'
         self._phi = u'\u1D719'
         self._lambda = u'\u03BB'
+        self._alpha = u'\u03B1'
+        self._beta = u'\u03B2'
+        self._gamma = u'\u03B3'
+
 
         self._sub_a = u'\u2090'
         self._sub_b = u'\u1D47'

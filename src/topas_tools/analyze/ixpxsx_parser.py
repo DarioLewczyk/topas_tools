@@ -12,6 +12,8 @@ import pandas as pd
 
 from topas_tools.utils import ixpxsx_calculator as calculator
 from topas_tools.plotting import ixpxsx_plotting
+from topas_tools.utils.topas_utils import Utils
+utils = Utils()
 #}}}
 ##########################
 # Profile Data
@@ -734,4 +736,127 @@ class ProfileDataManager:
         }
     #}}}
 
+#}}}
+##########################
+# Refinement Dict Management
+##########################
+# get_output_xy_from_refinement_dict: {{{ 
+def get_output_xy_from_refinement_dict(
+    refinement_dict:dict,
+    idx:int = 0,
+    method:str = 'IPS',
+):
+    """ 
+    Returns a tuple with the requested data
+    for the entry and method you select
+
+    tth, yobs, ycalc, ydiff
+    """
+    pattern = utils.get_dict_entry(
+            refinement_dict, idx, 'method', method, 'pattern'
+    )
+    if pattern:
+        tth, yobs, ycalc, ydiff = (
+                pattern.get('tth'), 
+                pattern.get('yobs'), 
+                pattern.get('ycalc'),
+                pattern.get('ydiff'),
+        )
+        return tth, yobs, ycalc, ydiff
+    return None
+#}}}
+# get_hkl_from_pd: {{{ 
+def get_hkl_from_pd(entry:dict):
+    """ 
+    This gets hkls from the profile_data
+    for a given substance
+    """ 
+    h, k, l = (entry.get('H'), 
+               entry.get('K'), 
+               entry.get('L')
+    )
+    return h,k,l
+#}}}
+# get_d_from_pd: {{{ 
+def get_d_from_pd(entry:dict):
+    return entry.get('d_angst')
+#}}}
+# get_tth_from_pd: {{{ 
+def get_tth_from_pd(entry:dict):
+    return entry.get('tth_deg')
+#}}}
+# get_beta_total_from_pd: {{{ 
+def get_beta_total_from_pd(entry:dict, include_error:bool = True):
+    """ returns either beta total or both with the error"""
+    beta_total = entry.get('IZTF_IBs')
+    beta_total_e = entry.get('IZTF_IBs_e')
+    if include_error:
+        return beta_total, beta_total_e
+    else:
+        return beta_total
+#}}}
+# get_lps_from_out_dict: {{{ 
+def get_lps_from_out_dict(entry):
+    """ 
+    Returns a list of paired tuples: 
+        value, error
+
+    a, b, c, al, be, ga
+
+    Always returns all lattice parameters, but if they are 
+    fixed, it makes it easy to exclude them in other code
+    """
+    a = utils.get_dict_entry(entry, 'lp_a', 'value')
+    a_e = utils.get_dict_entry(entry, 'lp_a', 'error')
+    a_fix = utils.get_dict_entry(entry, 'lp_a', 'fixed')
+
+    b = utils.get_dict_entry(entry, 'lp_b', 'value')
+    b_e = utils.get_dict_entry(entry, 'lp_b', 'error')
+    b_fix = utils.get_dict_entry(entry, 'lp_b', 'fixed')
+
+    c = utils.get_dict_entry(entry, 'lp_c', 'value')
+    c_e = utils.get_dict_entry(entry, 'lp_c', 'error')
+    c_fix = utils.get_dict_entry(entry, 'lp_c', 'fixed')
+
+    al = utils.get_dict_entry(entry, 'lp_al', 'value')
+    al_e = utils.get_dict_entry(entry, 'lp_al', 'error')
+    al_fix = utils.get_dict_entry(entry, 'lp_al', 'fixed')
+
+    be = utils.get_dict_entry(entry, 'lp_be', 'value')
+    be_e = utils.get_dict_entry(entry, 'lp_be', 'error')
+    be_fix = utils.get_dict_entry(entry, 'lp_be', 'fixed')
+
+    ga = utils.get_dict_entry(entry, 'lp_ga', 'value')
+    ga_e = utils.get_dict_entry(entry, 'lp_ga', 'error')
+    ga_fix = utils.get_dict_entry(entry, 'lp_ga', 'fixed')
+
+
+    return [
+        (a, a_e, a_fix), (b, b_e, b_fix), (c, c_e, c_fix), 
+        (al, al_e, al_fix), (be, be_e, be_fix), (ga, ga_e, ga_fix)
+    ]
+
+#}}}
+# get_avg_tc_temps_from_log: {{{ 
+def get_temps_from_log(entry, mode = None):
+    """  
+    mode:
+        avg: searches for keys from the avg_logvals
+        std: searches for keys from the std_logvals
+        None: searches for keys from the log itself
+    sp = setpoint
+    tca = TC a (thermocouple)
+    tcb = TC b (thermocouple)
+
+    returns:
+        avg_sp, avg_TCA, avg_TCB
+    """
+    base_keys = ['set_temps', 'TC_As', 'TC_Bs']
+    output = [None, None, None]
+    for i, key in enumerate(base_keys):
+        if mode:
+            key = f'{mode}_{key}'
+        output[i] = entry.get(key)
+   
+    return tuple(output)
 #}}}

@@ -7,6 +7,7 @@ Date: 01/16/2026
 # imports: {{{
 from topas_tools.utils.topas_parser import TOPAS_Parser
 import re
+import os
 import logging
 #}}}
 # TOPAS_Modifier: {{{
@@ -157,7 +158,13 @@ class TOPAS_Modifier(TOPAS_Parser):
    
     #}}}
     # write_ixpxsx_lines: {{{
-    def write_ixpxsx_lines(self,lines:list = None, cry_files:list = None,out_dict:dict = None, macro_blocks:dict = None, I="I", P = "P", S = "S"):
+    def write_ixpxsx_lines(
+            self,
+            lines:list = None, 
+            cry_files:list = None,
+            out_dict:dict = None, 
+            macro_blocks:dict = None, I="I", P = "P", S = "S"
+    ):
         '''
         This writes the lines necessary for running IxPxSx type refinements 
         and ensures that the added lines are all accounted for so that 
@@ -173,19 +180,20 @@ class TOPAS_Modifier(TOPAS_Parser):
 
         Returns: 
             lines 
-        '''
-        added_lines = 0 # Keep track of the lines added so that the linenumber for how many lines were added to add the IxPxSx 
+        ''' 
+        added_lines = 0 
         # Now, write the WPF IxPxSx stuff: {{{ 
-        insert_idx = macro_blocks[max(list(macro_blocks.keys()))][1] + 2 # This gives us the index where we can insert new lines
+        # This gives us the index where we can insert new lines
+        insert_idx = macro_blocks[max(list(macro_blocks.keys()))][1] + 2 
         for ph, entry in out_dict.items():
-            # Something important to remember is that the positioning of the WPF_IxPxSx stuff does matter
+            # The positioning of the WPF_IxPxSx stuff does matter
             # Write a macro for each phase: {{{
             if 'Ph' in ph:
                 lines.insert(insert_idx, '\n') # Insert a break
                 insert_idx +=1
                 added_lines += 1
-                
-                ph_num = int(re.search(r'(\d+)', ph).group(1)) # This will be used for making the WPF macros
+                # This will be used for making the WPF macros
+                ph_num = int(re.search(r'(\d+)', ph).group(1)) 
                 wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro 
                 lines.insert(insert_idx, wpf_macro) # Write the macro
                 insert_idx += 1 # Advance by 1
@@ -196,6 +204,7 @@ class TOPAS_Modifier(TOPAS_Parser):
         #}}}
         # Add the include statements for the CRY: {{{
         for cry in cry_files:
+            cry = os.path.basename(cry) # This removes the path stuff
             cry = cry.removesuffix('.out')
             lne = f'#include {cry}.inp'
 
@@ -207,13 +216,21 @@ class TOPAS_Modifier(TOPAS_Parser):
         #}}}    
         # Freeze the updates to the output_xy after it is updated: {{{
         if "output_xy" in out_dict and out_dict.get('output_xy') is not None:
-            self.apply_line_offset(out_dict['output_xy'], added_lines) # This offsets the lines by the number necessary
-            self.freeze_updates(out_dict['output_xy']) # This applies a freeze to the updates for the lifetime of this input file
+            # This offsets the lines by the number necessary
+            self.apply_line_offset(out_dict['output_xy'], added_lines) 
+            # Freezes updates for the lifetime of the inp file
+            self.freeze_updates(out_dict['output_xy']) 
         #}}} 
         return lines
     #}}}    
     # update_output_xy_line: {{{
-    def update_output_xy_line(self, lines:list = None, new_suffix:str = None,  inp_dict:dict = None, debug:bool = False):
+    def update_output_xy_line(
+            self, 
+            lines:list = None, 
+            new_suffix:str = None,  
+            inp_dict:dict = None, 
+            debug:bool = False
+    ):
         '''
         This allows you to quickly update the lines of an INP file to change the 
         filename of the XY file output by TOPAS.
@@ -222,7 +239,8 @@ class TOPAS_Modifier(TOPAS_Parser):
 
         returns the lines of the file and the new name created (does not contain the extension)
         '''
-        out_xy = inp_dict.get('output_xy') # This should be a dictionary with all necessary information on the output xy line
+        # A dictionary with necessary information on output xy line
+        out_xy = inp_dict.get('output_xy') 
         #  modify the line: {{{ 
         if out_xy:
             idx = out_xy.get('linenumber')  
@@ -250,7 +268,12 @@ class TOPAS_Modifier(TOPAS_Parser):
         return lines, new_name
     #}}}
     # modify_out_dict_linenumber: {{{
-    def modify_out_dict_linenumber(self, entry:dict = None, added_lines:int = 0, modified_linenumber:bool = False):
+    def modify_out_dict_linenumber(
+            self, 
+            entry:dict = None, 
+            added_lines:int = 0,
+            modified_linenumber:bool = False
+    ):
         ''' 
         Allows you to modify the linenumber of an entry in a dictionary
 

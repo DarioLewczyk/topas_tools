@@ -12,6 +12,7 @@ setup(
         'plotly',
         'texttable',
         'numpy',
+        'fabio',
 
     ],
     entry_points = {

@@ -71,6 +71,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
         '''
         working_dir = os.getcwd()
         refine_cmd = 'tc ' + working_dir + '\\'
+        #subprocess.call([os.path.join(self.topas_dir, "tc "), input_file])
         os.chdir(self.topas_dir) # This will change the directory to TOPAS Home
         subprocess.call(refine_cmd + input_file)
         os.chdir(working_dir)
@@ -574,8 +575,9 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
         '''
         previous_inp_dict = None # Store the base inp_dict
         self._inp_file_version = 0 # Counts different types of input file
-        self.out_dicts = {} # holds out dicts
-        os.chdir(home_dir) 
+        self.out_dicts = {} # holds out dicts 
+        if not home_dir:
+            home_dir = os.getcwd()
         # Gives us all of the dirs so we can run refinements in a loop
         
         #########################
@@ -589,28 +591,30 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
         pbar = tqdm(dirs, position = 0, leave = True) 
         
         for path in pbar:
-            self.logger.debug(f'Working through {path}')
-            pbar.set_description_str(f'Working through {path}')
-            os.chdir(path) # Enter the new path
+            dummy_inp_path = os.path.join(path, 'Dummy.inp')
+            dummy_out_path = os.path.join(path, "Dummy.out")
+            self.logger.debug(f'Working through {path}') 
             ## GET TEMP: {{{
             basename = os.path.basename(path)
+            pbar.set_description_str(f'Working through {basename}')
             m = re.search(r'(\d+C)', basename)
+            temp = None # should be assigned 
             if m:
                 temp = m.group(1) # This should be the temperature e.g. 50C 
             #}}} 
             # search the directory for input file including temperature
-            inp_file = glob(f'*{temp}*.inp')[0] 
+            inp_file = glob(os.path.join(path, f'*{temp}*.inp'))[0] 
+            inp_basename = os.path.basename(inp_file)
             if debug:
-                print(f'{temp}, {inp_file}')
+                print(f'{temp}, {inp_basename}')
             # Get important information & Linenumbers from the INP: {{{
-            with open(inp_file) as inp:
+            with open(os.path.join(path, inp_basename)) as inp:
                 lines = inp.readlines() # These are all the lines of the INP file
-            self.logger.debug(f'Loading {inp_file} into a dict')
+            self.logger.debug(f'Loading {inp_basename} into a dict')
             inp_dict = self.get_inp_out_dict(
                     lines, record_fit_metrics = False, 
                     record_xdd = True, fileextension = data_extension
-            ) # This gives us the INP dictionary 
-            self.logger.debug(f'Inp Dict: \n{pformat(inp_dict)}')
+            ) # This gives us the INP dictionary  
             # Check for a fundamental change to the INP: {{{
             if previous_inp_dict is not None:
                 if self._inp_fundamentally_changed(previous_inp_dict, inp_dict):
@@ -630,9 +634,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                                      path = os.path.join(home_dir, path)
                 ) 
             #}}}
-            # Now, we want to run the actual input file.  
-            inp_basename = inp_file.removesuffix('.inp') 
-            copyfile(inp_file, 'Dummy.inp') 
+            # Now, we want to run the actual input file.   
+            copyfile(inp_file, dummy_inp_path) 
             # IF OUT DICTS RECORDED, READ THEM: {{{
             self.logger.debug('Looking to see if we match an out dict')
             if len(self.out_dicts) > 0:
@@ -644,8 +647,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 # We need to make sure that these file versions match
                 self.refresh_out_dict(out_dict, inp_dict) 
                 self.logger.debug('Ensuring that the lines from INP dict and OUT dict match')
-
-                with open('Dummy.inp', 'r') as f:
+                with open(dummy_inp_path, 'r') as f:  
                     lines = f.readlines() # Gives access to all the lines 
                 # Update the INP to have the values from the output: {{{
                 lines, _ = self.modify_inp_lines(
@@ -663,28 +665,29 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         new_suffix = None,
                 )
                 self.logger.debug('Writing lines to Dummy.inp')
-                with open('Dummy.inp', 'w') as f:
+                with open(dummy_inp_path, 'w') as f:
                     f.writelines(lines) # This updates the file with the new lines
                 #}}}
             #}}}
             #  REFINE RIETVELD: {{{ 
-            pbar.set_description_str(f'Refining Rietveld {path}') 
+            pbar.set_description_str(f'Refining Rietveld {basename}') 
             if debug:
                 topas.simulate(lines = lines,
                         inp_dict = inp_dict,
-                        out_filename = 'Dummy.out',
+                        out_filename = dummy_out_path,
                         output_xy = None
                 )
             else:
                 self.logger.debug(f'Rietveld Dummy.inp at {temp}')
-                self.refine_pattern('Dummy.inp') # Refine the pattern
+                self.refine_pattern(dummy_inp_path) # Refine the pattern
                 self.logger.debug('Finished refinement of Dummy.inp')
             #}}}
             #  Manage CRY Files: {{{ 
             self.logger.debug('Finding CRY.OUT files')
-            cry_files = glob('*_cry.out') 
+            cry_files = glob(os.path.join(path,'*_cry.out')) 
             for file in cry_files:
-                self.logger.debug(f'Converting {file} to an INP')
+                file_basename = os.path.basename(file)
+                self.logger.debug(f'Converting {file_basename} to an INP')
                 copyfile(file, file.replace('.out', '.inp')) 
             #}}} 
             #######################################
@@ -693,7 +696,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
             # Loop through IxPxSx Modes: {{{ 
             recorded_out_dict = False
             for type_idx, ixpxsx in enumerate(ixpxsx_types):
-                pbar.set_description_str(f'Working on {ixpxsx} for {path}')
+                pbar.set_description_str(f'Working on {ixpxsx} for {basename}')
                 '''
                 The ixpxsx variable will be the string
                 of the type of refinement we want to do. 
@@ -711,20 +714,16 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                             temp, self.out_dicts
                     ) 
                     # Make sure that the recorded dict is okay to use.
-                    self.refresh_out_dict(out_dict, inp_dict) 
-                    self.logger.debug(f'Reading OUT Dict closest to {temp}: \n{pformat(out_dict)}')
+                    self.refresh_out_dict(out_dict, inp_dict)  
                     #}}}
                 else:
                     # if not, get new out_dict: {{{ 
-                    with open('Dummy.out', 'r') as out:
-                        lines = out.readlines()
-                 
+                    with open(dummy_out_path, 'r') as out:
+                        lines = out.readlines() 
                     out_dict = self.get_inp_out_dict(
                             lines, fileextension=data_extension, 
                             record_output_xy = True, debug = debug
-                    ) 
-                    self.logger.debug('Finished making OUT dictionary for Dummy.out: \n{pformat(out_dict)}')
-
+                    )
                     #}}}
                 #}}} 
                 # Update the out_dicts for the temperature: {{{
@@ -733,10 +732,10 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                     self.out_dicts[temp] = out_dict #
                     recorded_out_dict = True
                 #}}} 
-                self.logger.debug(f'Copying {inp_file} to Dummy.inp')
-                copyfile(inp_file, 'Dummy.inp') 
+                self.logger.debug(f'Copying {inp_basename} to Dummy.inp')
+                copyfile(inp_file, dummy_inp_path) 
                 # Manipulate the Dummy.inp file: {{{
-                with open('Dummy.inp', 'r') as f:
+                with open(dummy_inp_path, 'r') as f:
                     lines = f.readlines() # Gives access to all the lines 
                 # Update the INP to have the values from the output: {{{
                 lines, new_name = self.modify_inp_lines(
@@ -751,36 +750,37 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         modify_bkg = True,
                         write_ixpxsx_lines = True,
                         update_output_xy_line = True,
-                        new_suffix = f'{temp}_{I}{P}{S}', # This is the new suffix we will add to the filename
+                        new_suffix = f'{temp}_{I}{P}{S}', 
                 )
-                
+                # make sure that new_name is a full path
+                new_name = os.path.join(path, new_name) + '.xy' 
                 # Write the updates to the Dummy file: {{{
                 self.logger.debug('Writing to Dummy.inp')
-                with open('Dummy.inp', 'w') as f:
+                with open(dummy_inp_path, 'w') as f:
                     f.writelines(lines)
                 #}}} 
                 #    break # THIS IS TO TEST IF THE DUMMY IS UPDATING WELL
                 #}}} 
                 #}}}
                 # RUN IxPxSx REFINEMENT: {{{ 
-                pbar.set_description_str(f'Refining {ixpxsx} for {path}')
+                pbar.set_description_str(f'Refining {ixpxsx} for {basename}')
                 if debug:
                     topas.simulate(
                         lines = lines, 
                         inp_dict = out_dict, 
-                        out_filename = 'Dummy.out',
+                        out_filename = dummy_out_path,
                         output_xy = new_name,
                     )
                     if ixpxsx == 'xPx':
                         return out_dict
                 else:
                     self.logger.debug(f'Refining Dummy.inp using {ixpxsx}...')
-                    self.refine_pattern('Dummy.inp') 
+                    self.refine_pattern(dummy_inp_path) 
                     self.logger.debug(f'Finished  {ixpxsx} refinement...')
                 #}}}
                 # Get current and previous Rwps: {{{
                 self.logger.debug(f'Reading the OUT file for {ixpxsx}')
-                with open('Dummy.out', 'r') as f:
+                with open(dummy_out_path, 'r') as f:
                     lines = f.readlines()
                 current_out_dict = self.get_inp_out_dict(
                         lines, fileextension = data_extension, 
@@ -810,38 +810,47 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                     recorded_out_dict = True
                 #}}}
                 # Rename the OUT and Move Relevant Files to the IxPxSx Dir:  {{{ 
-                new_out_name = f'{inp_basename}_{ixpxsx}.out' 
-                copyfile('Dummy.out', new_out_name) 
+                # make sure the new_out_name is a full path
+                new_out_name = inp_file.replace('.out', f'_{ixpxsx}.out')
+                #new_out_name = f'{inp_basename}_{ixpxsx}.out' 
+                copyfile(dummy_out_path, new_out_name) 
                 time.sleep(0.1) # Give TOPAS some time 
-                profile_data_files = glob('*_profiles.out') 
+                profile_data_files = glob(os.path.join(path, '*_profiles.out') )
                  
                 files_to_move = profile_data_files
                 files_to_move.append(new_out_name)
                 
                 # Check that TOPAS Properly Output your XY if you output one: {{{
-                if new_name:
-                    new_name = f'{new_name}.xy'
-                    self.logger.debug(f'Expecting to move {new_name}.xy')
+                if new_name: 
+                    self.logger.debug(
+                            f'Expecting to move {os.path.basename(new_name)}'
+                    )
                     try:
                         new_name = glob(new_name)[0]
                         files_to_move.append(new_name)
                     except:
-                        self.logger.debug(f'Failed to find {new_name}.xy')
+                        self.logger.debug(
+                            f'Failed to find {os.path.basename(new_name)}'
+                        )
                         if not debug:
                             print('LAST OUTPUT DICTIONARY FOR REFERENCE: ')
                             print(f'out_dict:\n{out_dict}')
-                            raise ValueError(f'Expected TOPAS to create {new_name} but it failed!')
+                            raise ValueError(
+                                'TOPAS tried to make '+
+                                f'{os.path.basename(new_name)} but failed!'
+                            )
                 #}}}
              
                 pbar2 = tqdm(files_to_move, position = 1, leave = False)
-                for f in pbar2: 
-                    current_dir = os.path.join(home_dir, path)
-                    dest = os.path.join(current_dir, ixpxsx)
-                    pbar2.set_description_str(f'Moving {f} to {ixpxsx}')
-
-                    if os.path.exists(os.path.join(dest,f)):
+                for f in pbar2:  
+                    f_basename = os.path.basename(f)
+                    dest = os.path.join(path, ixpxsx)
+                    pbar2.set_description_str(
+                        f'Moving {os.path.basename(f)} to {ixpxsx}'
+                    )
+                    if os.path.exists(os.path.join(dest,f_basename)):
                         # If file already exists in the directory, removed
-                        os.remove(os.path.join(dest,f)) 
+                        os.remove(os.path.join(dest,f_basename)) 
                     time.sleep(0.5)
                     try:
                         shutil.move(f, dest)
@@ -849,10 +858,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         # Give topas some extra time
                         time.sleep(1)
                         shutil.move(f, dest) 
-                #}}} 
-            os.chdir(home_dir)
+                #}}}  
             #}}}
         #}}}
         #}}}
 #}}}
-

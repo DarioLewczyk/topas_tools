@@ -61,24 +61,37 @@ class GenericPlotter(UsefulUnicode):
             symbol: marker symbol if you choose
         '''
         # default kwargs: {{{
-
         hovertemplate = kwargs.get('hovertemplate', None)
         symbol = kwargs.get('symbol', 'circle')
+
+        # Allow full override of markers: 
+        marker_kwargs = kwargs.get('marker_kwargs', {})
+
+        #}}}
+        #  color: {{{ 
+        if not color:
+            color = self._get_random_color()
+        #}}}
+        #  merge marker kwargs: {{{ 
+        marker = dict(
+            symbol = symbol,
+            color = color,
+            size = marker_size,
+            line = dict(
+                width = 2,
+                color = color,
+            ),
+        )
+        marker.update(marker_kwargs)
         #}}}
         self._fig = go.Figure()
         # Plot Data: {{{
-        if not color:
-            color = self._get_random_color()
         self._fig.add_scatter(
                 x = x,
                 y = y,
                 error_y=dict(type='data', array=y_err, visible=True) if y_err is not None else None,
                 mode = mode,
-                marker = dict(
-                    symbol = symbol,
-                    color = color,
-                    size = marker_size,
-                ),
+                marker = marker, 
                 line = dict(
                     color = color,
                     dash = dash,
@@ -167,6 +180,25 @@ class GenericPlotter(UsefulUnicode):
         # kwargs: {{{
         hovertemplate = kwargs.get('hovertemplate',None)
         symbol = kwargs.get('symbol','circle')
+
+        # Allow for full marker override
+        marker_kwargs = kwargs.get('marker_kwargs', {})
+        #}}}
+        #  colors: {{{ 
+        if not color:
+            color = self._get_random_color()
+        #}}}
+        #  Override the marker and merge: {{{ 
+        marker = dict(
+            symbol = symbol,
+            color = color, 
+            size = marker_size,
+            line = dict(
+                width = 2,
+                color = color,
+            ),
+        )
+        marker.update(marker_kwargs)
         #}}}
         # Determine the Yaxis to plot on: {{{: 
         if y2:
@@ -176,8 +208,6 @@ class GenericPlotter(UsefulUnicode):
         else:
             yaxis = 'y1'
         #}}}
-        if not color:
-            color = self._get_random_color()
         # Plot: {{{
         self._fig.add_scatter(
             x = x,
@@ -185,15 +215,7 @@ class GenericPlotter(UsefulUnicode):
             error_y=dict(type='data', array=y_err, visible=True) if y_err is not None else None,
             name = name,
             mode = mode,
-            marker = dict(
-                symbol = symbol,
-                line = dict(
-                width = 2,
-                color =color,
-                ),
-                color = color,
-                size = marker_size,
-            ),
+            marker = marker,
             line =dict(
                 color = color,
                 dash = dash,
@@ -606,11 +628,20 @@ class GenericPlotter(UsefulUnicode):
         self.fig.show()
     #}}} 
     # plot_topas_xy_output: {{{
-    def plot_topas_xy_output(self, xy_file:str = None, xy_data = None, tth = None, yobs = None, ycalc = None, ydiff = None, *args, **kwargs):
+    def plot_topas_xy_output(
+            self, 
+            xy_file:str = None, 
+            xy_data = None, 
+            tth = None, 
+            yobs = None, 
+            ycalc = None, 
+            ydiff = None, 
+            *args, **kwargs
+        ):
         ''' 
         Allows you to quickly plot the xy output file from TOPAS
         where it outputs 2theta, yobs, ycalc, ydiff
-        '''
+        ''' 
         # Default stuff for this plot: {{{
         if not xy_file:
             kwargs.setdefault('title_text', "TOPAS_REFINED_PATTERN")
@@ -644,9 +675,7 @@ class GenericPlotter(UsefulUnicode):
         self.plot_data(tth, yobs, name = 'Observed', color = 'blue', *args, **kwargs)
         self.add_data_to_plot(tth, ycalc, name = 'Calculated', color = 'red',*args, **kwargs)
         self.add_data_to_plot(tth, ydiff, name = 'Difference', color = 'grey', *args, **kwargs)
-        #}}}
-        self.show_figure()
-       
+        #}}}   
     #}}}
 #}}}
 # PlottingUtils: {{{

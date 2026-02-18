@@ -3,3 +3,4 @@ tqdm
 plotly
 texttable
 numpy
+fabio

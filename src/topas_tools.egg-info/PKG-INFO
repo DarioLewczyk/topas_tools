@@ -16,6 +16,7 @@ Requires-Dist: tqdm
 Requires-Dist: plotly
 Requires-Dist: texttable
 Requires-Dist: numpy
+Requires-Dist: fabio
 Dynamic: author
 Dynamic: author-email
 Dynamic: classifier

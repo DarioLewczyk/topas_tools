@@ -28,8 +28,8 @@ def xdd_pattern(ext):
 
     return rf'^\s*xdd\s+"?(?:[^"\s]*?([A-Za-z0-9._-]+{ext}))"?\s*$'
 #}}}
-float_re = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?" # Important for the specimen_displacement
-
+# Important for the specimen_displacement
+float_re = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?" 
 # LineNumberManager:  {{{
 class LineNumberManager: 
     # _inp_file_version: {{{
