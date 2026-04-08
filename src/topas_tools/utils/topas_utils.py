@@ -635,10 +635,14 @@ class Utils:
         Out_X_Yobs_Ycalc_Ydiff()
         """
         xy = np.loadtxt(fn,delimiter=',')
-        tth = xy[:,0]
-        yobs = xy[:,1]
-        ycalc = xy[:,2]
-        ydiff = xy[:,3]
+        try:
+            tth = xy[:,0]
+            yobs = xy[:,1]
+            ycalc = xy[:,2]
+            ydiff = xy[:,3]
+        except Exception as e:
+            print(f'Could not load xy: {fn}: {e}')
+            return xy
         return tth, yobs, ycalc, ydiff
 #}}}
     # _filter_csv_dict: {{{

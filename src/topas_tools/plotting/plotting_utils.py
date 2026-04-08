@@ -59,6 +59,7 @@ class GenericPlotter(UsefulUnicode):
         kwargs:
             hovertemplate: if you have one, you can use it. 
             symbol: marker symbol if you choose
+            notation: scientific, power, or none
         '''
         # default kwargs: {{{
         hovertemplate = kwargs.get('hovertemplate', None)
@@ -67,6 +68,26 @@ class GenericPlotter(UsefulUnicode):
         # Allow full override of markers: 
         marker_kwargs = kwargs.get('marker_kwargs', {})
 
+        # Change the axis notation formatting
+        notation = kwargs.get("notation", "power")
+
+        if notation == 'scientific':
+            sci_format = dict(
+                exponentformat = "e", 
+                showexponent = 'all'
+            )
+        elif notation == 'power':
+            sci_format = dict(
+                exponentformat = "power", 
+                showexponent = 'all'
+            )
+        elif notation == 'none':
+            sci_format = dict(
+                exponentformat = "none", 
+                showexponent = 'none'
+            )
+        else:
+            raise ValueError(f'Unknown notation type: {notation}')
         #}}}
         #  color: {{{ 
         if not color:
@@ -131,11 +152,13 @@ class GenericPlotter(UsefulUnicode):
                 range = xrange, 
                 ticks = ticks,
                 mirror = mirror_x,
+                **sci_format,
             ),
             yaxis = dict(
                 title = yaxis_title,  
                 ticks = ticks,
                 mirror = mirror_y,
+                **sci_format,
             ),
         )
         #}}}
@@ -176,6 +199,7 @@ class GenericPlotter(UsefulUnicode):
         kwargs: 
             hovertemplate
             symbol: marker symbol if you choose to change it
+            notation: scientific, power, or none
         '''
         # kwargs: {{{
         hovertemplate = kwargs.get('hovertemplate',None)
@@ -183,6 +207,27 @@ class GenericPlotter(UsefulUnicode):
 
         # Allow for full marker override
         marker_kwargs = kwargs.get('marker_kwargs', {})
+
+        # Change the axis notation formatting
+        notation = kwargs.get("notation", "power")
+
+        if notation == 'scientific':
+            sci_format = dict(
+                exponentformat = "e", 
+                showexponent = 'all'
+            )
+        elif notation == 'power':
+            sci_format = dict(
+                exponentformat = "power", 
+                showexponent = 'all'
+            )
+        elif notation == 'none':
+            sci_format = dict(
+                exponentformat = "none", 
+                showexponent = 'none'
+            )
+        else:
+            raise ValueError(f'Unknown notation type: {notation}')
         #}}}
         #  colors: {{{ 
         if not color:
@@ -231,6 +276,7 @@ class GenericPlotter(UsefulUnicode):
                     xaxis = dict(
                         range = xrange, 
                         ticks = ticks,
+                        **sci_format,
                     )
             )
         if yrange != None and not y2 and not y3:
@@ -238,6 +284,7 @@ class GenericPlotter(UsefulUnicode):
                     yaxis = dict(
                         range = yrange, 
                         ticks = ticks,
+                        **sci_format,
                         )
                     )
         self._fig.update_layout(
@@ -258,6 +305,7 @@ class GenericPlotter(UsefulUnicode):
                         side = 'left',
                         position = y2_position, 
                         ticks = ticks,
+                        **sci_format,
                     ),
             )
             if yrange != None:
@@ -274,6 +322,7 @@ class GenericPlotter(UsefulUnicode):
                         overlaying = 'y',
                         side = 'right', 
                         ticks = ticks,
+                        **sci_format,
                     )
             )
             if yrange != None:
@@ -313,7 +362,36 @@ class GenericPlotter(UsefulUnicode):
         
         *args allows you to pass arguments through to plotly's
         "update_layout" function.
+
+        kwargs: 
+            notation: scientific, power, or none 
+            xrange: [xmin, xmax]
+            yrange: [ymin, ymax]
         '''
+        # kwargs: {{{ 
+        xrange = kwargs.pop("xrange", None)
+        yrange = kwargs.pop("yrange", None)
+        # Change the axis notation formatting
+        notation = kwargs.pop("notation", "power")
+
+        if notation == 'scientific':
+            sci_format = dict(
+                exponentformat = "e", 
+                showexponent = 'all'
+            )
+        elif notation == 'power':
+            sci_format = dict(
+                exponentformat = "power", 
+                showexponent = 'all'
+            )
+        elif notation == 'none':
+            sci_format = dict(
+                exponentformat = "none", 
+                showexponent = 'none'
+            )
+        else:
+            raise ValueError(f'Unknown notation type: {notation}')
+        #}}}
         if color == None:
             color = self._get_random_color()
         self._fig = go.Figure()
@@ -330,8 +408,16 @@ class GenericPlotter(UsefulUnicode):
         # Update the layout: {{{
         self._fig.update_layout(
             title = title_text,
-            xaxis_title = xaxis_title,
-            yaxis_title = yaxis_title,
+            xaxis = dict(
+                title = xaxis_title,
+                range = xrange,
+                **sci_format,
+            ), 
+            yaxis = dict(
+                title = yaxis_title,
+                range = yrange,
+                **sci_format,
+            ),
             bargap = bargap,
             template = 'simple_white',
             *args,
@@ -395,6 +481,37 @@ class GenericPlotter(UsefulUnicode):
         rand_color = list(np.random.choice(range(256),size=3))
         color = f'rgb({rand_color[0]},{rand_color[1]},{rand_color[2]})'
         return color 
+    #}}}
+    # _generate_color_family: {{{ 
+    def _generate_color_family(self, seed=None):
+        """
+        Returns a dict with consistent color variants:
+        {
+            "base": ...,        # observed pattern
+            "calc": ...,        # calculated pattern
+            "ticks": ...,       # HKL ticks
+            "diff": ...,        # difference curve
+        }
+        """
+        if seed is None:
+            seed = np.random.rand()
+    
+        # Hue fixed by seed, saturation fixed, vary lightness
+        h = seed
+        s = 0.65
+    
+        def hsl_to_rgb(h, s, l):
+            import colorsys
+            r, g, b = colorsys.hls_to_rgb(h, l, s)
+            return f"rgb({int(r*255)}, {int(g*255)}, {int(b*255)})"
+    
+        return {
+            "base":  hsl_to_rgb(h, s, 0.45),
+            "calc":  hsl_to_rgb(h, s, 0.30),
+            "ticks": hsl_to_rgb(h, s, 0.20),
+            "diff":  hsl_to_rgb(h, s, 0.60),
+        }
+
     #}}}
     # plot_series: {{{
     def plot_series(
@@ -918,6 +1035,37 @@ class PlottingUtils(GenericPlotter):
         color = f'rgb({r},{g},{b})'
         self.color_index+=1 # This is advances through the contrasting colors
         return color
+    #}}}
+    # _generate_color_family: {{{ 
+    def _generate_color_family(self, seed=None):
+        """
+        Returns a dict with consistent color variants:
+        {
+            "base": ...,        # observed pattern
+            "calc": ...,        # calculated pattern
+            "ticks": ...,       # HKL ticks
+            "diff": ...,        # difference curve
+        }
+        """
+        if seed is None:
+            seed = np.random.rand()
+    
+        # Hue fixed by seed, saturation fixed, vary lightness
+        h = seed
+        s = 0.65
+    
+        def hsl_to_rgb(h, s, l):
+            import colorsys
+            r, g, b = colorsys.hls_to_rgb(h, l, s)
+            return f"rgb({int(r*255)}, {int(g*255)}, {int(b*255)})"
+    
+        return {
+            "base":  hsl_to_rgb(h, s, 0.45),
+            "calc":  hsl_to_rgb(h, s, 0.30),
+            "ticks": hsl_to_rgb(h, s, 0.20),
+            "diff":  hsl_to_rgb(h, s, 0.60),
+        }
+
     #}}}
     # _normalize: {{{
     def _normalize(self, data:list = None):

@@ -785,6 +785,16 @@ def get_d_from_pd(entry:dict):
 def get_tth_from_pd(entry:dict):
     return entry.get('tth_deg')
 #}}}
+# get_pshift_from_pd: {{{ 
+def get_pshift_from_pd(entry:dict):
+    """ 
+    Returns a tuple of: 
+    pshift, pshift_error
+    """
+    pshift = entry.get('P_shift')
+    pshift_e = entry.get('P_shift_e')
+    return pshift,pshift_e
+#}}}
 # get_beta_total_from_pd: {{{ 
 def get_beta_total_from_pd(entry:dict, include_error:bool = True):
     """ returns either beta total or both with the error"""
