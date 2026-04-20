@@ -12,8 +12,10 @@ import bisect
 def line_parser(pattern, flags=0):
     regex = re.compile(pattern, flags)
     def decorator(func):
-        def wrapper(self, line):
-            m = regex.match(line.strip())
+        def wrapper(self, line): 
+            #clean = re.sub(r"\s+", "", line)
+            #m = regex.match(clean)
+            m = regex.match(line.strip()) 
             if not m:
                 return None
             return func(self,m)
@@ -251,10 +253,274 @@ class LineNumberManager:
 # TOPAS_Parser: {{{
 # Do not want to have an initializer because 
 class TOPAS_Parser(LineNumberManager):
+    """ 
+    TOPAS is too free-form and makes effective parsing of highly-mutable .inp 
+    files very difficult. 
+
+    To try to overcome this, we will rely on regex and tokenizing to take typical TOPAS patterns
+    and deconstruct them.
+    """
+    # TOKEN_SPEC: {{{ 
+    TOKEN_SPEC = [
+        ("NUMBER",   r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"),
+        ("WORD",     r"[A-Za-z_]\w*"),
+        ("STRING",   r'"[^"]*"'),
+        ("LPAREN",   r"\("),
+        ("RPAREN",   r"\)"),
+        ("COMMA",    r","),
+        ("EQUAL",    r"="),
+        ("COMMENT",  r"'[^\n]*"),
+        ("SKIP",     r"[ \t]+"),
+        ("NEWLINE",  r"\n"),
+        ("MISMATCH", r"."),
+    ]
+
+    #}}}
     # global_regex: {{{
     float_re = r"[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"
     term_re  = re.compile(rf"({float_re})(?:`_({float_re}))?")
     #}}}
+    # tokenize_line: {{{ 
+    def tokenize_line(self, line):
+        """ 
+        This assumes that the line is readable by TOPAS 
+        The best way to do this is to use my "topas_lines"
+        implementation 
+        """
+        tok_regex = "|".join(
+            f"(?P<{name}>{pattern})"
+            for name, pattern in self.TOKEN_SPEC
+        )
+        tokens = []
+        for m in re.finditer(tok_regex, line):
+            kind = m.lastgroup
+            value = m.group()
+            if kind in ("SKIP", "COMMENT"):
+                continue
+            tokens.append((kind, value))
+        return tokens
+
+    #}}}
+    # tokenize_topas_lines: {{{ 
+    def tokenize_topas_lines(self, topas_lines):
+        stream = []
+        for lineno in sorted(topas_lines.keys()):
+            line = topas_lines[lineno]
+            tokens = self.tokenize_line(line)
+            stream.append((lineno, tokens))
+        return stream
+
+    #}}}
+    # collect_macro_block: {{{ 
+    def collect_macro_block(self, token_stream, i):
+        """
+        Detects a macro call that may span multiple lines.
+        Returns (macro_dict, new_index)
+        """
+        lineno, tokens = token_stream[i]
+    
+        # must start with WORD LPAREN
+        if len(tokens) < 2 or tokens[0][0] != "WORD" or tokens[1][0] != "LPAREN":
+            return None, i
+    
+        name = tokens[0][1]
+        args_tokens = []
+        depth = 0
+    
+        # scan tokens across lines
+        j = i
+        while j < len(token_stream):
+            _, toks = token_stream[j]
+            for kind, val in toks:
+                if kind == "LPAREN":
+                    depth += 1
+                    if depth > 1:
+                        args_tokens.append((kind, val))
+                elif kind == "RPAREN":
+                    depth -= 1
+                    if depth == 0:
+                        return {
+                            "macro": name,
+                            "start_line": lineno,
+                            "end_line": token_stream[j][0],
+                            "args_tokens": args_tokens,
+                        }, j
+                    args_tokens.append((kind, val))
+                else:
+                    if depth >= 1:
+                        args_tokens.append((kind, val))
+            j += 1
+    
+        return None, i
+
+    #}}}
+    # parse_generic_prm_line: {{{ 
+    def parse_generic_prm_line(self, line):
+        """
+        General prm parser.
+        Handles:
+            prm Ph1(lp_a) 4.123 `_ 0.002 min 4 max 5
+            prm lp_a 4.123 `_ 0.002
+            prm lp_a = 4.123
+            prm myVar = 10 min 5 max 20
+            prm something(abc) 10 `_ 0.1
+        """
+    
+        # Must start with prm
+        if not line.strip().startswith("prm"):
+            return None
+    
+        # Remove leading prm
+        body = line.strip()[3:].strip()
+    
+        # Case 1: Phase-style prm: Ph1(lp_a)
+        m = re.match(r"(?P<phase>\w+)\(\s*(?P<var>\w+)\s*\)\s*(?P<rest>.*)", body)
+        if m:
+            phase = m.group("phase")
+            var = m.group("var")
+            rest = m.group("rest")
+        else:
+            # Case 2: simple prm: var ...
+            m = re.match(r"(?P<var>\w+)\s*(?P<rest>.*)", body)
+            if not m:
+                return None
+            phase = None
+            var = m.group("var")
+            rest = m.group("rest")
+    
+        # Extract value, error, min, max
+        # Value
+        val = self.extract_first_float(rest)
+    
+        # Error (value `_ error)
+        err = None
+        m_err = re.search(r"`_({})".format(self.float_re), rest)
+        if m_err:
+            err = float(m_err.group(1))
+    
+        # Min
+        mn = self.extract_first_float_after_keyword(rest, "min")
+    
+        # Max
+        mx = self.extract_first_float_after_keyword(rest, "max")
+    
+        # Fixed/refined
+        fixed = "@" not in rest  # @ means refined
+    
+        return {
+            "phase": phase,
+            "var": var,
+            "value": val,
+            "error": err,
+            "min": mn,
+            "max": mx,
+            "fixed": fixed,
+            "line": line,
+        }
+
+    #}}}
+    # build_ast_from_topas_lines: {{{ 
+    def build_ast_from_topas_lines(self, topas_lines):
+        """ 
+        AST: Abstract Syntax Tree
+        """
+        token_stream = self.tokenize_topas_lines(topas_lines)
+        ast = {"macros": [], "prms": []}
+    
+        i = 0
+        while i < len(token_stream):
+            lineno, tokens = token_stream[i]
+    
+            # 1. Try macro
+            macro, new_i = self.collect_macro_block(token_stream, i)
+            if macro:
+                ast["macros"].append(macro)
+                i = new_i + 1
+                continue
+    
+            # 2. Try prm (single-line)
+            line = topas_lines[lineno]
+            prm = self.parse_generic_prm_line(line)
+            if prm:
+                prm["linenumber"] = lineno
+                ast["prms"].append(prm)
+                i += 1
+                continue
+
+    
+            i += 1
+    
+        return ast
+
+    #}}}
+    # extract_macro_parameters: {{{ 
+    def extract_macro_parameters(self, arg_tokens):
+        """
+        Given a list of tokens for a macro argument, extract:
+            - parameter name (WORD)
+            - value
+            - error
+            - min/max
+        """
+    
+        kinds = [k for k, v in arg_tokens]
+        vals  = [v for k, v in arg_tokens]
+    
+        # Parameter name (WORD)
+        param = None
+        if "WORD" in kinds:
+            param = vals[kinds.index("WORD")]
+    
+        # Value
+        numbers = [float(v) for k, v in arg_tokens if k == "NUMBER"]
+        value = numbers[0] if numbers else None
+    
+        # Error
+        error = None
+        if "BACKTICK" in kinds:
+            idx = kinds.index("BACKTICK")
+            if idx + 1 < len(arg_tokens) and arg_tokens[idx+1][0] == "NUMBER":
+                error = float(arg_tokens[idx+1][1])
+    
+        # Min/max
+        mn = None
+        mx = None
+    
+        if "MIN" in kinds:
+            idx = kinds.index("MIN")
+            if idx + 1 < len(arg_tokens) and arg_tokens[idx+1][0] == "NUMBER":
+                mn = float(arg_tokens[idx+1][1])
+    
+        if "MAX" in kinds:
+            idx = kinds.index("MAX")
+            if idx + 1 < len(arg_tokens) and arg_tokens[idx+1][0] == "NUMBER":
+                mx = float(arg_tokens[idx+1][1])
+    
+        return {
+            "param": param,
+            "value": value,
+            "error": error,
+            "min": mn,
+            "max": mx,
+        }
+
+    #}}}
+    # get_all_prms: {{{ 
+    def get_all_prms(self):
+        return self.ast.get("prms", [])
+
+
+    #}}}
+    # get_all_macros: {{{ 
+    def get_all_macros(self):
+        return self.ast.get("macros", [])
+    
+    #}}}
+    # get_macro: {{{ 
+    def get_macro(self, name):
+        return [m for m in self.ast.get("macros", []) if m["macro"] == name]
+    #}}}
+
     # apply_parser_over_topas_lines: {{{
     def apply_parser_over_topas_lines(self, topas_lines, parser_func):
         for lineno, line in topas_lines.items():
@@ -392,6 +658,95 @@ class TOPAS_Parser(LineNumberManager):
             result[phase][var] = entry
     
         return result
+
+    #}}}
+    # parse_sd2d_line: {{{ 
+    @line_parser(
+        rf"""
+        SD2D
+        \(
+            \s*(?P<radius_bang>!?)\s*(?P<radius_name>@|\w+)\s*,      
+            \s*(?P<radius_val>{float_re})
+            (?:[`_]?_?(?P<radius_err>{float_re}))?
+            (?:\s+min\s+(?P<radius_min>{float_re}))?
+            (?:\s+max\s+(?P<radius_max>{float_re}))?
+            \s*,\s*(?P<dx_bang>!?)\s*(?P<dx_name>\w+)\s*,                
+            \s*(?P<dx_val>{float_re})
+            (?:[`_]?_?(?P<dx_err>{float_re}))?
+            (?:\s+min\s+(?P<dx_min>{float_re}))?
+            (?:\s+max\s+(?P<dx_max>{float_re}))?
+            \s*,\s*(?P<dy_bang>!?)\s*(?P<dy_name>\w+)\s*,            
+            \s*(?P<dy_val>{float_re})
+            (?:[`_]?_?(?P<dy_err>{float_re}))?
+            (?:\s+min\s+(?P<dy_min>{float_re}))?
+            (?:\s+max\s+(?P<dy_max>{float_re}))?
+        \)
+        """,
+        flags=re.VERBOSE,
+    )
+    def parse_sd2d_line(self, m):
+    
+        def build_arg(name, bang, val, err, mn, mx):
+            is_fixed = bang == "!"
+            is_literal = False
+            literal_value = None
+    
+            # literal variable name?
+            try:
+                literal_value = float(name)
+                is_literal = True
+            except ValueError:
+                pass
+    
+            return {
+                "name": name,
+                "fixed": is_fixed,
+                #"is_refined": (not is_fixed and not is_literal),
+                #"is_literal": is_literal,
+                #"literal_value": literal_value,
+                "value": float(val),
+                "error": float(err) if err else None,
+                "min": float(mn) if mn else None,
+                "max": float(mx) if mx else None,
+            }
+    
+        radius = build_arg(
+            m.group("radius_name"),
+            m.group("radius_bang"),
+            m.group("radius_val"),
+            m.group("radius_err"),
+            m.group("radius_min"),
+            m.group("radius_max")
+        )
+    
+        xoff = build_arg(
+            m.group("dx_name"),
+            m.group("dx_bang"),
+            m.group("dx_val"),
+            m.group("dx_err"),
+            m.group("dx_min"),
+            m.group("dx_max")
+        )
+    
+        yoff = build_arg(
+            m.group("dy_name"),
+            m.group("dy_bang"),
+            m.group("dy_val"),
+            m.group("dy_err"),
+            m.group("dy_min"),
+            m.group("dy_max")
+        )
+    
+        return {
+            "radius": radius,
+            "x_offset": xoff,
+            "y_offset": yoff,
+        }
+    
+    #}}}
+    # parse_sd2d: {{{ 
+    def parse_sd2d(self, topas_lines):
+        return self.apply_parser_over_topas_lines(topas_lines, self.parse_sd2d_line)
 
     #}}}
     # parse_specimen_displacement_line: {{{
@@ -660,7 +1015,8 @@ class TOPAS_Parser(LineNumberManager):
             record_fit_metrics:bool = True,
             record_output_xy:bool = True,
             record_lines:bool = False,
-            debug:bool = False):
+            debug:bool = False
+    ):
         ''' 
         Wrapper function that returns a dictionary full of relevant information 
         for automated refinements
@@ -688,6 +1044,10 @@ class TOPAS_Parser(LineNumberManager):
         if record_displacement:
             displacement_entry = self.apply_parser_over_topas_lines(topas_lines, self.parse_specimen_displacement_line)
             out_dict['Specimen_Displacement'] = displacement_entry
+
+            sd2d = self.apply_parser_over_topas_lines(topas_lines, self.parse_sd2d_line) # This is my custom 2D specimen Displacement
+            out_dict["SD2D"] = sd2d
+
             #if debug:
             #    print(f'Displacement Entry: {displacement_entry}')
         #}}}  

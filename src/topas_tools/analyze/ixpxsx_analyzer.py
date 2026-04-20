@@ -161,35 +161,37 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
                     target_dt=xdd_timestamp,
                     scantime=scantime_s,
                 )
-                log_info = refinement_dict[i]['log_info']
-                scan_info = log_info['scan_info']
-                scan_info.update({
-                    'start_idx': start_idx,
-                    'end_idx': end_idx,
-                })
-                for key, value in log_dict['log_info'].items(): 
+                # IF we do not find the pattern, we cant record. so this has to be skipped. 
+                if start_idx != None and end_idx != None: 
+                    log_info = refinement_dict[i]['log_info']
+                    scan_info = log_info['scan_info']
                     scan_info.update({
-                        key:value[start_idx:end_idx]
+                        'start_idx': start_idx,
+                        'end_idx': end_idx,
                     })
-                    try:
-                        val_slice = value[start_idx:end_idx]
-                        val_slice = np.array(val_slice)
-
-                        avg_val = np.average(val_slice)
-                        std_val = np.std(val_slice)
-                        
-                        log_info['avg_logvals'].update({
-                            f'avg_{key}':avg_val
+                    for key, value in log_dict['log_info'].items(): 
+                        scan_info.update({
+                            key:value[start_idx:end_idx]
                         })
-                        log_info['std_logvals'].update({
-                            f'std_{key}':std_val
-                        })
-                        if 'set_temps' in key:
-                            # The setpoint should be a good way to 
-                            # get the temperature for the scan
-                            refinement_dict[i]['temp'] = int(avg_val)
-                    except:
-                        pass
+                        try:
+                            val_slice = value[start_idx:end_idx]
+                            val_slice = np.array(val_slice)
+    
+                            avg_val = np.average(val_slice)
+                            std_val = np.std(val_slice)
+                         
+                            log_info['avg_logvals'].update({
+                                f'avg_{key}':avg_val
+                            })
+                            log_info['std_logvals'].update({
+                                f'std_{key}':std_val
+                            })
+                            if 'set_temps' in key:
+                                # The setpoint should be a good way to 
+                                # get the temperature for the scan
+                                refinement_dict[i]['temp'] = int(avg_val)
+                        except:
+                            pass
             #}}} 
             #  loop through IxPxSx Methods: {{{  
             for ixpxsx in os.scandir(path): 
@@ -291,7 +293,7 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
             summary_rows = [
                 self.summarize_refinement(idx, entry)
                 for idx, entry in refinement_dict.items()
-                if idx != "log"
+                if type(idx) == int 
             ]
             pd.DataFrame(summary_rows).to_excel(writer, sheet_name="summary", index=False)
     

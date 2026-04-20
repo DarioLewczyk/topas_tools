@@ -129,7 +129,7 @@ class TOPAS_Modifier(TOPAS_Parser):
             If P == 'x': fix the specimen displacement since these cant be refined together 
 
         '''
-        specimen_displacement = out_dict.get('Specimen_Displacement') # This is the only relevant entry
+        specimen_displacement = out_dict.get('Specimen_Displacement') # This is the only relevant entry 
         # Try modifying lines: {{{ 
         if specimen_displacement is not None: 
             idx = specimen_displacement.get('linenumber')
@@ -156,6 +156,65 @@ class TOPAS_Modifier(TOPAS_Parser):
         #}}} 
         return lines
    
+    #}}}
+    # modify_sd2d_lines: {{{ 
+    def modify_sd2d_lines(
+        self, 
+        lines:list=None, 
+        out_dict:dict=None, 
+        P:str='P', 
+        debug:bool=False
+    ):
+        """
+        Modify SD2D line in the INP file based on previous refinement results.
+        If P == 'x', fix all SD2D parameters (!r, !dx, !dy).
+        Always update values/errors/min/max.
+        """
+    
+        sd2d = out_dict.get("SD2D")
+        if sd2d is None:
+            if debug:
+                print("No SD2D entry found in out_dict")
+            return lines
+    
+        idx = sd2d["linenumber"]
+        old_line = lines[idx]
+    
+        # Extract parsed components
+        r  = sd2d["radius"]
+        dx = sd2d["x_offset"]
+        dy = sd2d["y_offset"]
+    
+        # Helper to build the prefix (!var or var)
+        def prefix(arg):
+            if P == 'x':
+                return f"!{arg['name']}"
+            return f"!{arg['name']}" if arg["fixed"] else arg["name"]
+    
+        # Helper to build value+error+min+max
+        def build_value_block(arg):
+            val = f"{arg['value']}"
+            err = f"_{arg['error']}" if arg["error"] is not None else ""
+            mn  = f" min {arg['min']}" if arg["min"] is not None else ""
+            mx  = f" max {arg['max']}" if arg["max"] is not None else ""
+            return f"{val}{err}{mn}{mx}"
+    
+        # Build new SD2D line
+        new_line = (
+            f"SD2D("
+            f"{prefix(r)}, {build_value_block(r)}, "
+            f"{prefix(dx)}, {build_value_block(dx)}, "
+            f"{prefix(dy)}, {build_value_block(dy)}"
+            f")"
+        )
+    
+        if debug:
+            print(f"OLD SD2D: {old_line}")
+            print(f"NEW SD2D: {new_line}")
+    
+        lines[idx] = new_line
+        return lines
+
     #}}}
     # write_ixpxsx_lines: {{{
     def write_ixpxsx_lines(
@@ -353,6 +412,10 @@ class TOPAS_Modifier(TOPAS_Parser):
         # 4. Modify_specimen_displacement_lines: {{{
         if modify_specimen_displacement:
             lines = self.modify_specimen_displacement_lines(lines=lines, out_dict=out_dict,P=P)
+        #}}}
+        # 4a. Modify 2D specimen displacement: {{{ 
+        if modify_specimen_displacement:
+            lines = self.modify_sd2d_lines(lines=lines, out_dict=out_dict, P=P)
         #}}}
         # 5. Modify background: {{{
         if modify_bkg:
