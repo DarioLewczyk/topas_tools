@@ -116,7 +116,7 @@ class FakeTOPAS:
         #}}}
         # 6. If an output_xy, need to make the file: {{{
         if output_xy is not None:
-            with open(f'{output_xy}.xy', 'w') as f:
+            with open(f'{output_xy}', 'w') as f:
                 f.write('XY')
         #}}}
 

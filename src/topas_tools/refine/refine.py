@@ -671,7 +671,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
             #}}}
             #  REFINE RIETVELD: {{{ 
             pbar.set_description_str(f'Refining Rietveld {basename}') 
-            if debug:
+            if debug: 
                 topas.simulate(lines = lines,
                         inp_dict = inp_dict,
                         out_filename = dummy_out_path,
@@ -679,6 +679,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 )
             else:
                 self.logger.debug(f'Rietveld Dummy.inp at {temp}')
+                
                 self.refine_pattern(dummy_inp_path) # Refine the pattern
                 self.logger.debug('Finished refinement of Dummy.inp')
             #}}}
@@ -811,14 +812,17 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 #}}}
                 # Rename the OUT and Move Relevant Files to the IxPxSx Dir:  {{{ 
                 # make sure the new_out_name is a full path
-                new_out_name = inp_file.replace('.out', f'_{ixpxsx}.out')
-                #new_out_name = f'{inp_basename}_{ixpxsx}.out' 
+                #new_out_name = dummy_out_path.replace('.out', f'_{ixpxsx}.out')
+                new_out_name = inp_basename.replace('.inp', f'_{ixpxsx}.out')
+                new_inp_name = inp_basename.replace('.inp',f'_{ixpxsx}.inp')
+ 
                 copyfile(dummy_out_path, new_out_name) 
+                copyfile(dummy_inp_path, new_inp_name)
                 time.sleep(0.1) # Give TOPAS some time 
                 profile_data_files = glob(os.path.join(path, '*_profiles.out') )
                  
                 files_to_move = profile_data_files
-                files_to_move.append(new_out_name)
+                files_to_move.extend([new_out_name, new_inp_name])
                 
                 # Check that TOPAS Properly Output your XY if you output one: {{{
                 if new_name: 

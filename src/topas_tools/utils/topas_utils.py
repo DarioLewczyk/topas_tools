@@ -850,6 +850,11 @@ class Utils:
         exclude: What files would you like to exclude? 
         path: path to the directory
         '''
+        if exclude is not None:
+            tmp = []
+            for p in exclude:
+                tmp.append(os.path.basename(p)) # This appends the filename
+            exclude = tmp
         exclude = set(exclude or [])
 
         with os.scandir(path) as entries: 
