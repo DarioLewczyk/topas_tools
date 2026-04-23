@@ -70,11 +70,20 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
         "input_file" is the filename of the input file we are refining 
         '''
         working_dir = os.getcwd()
+         
         refine_cmd = 'tc ' + working_dir + '\\'
-        #subprocess.call([os.path.join(self.topas_dir, "tc "), input_file])
+ 
         os.chdir(self.topas_dir) # This will change the directory to TOPAS Home
         subprocess.call(refine_cmd + input_file)
         os.chdir(working_dir)
+    #}}}
+    # refine_pattern_ixpxsx: {{{ 
+    def refine_pattern_ixpxsx(self, input_file):
+        '''
+        This performs a Rietveld Refinement using TOPAS. 
+        "input_file" is the filename of the input file we are refining 
+        ''' 
+        subprocess.call(os.path.join(self.topas_dir, f'tc {input_file}')) 
     #}}}
     # run_auto_rietveld: {{{
     def run_auto_rietveld(self,
@@ -686,7 +695,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
             else:
                 self.logger.debug(f'Rietveld Dummy.inp at {temp}')
                 
-                self.refine_pattern(dummy_inp_path) # Refine the pattern
+                self.refine_pattern_ixpxsx(dummy_inp_path) # Refine the pattern
                 self.logger.debug('Finished refinement of Dummy.inp')
             #}}}
             #  Manage CRY Files: {{{ 
@@ -783,7 +792,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         return out_dict
                 else:
                     self.logger.debug(f'Refining Dummy.inp using {ixpxsx}...')
-                    self.refine_pattern(dummy_inp_path) 
+                    self.refine_pattern_ixpxsx(dummy_inp_path) 
                     self.logger.debug(f'Finished  {ixpxsx} refinement...')
                 #}}}
                 # Get current and previous Rwps: {{{
