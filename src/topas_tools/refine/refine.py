@@ -554,6 +554,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
             home_dir:str = None, 
             data_extension:str = 'xy', 
             ixpxsx_types:list = ['IPS', 'xPS', 'xPx', 'xxx'], 
+            modes_for_phases:dict = None,
             debug:bool = False
             ):
         ''' 
@@ -572,6 +573,11 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
         data_extension: The extension for the data files to look 
                         for in each of the directories
         ixpxsx_types: The types of IxPxSx analysis you wish to run (IN ORDER)
+
+        modes_for_phases: This is a dict that can allow you to fix the IxPxSx mode of a 
+                        specific phase to a specific type regardless of what refinement
+                        the program expects
+                        ex: {1: 'xxx'} if you want Ph1 to always be xxx
         '''
         previous_inp_dict = None # Store the base inp_dict
         self._inp_file_version = 0 # Counts different types of input file
@@ -752,6 +758,7 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         write_ixpxsx_lines = True,
                         update_output_xy_line = True,
                         new_suffix = f'{temp}_{I}{P}{S}', 
+                        modes_for_phases=modes_for_phases,
                 )
                 # make sure that new_name is a full path
                 new_name = os.path.join(path, new_name) + '.xy' 

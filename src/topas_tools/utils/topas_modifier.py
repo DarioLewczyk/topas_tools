@@ -222,7 +222,8 @@ class TOPAS_Modifier(TOPAS_Parser):
             lines:list = None, 
             cry_files:list = None,
             out_dict:dict = None, 
-            macro_blocks:dict = None, I="I", P = "P", S = "S"
+            macro_blocks:dict = None, I="I", P = "P", S = "S",
+            modes_for_phases:dict = None,
     ):
         '''
         This writes the lines necessary for running IxPxSx type refinements 
@@ -236,6 +237,11 @@ class TOPAS_Modifier(TOPAS_Parser):
         I: designation of I
         P: designation of P
         S: designation of S
+
+        modes_for_phases:
+            This is the dictionary that can overwrite what the current IxPxSx method is 
+            for a specific phase
+            ex: {1: 'xxx'} set Ph 1 to xxx always
 
         Returns: 
             lines 
@@ -253,7 +259,16 @@ class TOPAS_Modifier(TOPAS_Parser):
                 added_lines += 1
                 # This will be used for making the WPF macros
                 ph_num = int(re.search(r'(\d+)', ph).group(1)) 
-                wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro 
+                
+                if modes_for_phases is not None:
+                    mode = modes_for_phases.get(ph_num)
+                    if mode is not None:
+                        wpf_macro = f'WPF_{mode}_{ph_num}()\n'
+                    else:
+                        wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro 
+                else:
+                    wpf_macro = f'WPF_{I}{P}{S}_{ph_num}()\n' # write the macro 
+
                 lines.insert(insert_idx, wpf_macro) # Write the macro
                 insert_idx += 1 # Advance by 1
                 lines.insert(insert_idx, '\n')
@@ -383,6 +398,7 @@ class TOPAS_Modifier(TOPAS_Parser):
             write_ixpxsx_lines:bool = True,
             update_output_xy_line:bool = True,
             new_suffix:str = None,
+            modes_for_phases:dict = None,
         ):
         ''' 
         This function wraps all the line modification lines
@@ -394,6 +410,10 @@ class TOPAS_Modifier(TOPAS_Parser):
         This function returns the following: 
             1. lines
             2. new_name
+
+        modes_for_phases: 
+            A dictionary of the form: {1:'xxx'} where you tell the code which 
+            phase number to pay attention to and what mode you want
         ''' 
         # 1.  Re-parse the INP to detect drift: {{{ 
         inp_dict = self.get_inp_out_dict(
@@ -432,6 +452,7 @@ class TOPAS_Modifier(TOPAS_Parser):
                     I = I, 
                     P = P,
                     S = S,
+                    modes_for_phases=modes_for_phases,
             ) 
         #}}}
         # 7. Update outuput_xy filename: {{{
