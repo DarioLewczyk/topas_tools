@@ -290,7 +290,7 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
         if show_figure:
             self.show_figure()
     #}}}
-    # plot_fit_and_residuals: {{{ 
+    # plot_fit: {{{ 
     def plot_fit(
         self, temps, lp_vals, lp_errs,
         filt_temps, filt_lp_vals, filt_lp_errs,
@@ -317,6 +317,24 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
  
         x_temps = np.linspace(0, 1300, 1000)
         fit_vals = poly(x_temps)
+
+        hts = []
+        hts_filt = []
+
+        for i, temp in enumerate(temps):
+            lp = lp_vals[i]
+            lpe = lp_errs[i]
+            hts.append(
+                    f'Pattern: {i}<br>'+
+                    f'Temp: {temp} {self._degree}C<br>'
+                    f'LP: {lp:.6f} ± {lpe:.6f}',
+            )
+            if lp in filt_lp_vals and lpe in filt_lp_errs:
+                hts_filt.append(
+                    f'Pattern: {i}<br>'+
+                    f'Temp: {temp} {self._degree}C<br>'
+                    f'LP: {lp:.6f} ± {lpe:.6f}',
+                )
      
         main_title = f'{title_text} (Refined LPs < ±{threshold}°C STD)'
         # Main fit plot
@@ -326,12 +344,14 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
             xaxis_title=f'Temperature {self._deg_c}',
             title_text= main_title,
             color='lightgrey', y_err=lp_errs, mode='markers', symbol='circle-open', 
+            hovertemplate = hts,
             *args, **kwargs
         )
         self.add_data_to_plot(
             filt_temps, filt_lp_vals, y_err=filt_lp_errs,
             color='black', mode='markers',
             name=f'Si LP (a) < ±{threshold}°C STD',
+            hovertemplate = hts_filt,
         )
         self.add_data_to_plot(
             x_temps, fit_vals,
