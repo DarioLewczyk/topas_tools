@@ -50,12 +50,20 @@ class TOPAS_Modifier(TOPAS_Parser):
         
     #}}}
     # modify_ph_lines: {{{
-    def modify_ph_lines(self,lines:list = None, out_dict:dict = None, I:str = "I", P:str = "P", S:str = "S", debug:bool = False):
+    def modify_ph_lines(
+        self,lines:list = None, out_dict:dict = None, 
+        I:str = "I", P:str = "P", S:str = "S", 
+        modes_for_phases:dict = None,
+        debug:bool = False):
         ''' 
         This function serves the purpose to neatly edit the lines of an INP 
         related to Ph# for IxPxSx type refinements. 
     
         It specifically edits the prm definitions
+
+        This function is aware of when Rietveld refinement has run and when 
+        a specific phase is locked to a specific type of refinement
+
         '''
         # Loop through the out_dict: {{{
         if debug: 
@@ -64,6 +72,7 @@ class TOPAS_Modifier(TOPAS_Parser):
         for ph, var_entry in out_dict.items():
             # For each of the phase parts, fix the LPs: {{{
             if 'Ph' in ph:
+                ph_num = int(ph.strip('Ph')) # Keep trak of what phase you are looking at.
                 self.logger.debug(f'FOUND {ph}')
                 relevant_keys = ['lp_a', 'lp_b', 'lp_c', 'lp_al', 'lp_be', 'lp_ga'] 
                 for key, entry in var_entry.items(): 
@@ -85,11 +94,32 @@ class TOPAS_Modifier(TOPAS_Parser):
                         old_err = old_parsed_prms.get('error')
                         
                         if debug:
-                            print(f'\tOLD LINE: {old}\n\tVARNAME: {varname}, VAL: {old_val}, ERR: {old_err}')
+                            print(f'\tOLD LINE: {old}\n\tVARNAME: {varname}, VAL: {old_val}, ERR: {old_err}') 
                         # Conditional for the P being x: {{{
                         if P == 'x' and key in relevant_keys and not fixed:
                             new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err),str(err))
                         #}}} 
+                        # conditional for constant xxx or something: {{{ 
+                        if modes_for_phases is not None: 
+                            ph_mode = modes_for_phases.get(ph_num)
+                            #print(f'Phase {ph_num} mode: {ph_mode}')
+                            if ph_mode is not None:
+                                ph_P = ph_mode[1] # get the P component of the mode
+                                #print(f'Ph{ph_num} (P) = {ph_P}')
+                                if ph_P == 'x' and key in relevant_keys and '!' not in lines[idx]:
+                                    # NOTE: WE MUST NOT HAVE THE STIPULATION THAT THIS IS NOT ALREADY
+                                    # FIXED BECAUSE THAT MAY NOT BE THE CASE!
+                                    new = old.replace(varname, f'!{varname}').replace(str(old_val), str(val)).replace(str(old_err),str(err))
+                                    #print(f'Ph{ph_num} {key} new:\n{new}')
+                                    lines[idx] = new                  
+                                    continue
+                        #}}}
+                        # Conditional for if the last refinement was just regular Rietveld: {{{ 
+                        if out_dict.get('Rietveld') and modes_for_phases is not None:
+                            # Skip the rest if this was just Rietveld
+                            #print(f'Skipping {key} because this is Rietveld and you are using a special mode')
+                            continue
+                        #}}}
                         # Conditional for the S being x: {{{
                         #elif S == 'x' and not fixed and self.match_shape_parameters(key):
                         #    # In this case, the parameter has been flagged as being a shape parameter
@@ -117,11 +147,14 @@ class TOPAS_Modifier(TOPAS_Parser):
                  
             #}}}
             continue
-        #}}}
+        #}}} 
         return lines 
     #}}}
     # modify_specimen_displacement_lines: {{{
-    def modify_specimen_displacement_lines(self, lines:list = None, out_dict:dict = None, P:str = 'P', debug:bool = False):
+    def modify_specimen_displacement_lines(
+        self, lines:list = None, out_dict:dict = None, P:str = 'P', 
+        modes_for_phases:dict = None,
+        debug:bool = False):
         '''
         lines: Lines of an inp file
         out_dict: a dictionary containing relevant information from the previous cycle
@@ -138,6 +171,12 @@ class TOPAS_Modifier(TOPAS_Parser):
             fixed = specimen_displacement.get('fixed')
             if debug:
                 print(f'Current values for Specimen_Displacement: IDX: {idx}, VAL: {val}, ERR: {err}, FIXED: {fixed}')
+
+            if out_dict.get('Rietveld') and modes_for_phases is not None:
+                # If this is Rietveld and the user expects
+                # a special mode for one of the phases, ignore this
+                # iteration
+                return lines 
          
             if not fixed:
                 old = lines[idx]
@@ -163,6 +202,7 @@ class TOPAS_Modifier(TOPAS_Parser):
         lines:list=None, 
         out_dict:dict=None, 
         P:str='P', 
+        modes_for_phases:dict = None,
         debug:bool=False
     ):
         """
@@ -170,6 +210,8 @@ class TOPAS_Modifier(TOPAS_Parser):
         If P == 'x', fix all SD2D parameters (!r, !dx, !dy).
         Always update values/errors/min/max.
         """
+        if modes_for_phases is not None and out_dict.get('Rietveld'):
+            return lines
     
         sd2d = out_dict.get("SD2D")
         if sd2d is None:
@@ -427,15 +469,23 @@ class TOPAS_Modifier(TOPAS_Parser):
         #}}}
         # 3. Modify_ph: {{{
         if modify_ph:
-            lines = self.modify_ph_lines(lines=lines, out_dict=out_dict, I=I,P=P,S=S)
+            lines = self.modify_ph_lines(
+                lines=lines, out_dict=out_dict, I=I,P=P,S=S, modes_for_phases=modes_for_phases
+            )
         #}}} 
         # 4. Modify_specimen_displacement_lines: {{{
         if modify_specimen_displacement:
-            lines = self.modify_specimen_displacement_lines(lines=lines, out_dict=out_dict,P=P)
+            lines = self.modify_specimen_displacement_lines(
+                lines=lines, out_dict=out_dict,P=P,
+                modes_for_phases = modes_for_phases,
+            )
         #}}}
         # 4a. Modify 2D specimen displacement: {{{ 
         if modify_specimen_displacement:
-            lines = self.modify_sd2d_lines(lines=lines, out_dict=out_dict, P=P)
+            lines = self.modify_sd2d_lines(
+                lines=lines, out_dict=out_dict, P=P,
+                modes_for_phases = modes_for_phases,
+            )
         #}}}
         # 5. Modify background: {{{
         if modify_bkg:

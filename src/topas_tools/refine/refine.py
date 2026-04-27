@@ -606,6 +606,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
         pbar = tqdm(dirs, position = 0, leave = True) 
         
         for path in pbar:
+            refinements_completed = 0 # Tracks the number of refinements
+            
             dummy_inp_path = os.path.join(path, 'Dummy.inp')
             dummy_out_path = os.path.join(path, "Dummy.out")
             self.logger.debug(f'Working through {path}') 
@@ -692,10 +694,12 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         out_filename = dummy_out_path,
                         output_xy = None
                 )
+                refinements_completed +=1
             else:
                 self.logger.debug(f'Rietveld Dummy.inp at {temp}')
                 
                 self.refine_pattern_ixpxsx(dummy_inp_path) # Refine the pattern
+                refinements_completed += 1 # Tells the code it has just finished Rietveld
                 self.logger.debug('Finished refinement of Dummy.inp')
             #}}}
             #  Manage CRY Files: {{{ 
@@ -724,15 +728,20 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 
                 # Check to see if we already have an out dict recorded: {{{
                 self.logger.debug('Making an OUT dictionary for Dummy.out')
-                if len(self.out_dicts) > 0 and type_idx != 0:
+                if len(self.out_dicts) > 0 and refinements_completed > 1:
+                    #print(f'Retrieving out dict from out dicts for {temp} MODE: {I}{P}{S}')
                     # retrieve out_dict closest to current temp:{{{ 
                     out_dict = self.get_closest_entry_in_out_dict(
                             temp, self.out_dicts
                     ) 
                     # Make sure that the recorded dict is okay to use.
-                    self.refresh_out_dict(out_dict, inp_dict)  
+                    #before = out_dict['Ph2']['lp_a']
+                    #print(f'Before Refresh:\n\t{before}')
+                    #self.refresh_out_dict(out_dict, inp_dict)  
+                    #after = out_dict['Ph2']['lp_a']
+                    #print(f'After Refresh:\n\t{after}')
                     #}}}
-                else:
+                else: 
                     # if not, get new out_dict: {{{ 
                     with open(dummy_out_path, 'r') as out:
                         lines = out.readlines() 
@@ -740,10 +749,16 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                             lines, fileextension=data_extension, 
                             record_output_xy = True, debug = debug
                     )
+                    if refinements_completed == 1:
+                        # This means that it has just finished normal Rietveld
+                        out_dict['Rietveld'] = True
                     #}}}
                 #}}} 
+                #print(f'START OF {I}{P}{S} REFINEMENT')
+                #out_ph = out_dict['Ph1']['lp_a']['fixed']
+                #print(f'Ph2 LPa is fixed: {out_ph}')
                 # Update the out_dicts for the temperature: {{{
-                if not recorded_out_dict: 
+                if not recorded_out_dict and not out_dict.get('Rietveld'): 
                     self.logger.debug('Recording out dict first time') 
                     self.out_dicts[temp] = out_dict #
                     recorded_out_dict = True
@@ -788,11 +803,13 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                         out_filename = dummy_out_path,
                         output_xy = new_name,
                     )
+                    refinements_completed+=1
                     if ixpxsx == 'xPx':
                         return out_dict
                 else:
                     self.logger.debug(f'Refining Dummy.inp using {ixpxsx}...')
                     self.refine_pattern_ixpxsx(dummy_inp_path) 
+                    refinements_completed += 1
                     self.logger.debug(f'Finished  {ixpxsx} refinement...')
                 #}}}
                 # Get current and previous Rwps: {{{
@@ -814,9 +831,20 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                 #}}} 
                 # AFTER REFINEMENT Update Out Dict if meeting criteria: {{{
                 self.logger.debug('Update the self.out_dicts?')
-                if current_rwp < previous_rwp and P != 'x':
+                #ph_entry_out_dict = out_dict['Ph2']['lp_a']['fixed']
+                #ph_entry_curr_out_dict =current_out_dict['Ph2']['lp_a']['fixed']
+                #print(f'CURRENT MODE: {I}{P}{S}, REFINEMENTS DONE {refinements_completed}')
+                #out_dict_rietveld = out_dict.get('Rietveld')
+                #current_rietveld = current_out_dict.get('Rietveld')
+                #print(f'OUT DICT RIETVELD: {out_dict_rietveld}\nCURRENT OUT DICT RIETVELD: {current_rietveld}')
+                #print(f'Out Dict LPa is fixed: {ph_entry_out_dict}\nCurrent out dict LPa is fixed: {ph_entry_curr_out_dict}')
+                if out_dict.get('Rietveld'):
+                    #print(f'Updating the out_dicts with the current one')
+                    self.out_dicts[temp] = current_out_dict 
+                    recorded_out_dict = True
+                elif current_rwp < previous_rwp and P != 'x':
+                    #print(f'Updating the out_dicts with the current one')
                     self.logger.debug(f'Replacing out_dicts entry for {temp}')
-
                      #  Overwrite the previous entry of out_dict 
                     self.out_dicts[temp] = current_out_dict 
                     recorded_out_dict = True
@@ -825,6 +853,8 @@ class TOPAS_Refinements(Utils, UsefulUnicode, OUT_Parser, FileModifier, TOPAS_Mo
                     self.logger.debug(f'Replacing out_dicts entry for {temp}')
                     self.out_dicts[temp] = out_dict
                     recorded_out_dict = True
+                #final_save = self.out_dicts[temp]['Ph2']['lp_a']['fixed']
+                #print(f'AFTER UPDATING SELF.OUT_DICTS:\n\tPh2 LPa Fixed: {final_save}')
                 #}}}
                 # Rename the OUT and Move Relevant Files to the IxPxSx Dir:  {{{ 
                 # make sure the new_out_name is a full path
