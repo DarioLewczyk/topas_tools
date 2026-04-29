@@ -297,6 +297,7 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
         poly, rmse,
         threshold=5,
         title_text = 'Si LP a xPx',
+        temp_units = 'C',
         *args,
         **kwargs,
     ):
@@ -315,7 +316,7 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
         kwargs = self._merge_plot_kwargs("fit", kwargs)
         kwargs.setdefault('legend_x', 0.5)
  
-        x_temps = np.linspace(0, 1300, 1000)
+        x_temps = np.linspace(0, max(temps) * 1.10, 1000)
         fit_vals = poly(x_temps)
 
         hts = []
@@ -326,13 +327,13 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
             lpe = lp_errs[i]
             hts.append(
                     f'Pattern: {i}<br>'+
-                    f'Temp: {temp} {self._degree}C<br>'
+                    f'Temp: {temp} {temp_units}<br>'
                     f'LP: {lp:.6f} ± {lpe:.6f}',
             )
             if lp in filt_lp_vals and lpe in filt_lp_errs:
                 hts_filt.append(
                     f'Pattern: {i}<br>'+
-                    f'Temp: {temp} {self._degree}C<br>'
+                    f'Temp: {temp} {temp_units}<br>'
                     f'LP: {lp:.6f} ± {lpe:.6f}',
                 )
      
@@ -341,7 +342,7 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
         self.plot_data(
             temps, lp_vals, name='All LPs',
             yaxis_title='Lattice Parameter (Å)',
-            xaxis_title=f'Temperature {self._deg_c}',
+            xaxis_title=f'Temperature {temp_units}',
             title_text= main_title,
             color='lightgrey', y_err=lp_errs, mode='markers', symbol='circle-open', 
             hovertemplate = hts,
@@ -367,13 +368,14 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
         filt_temps, diff_eval, filt_lp_errs,
         rmse,
         title_text,  
+        temp_units = 'C',
         *args, **kwargs
     ):
         """ 
         Plots the results of fitting LP data
         to a polynomial model as residuals
         """
-        x_temps = np.linspace(0, 1300, 1000)
+        x_temps = np.linspace(0, max(temps) * 1.10 , 1000)
         kwargs = self._merge_plot_kwargs("residuals",kwargs)
 
  
@@ -382,7 +384,7 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
         self.plot_data(
             temps, diff_full, name='ΔLP (all refinements)',
             yaxis_title='Δ Lattice Parameter (Å)',
-            xaxis_title=f'Temperature {self._deg_c}',
+            xaxis_title=f'Temperature {temp_units}',
             color='lightgrey', y_err=lp_errs, mode='markers',
             symbol='circle-open',
             title_text=title_text, 
@@ -413,6 +415,7 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
         derivative, 
         title_text = 'Si xPx LP',
         lp:str = 'a',
+        temp_units= 'C',
         *args,
         **kwargs,
     ):
@@ -430,7 +433,7 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
 
         self.plot_data(temps, derivative,
             title_text=f'{title_text} ({lp}) Sensitivity to T',    
-            xaxis_title=f'Temperature {self._deg_c}',
+            xaxis_title=f'Temperature {temp_units}',
             yaxis_title=f'd{lp}/dT (Å/°C)',   
             *args,
             **kwargs,
@@ -485,6 +488,7 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
         meas_temp_err:np.ndarray,
         title_text = 'Si',
         lp:str = 'a',
+        temp_units = 'C',
         *args,
         **kwargs
     ):
@@ -502,7 +506,7 @@ class IxPxSx_Plotter(Utils, GenericPlotter):
             temps, total_temp_err,
             name=f"σ(T_total, {lp})",
             yaxis_title="Temperature Uncertainty (°C)",
-            xaxis_title=f"Temperature {self._deg_c}",
+            xaxis_title=f"Temperature {temp_units}",
             color="black",
             mode="markers",
             title_text=f"Temperature Uncertainty Components ({title_text} {lp})",

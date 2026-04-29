@@ -710,7 +710,7 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
     
         eval_vals = poly(temps)
         r2 = self.calculate_rsq(lp_vals, eval_vals, precision=6)
-        rmse = self.calculate_rmse(lp_vals, eval_vals, precision=6)
+        rmse = self.calculate_rmse(lp_vals, eval_vals, precision=20)
     
         return poly, eval_vals, r2, rmse
     #}}}
@@ -791,7 +791,7 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
         if r2:
             print(f'R^2: {r2}')
         if rmse:
-            print(f'RMSE: ± {rmse} Å')
+            print(f'RMSE: ± {rmse:.5e} Å')
 
     #}}} 
     # analyze_lp_temperature_series: {{{ 
@@ -811,6 +811,7 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
         excel_dir=None,
         excel_filename=None,
         plot=True,
+        temp_units = 'C',
         **kwargs
     ):
         """
@@ -824,6 +825,12 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
         - Generate plots (optional)
         - Return all arrays in a structured dictionary
         - Optionally export arrays to Excel
+
+        temp_units: 
+            "C" or "K"
+            The refinement dict will always have temps in C
+            but if you choose, you can have the plots and equations calculated on K
+            instead.
         """
     
         # -----------------------------
@@ -842,6 +849,10 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
             lp_key = lp_key,
             method_key = method,
         )
+        #}}}
+        # check for conversion to K: {{{ 
+        if temp_units.lower() == 'k':
+            temps = np.array(temps) + 273.15 # Convert to K
         #}}}
     
         # -----------------------------
@@ -864,6 +875,7 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
         )
         #}}}
         self.print_polynomial_fit(poly, r2, rmse)
+        rmse = np.around(rmse, 6)
     
         # -----------------------------
         # 4. Residuals
@@ -968,6 +980,7 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
                 poly, rmse,
                 threshold=threshold,
                 title_text=title_text,
+                temp_units=temp_units,
                 **kwargs
             )
             #}}}  
@@ -977,6 +990,7 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
                 filt_temps, diff_eval, filt_lp_errs,
                 rmse,
                 title_text= f'Δ {title_text} < ±{threshold}°C STD deg = {poly_deg}', 
+                temp_units=temp_units,
                 **kwargs
 
             )
@@ -1006,6 +1020,7 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
                 temps, dadt_full,
                 title_text=f"{substance} {method} poly={poly_deg}",
                 lp=lp,
+                temp_units=temp_units,
                 show_figure=False
             )
             self.add_data_to_plot(
@@ -1044,7 +1059,8 @@ class IxPxSxAnalyzer(IxPxSx_Plotter, TOPAS_Parser, APSUtils):
                 lp_temp_err=np.abs(temp_err_full),
                 meas_temp_err=std_temps,
                 title_text=substance,
-                lp=lp
+                lp=lp,
+                temp_units=temp_units,
             )
             #}}}
              
